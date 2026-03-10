@@ -58,20 +58,36 @@
 </head>
 <body>
 
+<!-- Banner at natural size above the wallpaper -->
 <div class="banner">
     <img src="images/Banner.png" alt="Game Hub Banner">
 </div>
 
+<h1>Game Hub</h1>
+
 <style>
     .banner {
-        width: 100%;
-        height: auto;
-        overflow: hidden;
+        width: auto;      /* keep actual width */
+        height: auto;     /* keep actual height */
+        margin: 0 auto;   /* center the image horizontally */
+        display: block;
     }
     .banner img {
-        width: 100%;
+        width: auto;      /* use original width of the image */
+        height: auto;     /* use original height of the image */
         display: block;
-        height: auto; 
+    }
+
+    .game-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); /* bigger cards */
+        gap: 20px;
+        padding: 20px;
+    }
+    .game-card img {
+        width: 100%;
+        height: auto;
+        border-radius: 10px;
     }
 </style>
 
