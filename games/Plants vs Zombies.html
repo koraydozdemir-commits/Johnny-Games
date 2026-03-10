@@ -1,177 +1,35 @@
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta http-equiv="x-ua-compatible" content="ie=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>really cool flash game</title>
+<script>
+  const ruffle = window.RufflePlayer?.newest();
+  const player = ruffle.createPlayer();
+  player.style.width = "100%";
+  player.style.height = "100%";
+  container.appendChild(player);
 
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: black;
-      overflow: hidden;
-      height: 100%;
-      width: 100%;
-    }
+  player.load("https://cdn.jsdelivr.net/gh/sasa24s/Sphere-compile@95d1d98dc38a920d02e6bbcf61620501b2bacfcb/tables/pvz_9_15.swf");
 
-    #flash-container {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: black;
-      overflow: hidden;
-    }
+  // Wait a few seconds for SWF to initialize, then attempt load/save
+  setTimeout(() => {
+    const savedProgress = loadProgress();
 
-    .black-box {
-      position: fixed;
-      background: black;
-      z-index: 10;
-    }
-
-    #box-top { top: 0; left: 0; width: 100%; height: 0; }
-    #box-bottom { bottom: 0; left: 0; width: 100%; height: 0; }
-    #box-left { top: 0; left: 0; width: 0; height: 100%; }
-    #box-right { top: 0; right: 0; width: 0; height: 100%; }
-
-    ruffle-player {
-      width: 100%;
-      height: 100%;
-      background: black;
-      display: block;
-    }
-
-    #fullscreen-btn {
-      position: fixed;
-      top: 12px;
-      right: 12px;
-      z-index: 999;
-      padding: 10px 14px;
-      font-size: 14px;
-      background: rgba(0,0,0,0.75);
-      color: white;
-      border: 1px solid #555;
-      border-radius: 8px;
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-    }
-  </style>
-
-  <script src="https://cdn.jsdelivr.net/npm/@ruffle-rs/ruffle@0.2.0-nightly.2025.10.2/ruffle.min.js"></script>
-</head>
-
-<body>
-  <button id="fullscreen-btn">Fullscreen</button>
-  <div id="flash-container"></div>
-  <div class="black-box" id="box-top"></div>
-  <div class="black-box" id="box-bottom"></div>
-  <div class="black-box" id="box-left"></div>
-  <div class="black-box" id="box-right"></div>
-
-  <script>
-    const container = document.getElementById("flash-container");
-    const boxTop = document.getElementById("box-top");
-    const boxBottom = document.getElementById("box-bottom");
-    const boxLeft = document.getElementById("box-left");
-    const boxRight = document.getElementById("box-right");
-    const fullscreenBtn = document.getElementById("fullscreen-btn");
-
-    function resizeGame() {
-      const windowWidth = window.innerWidth;
-      const windowHeight = window.innerHeight;
-      const aspectRatio = 5.5 / 3;
-
-      let width = Math.floor(windowWidth);
-      let height = Math.floor(width / aspectRatio);
-
-      if (height > windowHeight) {
-        height = Math.floor(windowHeight);
-        width = Math.floor(height * aspectRatio);
+    if (savedProgress && player.call) {
+      try {
+        player.call("loadProgress", savedProgress);
+        console.log("Sent saved progress to SWF.");
+      } catch (e) {
+        console.warn("SWF does not support loadProgress():", e);
       }
-
-      container.style.width = width + "px";
-      container.style.height = height + "px";
-
-      const topMargin = (windowHeight - height) / 2;
-      const leftMargin = (windowWidth - width) / 2;
-
-      boxTop.style.height = topMargin + "px";
-      boxBottom.style.height = topMargin + "px";
-      boxLeft.style.width = leftMargin + "px";
-      boxRight.style.width = leftMargin + "px";
     }
 
-    fullscreenBtn.addEventListener("click", () => {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen();
-      } else {
-        document.exitFullscreen();
-      }
-    });
-
-    document.addEventListener("fullscreenchange", () => {
-      fullscreenBtn.textContent = document.fullscreenElement ? "Exit Fullscreen" : "Fullscreen";
-      resizeGame();
-    });
-
-    window.addEventListener("resize", resizeGame);
-
-    // ----- Progress saving/loading -----
-    function saveProgress(progress) {
-      if (!progress) return;
-      localStorage.setItem("gameProgress", JSON.stringify(progress));
-      console.log("Progress saved:", progress);
-    }
-
-    function loadProgress() {
-      const saved = localStorage.getItem("gameProgress");
-      if (saved) {
-        const progress = JSON.parse(saved);
-        console.log("Progress loaded:", progress);
-        return progress;
-      }
-      return null;
-    }
-
-    window.addEventListener("DOMContentLoaded", () => {
-      resizeGame();
-
-      const ruffle = window.RufflePlayer?.newest();
-      const player = ruffle.createPlayer();
-      player.style.width = "100%";
-      player.style.height = "100%";
-      player.style.background = "black";
-      container.appendChild(player);
-
-      player.load("https://cdn.jsdelivr.net/gh/sasa24s/Sphere-compile@95d1d98dc38a920d02e6bbcf61620501b2bacfcb/tables/pvz_9_15.swf");
-
-      // --- Wait until SWF is ready, then load saved progress ---
-      player.addEventListener("load", () => {
-        const savedProgress = loadProgress();
-        if (savedProgress && player.call) {
-          // Attempt to restore SWF state via ExternalInterface
-          try {
-            player.call("loadProgress", savedProgress);
-            console.log("Sent saved progress to SWF.");
-          } catch (e) {
-            console.warn("SWF does not support loadProgress():", e);
-          }
+    // Auto-save every 15 seconds
+    setInterval(() => {
+      if (player.call) {
+        try {
+          const progress = player.call("getProgress");
+          if (progress) saveProgress(progress);
+        } catch (e) {
+          // Ignore if SWF doesn't have getProgress()
         }
-
-        // --- Auto-save loop every 15 seconds ---
-        setInterval(() => {
-          if (player.call) {
-            try {
-              const progress = player.call("getProgress"); // Should return an object
-              if (progress) saveProgress(progress);
-            } catch (e) {
-              console.warn("SWF does not support getProgress():", e);
-            }
-          }
-        }, 15000);
-      });
-    });
-  </script>
-</body>
-</html>
+      }
+    }, 15000);
+  }, 3000); // 3 seconds delay
+</script>
