@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Hub</title>
+    <title>Johnny Games</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -12,27 +12,34 @@
             background: url('images/Wallpaper.jpg') no-repeat center center fixed;
             background-size: cover;
         }
+
+        /* Responsive banner image */
         .banner {
-            width: 100%;
-            max-height: 400px;
-            overflow: hidden;
+            display: flex;
+            justify-content: center; /* center horizontally */
+            padding: 20px 0;
         }
         .banner img {
-            width: 100%;
+            width: 100%;        /* scales down to fit smaller screens */
+            max-width: 1536px;  /* natural width of the image */
+            height: auto;       /* keep original aspect ratio */
             display: block;
         }
+
         h1 {
             text-align: center;
             color: #fff;
-            margin-top: 20px;
+            margin: 20px 0;
             text-shadow: 2px 2px 5px rgba(0,0,0,0.7);
         }
+
         .game-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); /* bigger cards */
             gap: 20px;
             padding: 20px;
         }
+
         .game-card {
             text-align: center;
             background: rgba(0,0,0,0.9); /* black background */
@@ -44,11 +51,13 @@
         .game-card:hover {
             transform: scale(1.05);
         }
+
         .game-card img {
             width: 100%;
             height: auto;
             border-radius: 10px;
         }
+
         .game-card p {
             margin-top: 10px;
             font-weight: bold;
@@ -58,27 +67,16 @@
 </head>
 <body>
 
-<!-- Banner at natural size above the wallpaper -->
-<!-- Responsive banner image -->
+<!-- Banner at natural size, responsive -->
 <div class="banner">
     <img src="images/Banner.png" alt="Johnny Games Banner">
 </div>
 
-<style>
-    .banner {
-        display: flex;
-        justify-content: center; /* center horizontally */
-        padding: 20px 0;
-    }
-    .banner img {
-        width: 100%;        /* scales down to fit smaller screens */
-        max-width: 1536px;  /* natural width of the image */
-        height: auto;       /* keep original aspect ratio */
-        display: block;
-    }
-</style>
+<h1>Johnny Games</h1>
 
-<h1>Game Hub</h1>
+<div class="game-grid">
+    <div class="game-card">
+
 
 <div class="game-grid">
     <div class="game-card">
