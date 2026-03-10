@@ -4,6 +4,34 @@
 
 <!DOCTYPE html>
 <html lang="en-US">
+<!-- Fullscreen Button -->
+<button id="fullscreen-btn" style="position:fixed; top:10px; right:10px; z-index:999;">Fullscreen</button>
+
+<script>
+  const fsBtn = document.getElementById('fullscreen-btn');
+
+  fsBtn.addEventListener('click', () => {
+    const docEl = document.documentElement;
+
+    if (!document.fullscreenElement) {
+      if (docEl.requestFullscreen) {
+        docEl.requestFullscreen();
+      } else if (docEl.webkitRequestFullscreen) { // Safari
+        docEl.webkitRequestFullscreen();
+      } else if (docEl.msRequestFullscreen) { // IE11
+        docEl.msRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+      }
+    }
+  });
+</script>
 
 <head>
     <base href="https://rawcdn.githack.com/genizy/google-class/main/gdlite/">
