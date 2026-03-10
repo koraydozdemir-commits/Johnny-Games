@@ -59,13 +59,24 @@
 <body>
 
 <!-- Banner at natural size above the wallpaper -->
+<!-- Responsive banner image -->
 <div class="banner">
-    <img src="images/Banner.png" alt="Game Hub Banner">
+    <img src="images/Banner.png" alt="Johnny Games Banner">
 </div>
 
-<h1>Game Hub</h1>
-
 <style>
+    .banner {
+        display: flex;
+        justify-content: center; /* center horizontally */
+        padding: 20px 0;
+    }
+    .banner img {
+        width: 100%;        /* scales down to fit smaller screens */
+        max-width: 1536px;  /* natural width of the image */
+        height: auto;       /* keep original aspect ratio */
+        display: block;
+    }
+</style>
     .banner {
         width: auto;      /* keep actual width */
         height: auto;     /* keep actual height */
