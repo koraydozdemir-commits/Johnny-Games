@@ -1,63 +1,157 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-<title>My Game Site</title>
-
-<style>
-body{
-    background:#111;
-    color:white;
-    font-family:Arial;
-    text-align:center;
-}
-
-.game-grid{
-    display:grid;
-    grid-template-columns:repeat(4, 200px);
-    gap:20px;
-    justify-content:center;
-}
-
-.game{
-    background:#222;
-    padding:20px;
-    border-radius:10px;
-}
-
-.game a{
-    color:white;
-    text-decoration:none;
-}
-</style>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Hub</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        .game-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+        .game-card {
+            text-align: center;
+            background: #fff;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        .game-card:hover {
+            transform: scale(1.05);
+        }
+        .game-card img {
+            width: 100%;
+            height: auto;
+            border-radius: 10px;
+        }
+        .game-card p {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
 </head>
-
 <body>
 
-<h1>Johnny Games</h1>
-<p>Work In Progress!</p>
+<h1>Game Hub</h1>
 
 <div class="game-grid">
-
-<div class="game">
-<a href="games/drivemad.html">Drive Mad</a>
-</div>
-
-<div class="game">
-<a href="games/geodash.html">Geometry Dash</a>
-</div>
-
-<div class="game">
-<a href="games/worldcup.html">A Small World Cup</a>
-</div>
-
-<div class="game">
-<a href="games/ageofwar.html">Age of War</a>
-</div>
-
+    <div class="game-card">
+        <a href="A Small World Cup.html"><img src="images/A Small World Cup.png" alt="A Small World Cup"></a>
+        <p>A Small World Cup</p>
+    </div>
+    <div class="game-card">
+        <a href="Age of War.html"><img src="images/Age of War .png" alt="Age of War"></a>
+        <p>Age of War</p>
+    </div>
+    <div class="game-card">
+        <a href="Among Us.html"><img src="images/Among Us.png" alt="Among Us"></a>
+        <p>Among Us</p>
+    </div>
+    <div class="game-card">
+        <a href="Angry Birds.html"><img src="images/Angry Birds.png" alt="Angry Birds"></a>
+        <p>Angry Birds</p>
+    </div>
+    <div class="game-card">
+        <a href="Bad Piggies.html"><img src="images/Bad Piggies.png" alt="Bad Piggies"></a>
+        <p>Bad Piggies</p>
+    </div>
+    <div class="game-card">
+        <a href="Bloons Tower Defense.html"><img src="images/Bloons Tower Defense.png" alt="Bloons Tower Defense"></a>
+        <p>Bloons Tower Defense</p>
+    </div>
+    <div class="game-card">
+        <a href="Burrito Bison.html"><img src="images/Burrito Bison.png" alt="Burrito Bison"></a>
+        <p>Burrito Bison</p>
+    </div>
+    <div class="game-card">
+        <a href="Cookie Clicker.html"><img src="images/Cookie Clicker.png" alt="Cookie Clicker"></a>
+        <p>Cookie Clicker</p>
+    </div>
+    <div class="game-card">
+        <a href="Cover Orange.html"><img src="images/Cover Orange.png" alt="Cover Orange"></a>
+        <p>Cover Orange</p>
+    </div>
+    <div class="game-card">
+        <a href="Drift Boss.html"><img src="images/Drift Boss.png" alt="Drift Boss"></a>
+        <p>Drift Boss</p>
+    </div>
+    <div class="game-card">
+        <a href="Drive Mad.html"><img src="images/Drive Mad.png" alt="Drive Mad"></a>
+        <p>Drive Mad</p>
+    </div>
+    <div class="game-card">
+        <a href="Five Nights At Johnny's.html"><img src="images/Five Nights At Johnny's.png" alt="Five Nights At Johnny's"></a>
+        <p>Five Nights At Johnny's</p>
+    </div>
+    <div class="game-card">
+        <a href="Geometry Dash.html"><img src="images/Geometry Dash.png" alt="Geometry Dash"></a>
+        <p>Geometry Dash</p>
+    </div>
+    <div class="game-card">
+        <a href="Getting Over It.html"><img src="images/Getting Over It.png" alt="Getting Over It"></a>
+        <p>Getting Over It</p>
+    </div>
+    <div class="game-card">
+        <a href="Island Simulator.html"><img src="images/Island Simulator.png" alt="Island Simulator"></a>
+        <p>Island Simulator</p>
+    </div>
+    <div class="game-card">
+        <a href="Johnny Obby.html"><img src="images/Johnny Obby.png" alt="Johnny Obby"></a>
+        <p>Johnny Obby</p>
+    </div>
+    <div class="game-card">
+        <a href="Messages.html"><img src="images/Messages.png" alt="Messages"></a>
+        <p>Messages</p>
+    </div>
+    <div class="game-card">
+        <a href="Monkey Mart.html"><img src="images/Monkey Mart.png" alt="Monkey Mart"></a>
+        <p>Monkey Mart</p>
+    </div>
+    <div class="game-card">
+        <a href="Plants vs Zombies.html"><img src="images/Plants vs Zombies.png" alt="Plants vs Zombies"></a>
+        <p>Plants vs Zombies</p>
+    </div>
+    <div class="game-card">
+        <a href="Retro Bowl.html"><img src="images/Retro Bowl.png" alt="Retro Bowl"></a>
+        <p>Retro Bowl</p>
+    </div>
+    <div class="game-card">
+        <a href="Rocket League.html"><img src="images/Rocket League.png" alt="Rocket League"></a>
+        <p>Rocket League</p>
+    </div>
+    <div class="game-card">
+        <a href="Squid Game P1.html"><img src="images/Squid Game P1.png" alt="Squid Game P1"></a>
+        <p>Squid Game P1</p>
+    </div>
+    <div class="game-card">
+        <a href="Squid Game P2.html"><img src="images/Squid Game P2.png" alt="Squid Game P2"></a>
+        <p>Squid Game P2</p>
+    </div>
+    <div class="game-card">
+        <a href="Steal a Brainrot.html"><img src="images/Steal a Brainrot.png" alt="Steal a Brainrot"></a>
+        <p>Steal a Brainrot</p>
+    </div>
+    <div class="game-card">
+        <a href="Stickman Hook.html"><img src="images/Stickman Hook.png" alt="Stickman Hook"></a>
+        <p>Stickman Hook</p>
+    </div>
+    <div class="game-card">
+        <a href="Subway Surfers.html"><img src="images/Subway Surfers.png" alt="Subway Surfers"></a>
+        <p>Subway Surfers</p>
+    </div>
 </div>
 
 </body>
-
 </html>
