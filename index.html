@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Hub</title>
+    <title>Johnny Games</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -12,41 +12,78 @@
             background: url('images/Wallpaper.jpg') no-repeat center center fixed;
             background-size: cover;
         }
-      <!-- Banner Section -->
-<div class="banner">
-    <img src="images/Banner.png" alt="Play Johnny Games">
-</div>
 
-<style>
-/* Banner Styling */
-.banner {
-    width: 100%;
-    height: 100vh; /* make it full screen height */
-    overflow: hidden;
-}
-.banner img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover; /* ensures the image covers entire banner */
-    display: block;
-}
+        /* Responsive banner image */
+        .banner {
+            display: flex;
+            justify-content: center; /* center horizontally */
+            padding: 20px 0;
+        }
+        .banner img {
+            width: 100%;        /* scales down to fit smaller screens */
+            max-width: 1536px;  /* natural width of the image */
+            height: auto;       /* keep original aspect ratio */
+            display: block;
+        }
 
-/* Game Grid Styling */
-.game-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); /* fewer cards per row */
-    gap: 20px;
-    padding: 20px;
-}
-</style>
+        h1 {
+            text-align: center;
+            color: #fff;
+            margin: 20px 0;
+            text-shadow: 2px 2px 5px rgba(0,0,0,0.7);
+        }
+
+        .game-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); /* bigger cards */
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .game-card {
+            text-align: center;
+            background: rgba(0,0,0,0.9); /* black background */
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+            transition: transform 0.2s;
+        }
+        .game-card:hover {
+            transform: scale(1.05);
+        }
+
+        .game-card img {
+            width: 100%;
+            height: auto;
+            border-radius: 10px;
+        }
+
+        .game-card p {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #fff; /* white captions */
+        }
+    </style>
 </head>
 <body>
 
-<div class="image">
-    <img src="images/Banner.png" alt="Play Johnny Games">
+<!-- Banner at natural size, responsive -->
+<!-- Full-width image taking full screen width -->
+<div class="hero-image">
+    <img src="images/Banner.png" alt="Johnny Games Hero Image">
 </div>
 
-<h1>Johnny Games</h1>
+<style>
+    .hero-image {
+        width: 100%;        /* full width of the viewport */
+        overflow: hidden;   /* prevent any overflow */
+    }
+    .hero-image img {
+        width: 100%;        /* stretch image to full width */
+        height: auto;       /* keep natural aspect ratio */
+        display: block;     /* remove small gaps under image */
+    }
+</style>
 
 <div class="game-grid">
     <div class="game-card">
