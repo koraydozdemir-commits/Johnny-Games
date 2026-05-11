@@ -40,6 +40,39 @@
 		<meta property="og:image:alt" content="Plants vs. Zombies - MODDED" />
 		<meta property="og:image:type" content="image/png" />
 		<meta name="twitter:card" content="summary_large_image" />
+		...existing code above...
+        <meta name="google-site-verification" content="fJLVF6HtXXMM2ag1_bMLijwLhOVj9XWFtUb8KlkdS0I" />
+    
+        <!-- ADD THIS RIGHT HERE -->
+        <style>
+          html, body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: #000;
+          }
+        </style>
+
+        <script>
+          function scaleGame() {
+            const baseW = 900;
+            const baseH = 600;
+            const scaleX = window.innerWidth / baseW;
+            const scaleY = window.innerHeight / baseH;
+            const scale = Math.min(scaleX, scaleY);
+            const offsetX = (window.innerWidth - baseW * scale) / 2;
+            const offsetY = (window.innerHeight - baseH * scale) / 2;
+
+            document.body.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+            document.body.style.transformOrigin = 'top left';
+          }
+
+          window.addEventListener('load', scaleGame);
+          window.addEventListener('resize', scaleGame);
+        </script>
+	
 		<meta name="theme-color" content="#ff2200" />
 		<meta name="twitter:title" content="Play Plants vs. Zombies Modded Online" />
 		<meta name="twitter:description" content="Play Plants vs. Zombie Modded here for Free - Mod by ROBlNET13 on Github." />
