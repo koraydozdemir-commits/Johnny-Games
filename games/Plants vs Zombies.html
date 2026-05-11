@@ -1,94 +1,1209 @@
-<!DOCTYPE html>
-
-
-<!-- Ultimate Game Stash file--> 
-<!-- For the regularly updating doc go to https://docs.google.com/document/d/1_FmH3BlSBQI7FGgAQL59-ZPe8eCxs35wel6JUyVaG8Q/ -->
-
-
 <html>
+	<head>
+    <base href="https://cdn.jsdelivr.net/gh/greeniYT/pvz@main/game/" target="_blank">
+		<link rel="stylesheet" href="Custom.css" />
+		<meta http-equiv="X-Frame-Options" content="DENY" />
+		<title>Plants vs. Zombies - MODDED Official</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<script>
+			// Scale document to 0.9 if running in an extension (localStorage is unavailable)
+			try {
+				localStorage.setItem("__test__", "1");
+				localStorage.removeItem("__test__");
+				console.log("Not running in an extension, no scaling applied");
+			} catch (e) {
+				console.log("Running in an extension, scaling down to 90%");
+				document.documentElement.style.transform = "scale(0.9)";
+				document.documentElement.style.transformOrigin = "top center";
+			}
+		</script>
+		<link rel="icon" href="https://pvzm.net/game/images/gameicon2.png" type="image/png" />
+		<script>
+			window.addEventListener("beforeunload", function (e) {
+				var confirmationMessage = "Are you sure you want to leave? Progress does not save and any progress will be lost.";
+				e.returnValue = confirmationMessage; // For most browsers
+				return confirmationMessage; // For some older browsers
+			});
+		</script>
+		<script src="js/pako.js" defer></script>
+		<!-- <script src="js/html2canvas.js" defer></script> -->
+		<script src="js/msgpack.min.js" defer></script>
+		<script src="js/WebComponents.js" defer></script>
+		<meta property="og:title" content="Play Plants vs Zombies Modded Online" />
+		<meta
+			property="og:description"
+			content="Play Plants vs Zombies Modded here for Free - A tower defense game created by PopCap Games and released on May 5, 2009. Click to Play now! Mod by ROBLNET13 on Github."
+		/>
+		<meta property="og:url" content="https://pvzm.net/game.html" />
+		<meta property="og:site_name" content="ROBLNET13" />
+		<meta property="og:image" content="https://pvzm.net/game/images/gamethumbnail5.png" />
+		<meta property="og:image:alt" content="Plants vs. Zombies - MODDED" />
+		<meta property="og:image:type" content="image/png" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="theme-color" content="#ff2200" />
+		<meta name="twitter:title" content="Play Plants vs. Zombies Modded Online" />
+		<meta name="twitter:description" content="Play Plants vs. Zombie Modded here for Free - Mod by ROBlNET13 on Github." />
+		<meta name="twitter:image" content="https://pvzm.net/game/images/gamethumbnail5.png" />
+		<link rel="stylesheet" href="UI.css" />
+		<!-- REMOVE THIS SCRIPT AFTER REFACTOR IS DONE -->
+		<script>
+			function replaceSingleFontTag(fontElement) {
+				if (!fontElement || !fontElement.parentNode || fontElement.tagName !== "FONT") {
+					return;
+				}
 
-<head>
-  <meta charset="utf-8">
-  <base href="https://cdn.jsdelivr.net/gh/bubbls/UGS-Assets@main/gardenless/">
-  <title>PvZ2 Gardendless Online | 0.6.0</title>
-<script>
-(function() {
-  const originalImage = window.Image;
-  window.Image = function() {
-    const img = new originalImage();
-    img.crossOrigin = 'anonymous';
-    return img;
-  };
-})();
-</script>
-  <!--http://www.html5rocks.com/en/mobile/mobifying/-->
-  <meta name="viewport"
-    content="width=device-width,user-scalable=no,initial-scale=1,minimum-scale=1,maximum-scale=1,minimal-ui=true" />
+				const fontSizeMap = {
+					1: "x-small",
+					2: "small",
+					3: "medium",
+					4: "large",
+					5: "x-large",
+					6: "xx-large",
+					7: "xxx-large",
+				};
 
-  <!--https://developer.apple.com/library/safari/documentation/AppleApplications/Reference/SafariHTMLRef/Articles/MetaTags.html-->
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="format-detection" content="telephone=no">
+				const spanElement = document.createElement("span");
 
-  <!-- force webkit on 360 -->
-  <meta name="renderer" content="webkit" />
-  <meta name="force-rendering" content="webkit" />
-  <!-- force edge on IE -->
-  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
-  <meta name="msapplication-tap-highlight" content="no">
+				spanElement.innerHTML = fontElement.innerHTML;
 
-  <!-- force full screen on some browser -->
-  <meta name="full-screen" content="yes" />
-  <meta name="x5-fullscreen" content="true" />
-  <meta name="360-fullscreen" content="true" />
+				const color = fontElement.getAttribute("color");
+				if (color) {
+					spanElement.style.color = color;
+				}
+				const size = fontElement.getAttribute("size");
+				if (size && fontSizeMap[size]) {
+					spanElement.style.fontSize = fontSizeMap[size];
+				}
+				const face = fontElement.getAttribute("face");
+				if (face) {
+					spanElement.style.fontFamily = face;
+				}
 
-  <!--fix fireball/issues/3568 -->
-  <!--<meta name="browsermode" content="application">-->
-  <meta name="x5-page-mode" content="app">
+				console.log("Replacing <font> tag:", fontElement);
+				fontElement.replaceWith(spanElement);
+			}
 
-  <!--<link rel="apple-touch-icon" href=".png" />-->
-  <!--<link rel="apple-touch-icon-precomposed" href=".png" />-->
+			function replaceExistingFontTags() {
+				const existingFonts = document.querySelectorAll("font");
+				let replacedCount = 0;
+				existingFonts.forEach((font) => {
+					if (font.parentNode) {
+						replaceSingleFontTag(font);
+						replacedCount++;
+					}
+				});
+				if (replacedCount > 0) {
+					console.log(`Replaced ${replacedCount} initially present <font> tag(s).`);
+				} else {
+					console.log("No initial <font> tags found to replace.");
+				}
+			}
 
-  <link rel="stylesheet" type="text/css" href="style.f76d1.css" />
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-FNC28KV0ZR"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag() { dataLayer.push(arguments); }
-    gtag('js', new Date());
+			const mutationCallback = (mutationsList, observer) => {
+				for (const mutation of mutationsList) {
+					if (mutation.type === "childList") {
+						mutation.addedNodes.forEach((node) => {
+							if (node.nodeType === Node.ELEMENT_NODE && node.tagName === "FONT") {
+								replaceSingleFontTag(node);
+							} else if (node.nodeType === Node.ELEMENT_NODE && node.querySelectorAll) {
+								const nestedFonts = node.querySelectorAll("font");
+								nestedFonts.forEach(replaceSingleFontTag);
+							}
+						});
+					} else if (mutation.type === "attributes") {
+						if (mutation.target.nodeType === Node.ELEMENT_NODE && mutation.target.tagName === "FONT") {
+							console.log(`Attribute '${mutation.attributeName}' changed on:`, mutation.target);
+							replaceSingleFontTag(mutation.target);
+						}
+					}
+				}
+			};
 
-    gtag('config', 'G-FNC28KV0ZR');
-  </script>
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7637695321442015"
-    crossorigin="anonymous"></script>
-  <script async src="https://fundingchoicesmessages.google.com/i/pub-7637695321442015?ers=1"></script>
-  <script>(function () { function signalGooglefcPresent() { if (!window.frames['googlefcPresent']) { if (document.body) { const iframe = document.createElement('iframe'); iframe.style = 'width: 0; height: 0; border: none; z-index: -1000; left: -1000px; top: -1000px;'; iframe.style.display = 'none'; iframe.name = 'googlefcPresent'; document.body.appendChild(iframe); } else { setTimeout(signalGooglefcPresent, 0); } } } signalGooglefcPresent(); })();</script>
-  <script>(function () { 'use strict'; function aa(a) { var b = 0; return function () { return b < a.length ? { done: !1, value: a[b++] } : { done: !0 } } } var ba = typeof Object.defineProperties == "function" ? Object.defineProperty : function (a, b, c) { if (a == Array.prototype || a == Object.prototype) return a; a[b] = c.value; return a }; function ca(a) { a = ["object" == typeof globalThis && globalThis, a, "object" == typeof window && window, "object" == typeof self && self, "object" == typeof global && global]; for (var b = 0; b < a.length; ++b) { var c = a[b]; if (c && c.Math == Math) return c } throw Error("Cannot find global object"); } var da = ca(this); function l(a, b) { if (b) a: { var c = da; a = a.split("."); for (var d = 0; d < a.length - 1; d++) { var e = a[d]; if (!(e in c)) break a; c = c[e] } a = a[a.length - 1]; d = c[a]; b = b(d); b != d && b != null && ba(c, a, { configurable: !0, writable: !0, value: b }) } } function ea(a) { return a.raw = a } function n(a) { var b = typeof Symbol != "undefined" && Symbol.iterator && a[Symbol.iterator]; if (b) return b.call(a); if (typeof a.length == "number") return { next: aa(a) }; throw Error(String(a) + " is not an iterable or ArrayLike"); } function fa(a) { for (var b, c = []; !(b = a.next()).done;)c.push(b.value); return c } var ha = typeof Object.create == "function" ? Object.create : function (a) { function b() { } b.prototype = a; return new b }, p; if (typeof Object.setPrototypeOf == "function") p = Object.setPrototypeOf; else { var q; a: { var ja = { a: !0 }, ka = {}; try { ka.__proto__ = ja; q = ka.a; break a } catch (a) { } q = !1 } p = q ? function (a, b) { a.__proto__ = b; if (a.__proto__ !== b) throw new TypeError(a + " is not extensible"); return a } : null } var la = p; function t(a, b) { a.prototype = ha(b.prototype); a.prototype.constructor = a; if (la) la(a, b); else for (var c in b) if (c != "prototype") if (Object.defineProperties) { var d = Object.getOwnPropertyDescriptor(b, c); d && Object.defineProperty(a, c, d) } else a[c] = b[c]; a.A = b.prototype } function ma() { for (var a = Number(this), b = [], c = a; c < arguments.length; c++)b[c - a] = arguments[c]; return b } l("Object.is", function (a) { return a ? a : function (b, c) { return b === c ? b !== 0 || 1 / b === 1 / c : b !== b && c !== c } }); l("Array.prototype.includes", function (a) { return a ? a : function (b, c) { var d = this; d instanceof String && (d = String(d)); var e = d.length; c = c || 0; for (c < 0 && (c = Math.max(c + e, 0)); c < e; c++) { var f = d[c]; if (f === b || Object.is(f, b)) return !0 } return !1 } }); l("String.prototype.includes", function (a) { return a ? a : function (b, c) { if (this == null) throw new TypeError("The 'this' value for String.prototype.includes must not be null or undefined"); if (b instanceof RegExp) throw new TypeError("First argument to String.prototype.includes must not be a regular expression"); return this.indexOf(b, c || 0) !== -1 } }); l("Number.MAX_SAFE_INTEGER", function () { return 9007199254740991 }); l("Number.isFinite", function (a) { return a ? a : function (b) { return typeof b !== "number" ? !1 : !isNaN(b) && b !== Infinity && b !== -Infinity } }); l("Number.isInteger", function (a) { return a ? a : function (b) { return Number.isFinite(b) ? b === Math.floor(b) : !1 } }); l("Number.isSafeInteger", function (a) { return a ? a : function (b) { return Number.isInteger(b) && Math.abs(b) <= Number.MAX_SAFE_INTEGER } }); l("Math.trunc", function (a) { return a ? a : function (b) { b = Number(b); if (isNaN(b) || b === Infinity || b === -Infinity || b === 0) return b; var c = Math.floor(Math.abs(b)); return b < 0 ? -c : c } });/* Copyright The Closure Library Authors. SPDX-License-Identifier: Apache-2.0 */ var u = this || self; function v(a, b) { a: { var c = ["CLOSURE_FLAGS"]; for (var d = u, e = 0; e < c.length; e++)if (d = d[c[e]], d == null) { c = null; break a } c = d } a = c && c[a]; return a != null ? a : b } function w(a) { return a }; function na(a) { u.setTimeout(function () { throw a; }, 0) }; var oa = v(610401301, !1), pa = v(188588736, !0), qa = v(645172343, v(1, !0)); var x, ra = u.navigator; x = ra ? ra.userAgentData || null : null; function z(a) { return oa ? x ? x.brands.some(function (b) { return (b = b.brand) && b.indexOf(a) != -1 }) : !1 : !1 } function A(a) { var b; a: { if (b = u.navigator) if (b = b.userAgent) break a; b = "" } return b.indexOf(a) != -1 }; function B() { return oa ? !!x && x.brands.length > 0 : !1 } function C() { return B() ? z("Chromium") : (A("Chrome") || A("CriOS")) && !(B() ? 0 : A("Edge")) || A("Silk") }; var sa = B() ? !1 : A("Trident") || A("MSIE"); !A("Android") || C(); C(); A("Safari") && (C() || (B() ? 0 : A("Coast")) || (B() ? 0 : A("Opera")) || (B() ? 0 : A("Edge")) || (B() ? z("Microsoft Edge") : A("Edg/")) || B() && z("Opera")); var ta = {}, D = null; var ua = typeof Uint8Array !== "undefined", va = !sa && typeof btoa === "function"; var wa; function E() { return typeof BigInt === "function" }; var F = typeof Symbol === "function" && typeof Symbol() === "symbol"; function xa(a) { return typeof Symbol === "function" && typeof Symbol() === "symbol" ? Symbol() : a } var G = xa(), ya = xa("2ex"); var za = F ? function (a, b) { a[G] |= b } : function (a, b) { a.g !== void 0 ? a.g |= b : Object.defineProperties(a, { g: { value: b, configurable: !0, writable: !0, enumerable: !1 } }) }, H = F ? function (a) { return a[G] | 0 } : function (a) { return a.g | 0 }, I = F ? function (a) { return a[G] } : function (a) { return a.g }, J = F ? function (a, b) { a[G] = b } : function (a, b) { a.g !== void 0 ? a.g = b : Object.defineProperties(a, { g: { value: b, configurable: !0, writable: !0, enumerable: !1 } }) }; function Aa(a, b) { J(b, (a | 0) & -14591) } function Ba(a, b) { J(b, (a | 34) & -14557) }; var K = {}, Ca = {}; function Da(a) { return !(!a || typeof a !== "object" || a.g !== Ca) } function Ea(a) { return a !== null && typeof a === "object" && !Array.isArray(a) && a.constructor === Object } function L(a, b, c) { if (!Array.isArray(a) || a.length) return !1; var d = H(a); if (d & 1) return !0; if (!(b && (Array.isArray(b) ? b.includes(c) : b.has(c)))) return !1; J(a, d | 1); return !0 }; var M = 0, N = 0; function Fa(a) { var b = a >>> 0; M = b; N = (a - b) / 4294967296 >>> 0 } function Ga(a) { if (a < 0) { Fa(-a); var b = n(Ha(M, N)); a = b.next().value; b = b.next().value; M = a >>> 0; N = b >>> 0 } else Fa(a) } function Ia(a, b) { b >>>= 0; a >>>= 0; if (b <= 2097151) var c = "" + (4294967296 * b + a); else E() ? c = "" + (BigInt(b) << BigInt(32) | BigInt(a)) : (c = (a >>> 24 | b << 8) & 16777215, b = b >> 16 & 65535, a = (a & 16777215) + c * 6777216 + b * 6710656, c += b * 8147497, b *= 2, a >= 1E7 && (c += a / 1E7 >>> 0, a %= 1E7), c >= 1E7 && (b += c / 1E7 >>> 0, c %= 1E7), c = b + Ja(c) + Ja(a)); return c } function Ja(a) { a = String(a); return "0000000".slice(a.length) + a } function Ha(a, b) { b = ~b; a ? a = ~a + 1 : b += 1; return [a, b] }; var Ka = /^-?([1-9][0-9]*|0)(\.[0-9]+)?$/; var O; function La(a, b) { O = b; a = new a(b); O = void 0; return a } function P(a, b, c) { a == null && (a = O); O = void 0; if (a == null) { var d = 96; c ? (a = [c], d |= 512) : a = []; b && (d = d & -16760833 | (b & 1023) << 14) } else { if (!Array.isArray(a)) throw Error("narr"); d = H(a); if (d & 2048) throw Error("farr"); if (d & 64) return a; d |= 64; if (c && (d |= 512, c !== a[0])) throw Error("mid"); a: { c = a; var e = c.length; if (e) { var f = e - 1; if (Ea(c[f])) { d |= 256; b = f - (+!!(d & 512) - 1); if (b >= 1024) throw Error("pvtlmt"); d = d & -16760833 | (b & 1023) << 14; break a } } if (b) { b = Math.max(b, e - (+!!(d & 512) - 1)); if (b > 1024) throw Error("spvt"); d = d & -16760833 | (b & 1023) << 14 } } } J(a, d); return a }; function Ma(a) { switch (typeof a) { case "number": return isFinite(a) ? a : String(a); case "boolean": return a ? 1 : 0; case "object": if (a) if (Array.isArray(a)) { if (L(a, void 0, 0)) return } else if (ua && a != null && a instanceof Uint8Array) { if (va) { for (var b = "", c = 0, d = a.length - 10240; c < d;)b += String.fromCharCode.apply(null, a.subarray(c, c += 10240)); b += String.fromCharCode.apply(null, c ? a.subarray(c) : a); a = btoa(b) } else { b === void 0 && (b = 0); if (!D) { D = {}; c = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".split(""); d = ["+/=", "+/", "-_=", "-_.", "-_"]; for (var e = 0; e < 5; e++) { var f = c.concat(d[e].split("")); ta[e] = f; for (var g = 0; g < f.length; g++) { var h = f[g]; D[h] === void 0 && (D[h] = g) } } } b = ta[b]; c = Array(Math.floor(a.length / 3)); d = b[64] || ""; for (e = f = 0; f < a.length - 2; f += 3) { var k = a[f], m = a[f + 1]; h = a[f + 2]; g = b[k >> 2]; k = b[(k & 3) << 4 | m >> 4]; m = b[(m & 15) << 2 | h >> 6]; h = b[h & 63]; c[e++] = g + k + m + h } g = 0; h = d; switch (a.length - f) { case 2: g = a[f + 1], h = b[(g & 15) << 2] || d; case 1: a = a[f], c[e] = b[a >> 2] + b[(a & 3) << 4 | g >> 4] + h + d }a = c.join("") } return a } }return a }; function Na(a, b, c) { a = Array.prototype.slice.call(a); var d = a.length, e = b & 256 ? a[d - 1] : void 0; d += e ? -1 : 0; for (b = b & 512 ? 1 : 0; b < d; b++)a[b] = c(a[b]); if (e) { b = a[b] = {}; for (var f in e) Object.prototype.hasOwnProperty.call(e, f) && (b[f] = c(e[f])) } return a } function Oa(a, b, c, d, e) { if (a != null) { if (Array.isArray(a)) a = L(a, void 0, 0) ? void 0 : e && H(a) & 2 ? a : Pa(a, b, c, d !== void 0, e); else if (Ea(a)) { var f = {}, g; for (g in a) Object.prototype.hasOwnProperty.call(a, g) && (f[g] = Oa(a[g], b, c, d, e)); a = f } else a = b(a, d); return a } } function Pa(a, b, c, d, e) { var f = d || c ? H(a) : 0; d = d ? !!(f & 32) : void 0; a = Array.prototype.slice.call(a); for (var g = 0; g < a.length; g++)a[g] = Oa(a[g], b, c, d, e); c && c(f, a); return a } function Qa(a) { return a.s === K ? a.toJSON() : Ma(a) }; function Ra(a, b, c) { c = c === void 0 ? Ba : c; if (a != null) { if (ua && a instanceof Uint8Array) return b ? a : new Uint8Array(a); if (Array.isArray(a)) { var d = H(a); if (d & 2) return a; b && (b = d === 0 || !!(d & 32) && !(d & 64 || !(d & 16))); return b ? (J(a, (d | 34) & -12293), a) : Pa(a, Ra, d & 4 ? Ba : c, !0, !0) } a.s === K && (c = a.h, d = I(c), a = d & 2 ? a : La(a.constructor, Sa(c, d, !0))); return a } } function Sa(a, b, c) { var d = c || b & 2 ? Ba : Aa, e = !!(b & 32); a = Na(a, b, function (f) { return Ra(f, e, d) }); za(a, 32 | (c ? 2 : 0)); return a }; function Ta(a, b) { a = a.h; return Ua(a, I(a), b) } function Va(a, b, c, d) { b = d + (+!!(b & 512) - 1); if (!(b < 0 || b >= a.length || b >= c)) return a[b] } function Ua(a, b, c, d) { if (c === -1) return null; var e = b >> 14 & 1023 || 536870912; if (c >= e) { if (b & 256) return a[a.length - 1][c] } else { var f = a.length; if (d && b & 256 && (d = a[f - 1][c], d != null)) { if (Va(a, b, e, c) && ya != null) { var g; a = (g = wa) != null ? g : wa = {}; g = a[ya] || 0; g >= 4 || (a[ya] = g + 1, g = Error(), g.__closure__error__context__984382 || (g.__closure__error__context__984382 = {}), g.__closure__error__context__984382.severity = "incident", na(g)) } return d } return Va(a, b, e, c) } } function Wa(a, b, c, d, e) { var f = b >> 14 & 1023 || 536870912; if (c >= f || e && !qa) { var g = b; if (b & 256) e = a[a.length - 1]; else { if (d == null) return; e = a[f + (+!!(b & 512) - 1)] = {}; g |= 256 } e[c] = d; c < f && (a[c + (+!!(b & 512) - 1)] = void 0); g !== b && J(a, g) } else a[c + (+!!(b & 512) - 1)] = d, b & 256 && (a = a[a.length - 1], c in a && delete a[c]) } function Xa(a, b) { var c = Ya; var d = d === void 0 ? !1 : d; var e = a.h; var f = I(e), g = Ua(e, f, b, d); if (g != null && typeof g === "object" && g.s === K) c = g; else if (Array.isArray(g)) { var h = H(g), k = h; k === 0 && (k |= f & 32); k |= f & 2; k !== h && J(g, k); c = new c(g) } else c = void 0; c !== g && c != null && Wa(e, f, b, c, d); e = c; if (e == null) return e; a = a.h; f = I(a); f & 2 || (g = e, c = g.h, h = I(c), g = h & 2 ? La(g.constructor, Sa(c, h, !1)) : g, g !== e && (e = g, Wa(a, f, b, e, d))); return e } function Za(a, b) { a = Ta(a, b); return a == null || typeof a === "string" ? a : void 0 } function $a(a, b) { var c = c === void 0 ? 0 : c; a = Ta(a, b); if (a != null) if (b = typeof a, b === "number" ? Number.isFinite(a) : b !== "string" ? 0 : Ka.test(a)) if (typeof a === "number") { if (a = Math.trunc(a), !Number.isSafeInteger(a)) { Ga(a); b = M; var d = N; if (a = d & 2147483648) b = ~b + 1 >>> 0, d = ~d >>> 0, b == 0 && (d = d + 1 >>> 0); b = d * 4294967296 + (b >>> 0); a = a ? -b : b } } else if (b = Math.trunc(Number(a)), Number.isSafeInteger(b)) a = String(b); else { if (b = a.indexOf("."), b !== -1 && (a = a.substring(0, b)), !(a[0] === "-" ? a.length < 20 || a.length === 20 && Number(a.substring(0, 7)) > -922337 : a.length < 19 || a.length === 19 && Number(a.substring(0, 6)) < 922337)) { if (a.length < 16) Ga(Number(a)); else if (E()) a = BigInt(a), M = Number(a & BigInt(4294967295)) >>> 0, N = Number(a >> BigInt(32) & BigInt(4294967295)); else { b = +(a[0] === "-"); N = M = 0; d = a.length; for (var e = b, f = (d - b) % 6 + b; f <= d; e = f, f += 6)e = Number(a.slice(e, f)), N *= 1E6, M = M * 1E6 + e, M >= 4294967296 && (N += Math.trunc(M / 4294967296), N >>>= 0, M >>>= 0); b && (b = n(Ha(M, N)), a = b.next().value, b = b.next().value, M = a, N = b) } a = M; b = N; b & 2147483648 ? E() ? a = "" + (BigInt(b | 0) << BigInt(32) | BigInt(a >>> 0)) : (b = n(Ha(a, b)), a = b.next().value, b = b.next().value, a = "-" + Ia(a, b)) : a = Ia(a, b) } } else a = void 0; return a != null ? a : c } function R(a, b) { var c = c === void 0 ? "" : c; a = Za(a, b); return a != null ? a : c }; var S; function T(a, b, c) { this.h = P(a, b, c) } T.prototype.toJSON = function () { return ab(this) }; T.prototype.s = K; T.prototype.toString = function () { try { return S = !0, ab(this).toString() } finally { S = !1 } }; function ab(a) { var b = S ? a.h : Pa(a.h, Qa, void 0, void 0, !1); var c = !S; var d = pa ? void 0 : a.constructor.v; var e = I(c ? a.h : b); if (a = b.length) { var f = b[a - 1], g = Ea(f); g ? a-- : f = void 0; e = +!!(e & 512) - 1; var h = b; if (g) { b: { var k = f; var m = {}; g = !1; if (k) for (var r in k) if (Object.prototype.hasOwnProperty.call(k, r)) if (isNaN(+r)) m[r] = k[r]; else { var y = k[r]; Array.isArray(y) && (L(y, d, +r) || Da(y) && y.size === 0) && (y = null); y == null && (g = !0); y != null && (m[r] = y) } if (g) { for (var Q in m) break b; m = null } else m = k } k = m == null ? f != null : m !== f } for (var ia; a > 0; a--) { Q = a - 1; r = h[Q]; Q -= e; if (!(r == null || L(r, d, Q) || Da(r) && r.size === 0)) break; ia = !0 } if (h !== b || k || ia) { if (!c) h = Array.prototype.slice.call(h, 0, a); else if (ia || k || m) h.length = a; m && h.push(m) } b = h } return b }; function bb(a) { return function (b) { if (b == null || b == "") b = new a; else { b = JSON.parse(b); if (!Array.isArray(b)) throw Error("dnarr"); za(b, 32); b = La(a, b) } return b } }; function cb(a) { this.h = P(a) } t(cb, T); var db = bb(cb); var U; function V(a) { this.g = a } V.prototype.toString = function () { return this.g + "" }; var eb = {}; function fb(a) { if (U === void 0) { var b = null; var c = u.trustedTypes; if (c && c.createPolicy) { try { b = c.createPolicy("goog#html", { createHTML: w, createScript: w, createScriptURL: w }) } catch (d) { u.console && u.console.error(d.message) } U = b } else U = b } a = (b = U) ? b.createScriptURL(a) : a; return new V(a, eb) };/* SPDX-License-Identifier: Apache-2.0 */ function gb(a) { var b = ma.apply(1, arguments); if (b.length === 0) return fb(a[0]); for (var c = a[0], d = 0; d < b.length; d++)c += encodeURIComponent(b[d]) + a[d + 1]; return fb(c) }; function hb(a, b) { a.src = b instanceof V && b.constructor === V ? b.g : "type_error:TrustedResourceUrl"; var c, d; (c = (b = (d = (c = (a.ownerDocument && a.ownerDocument.defaultView || window).document).querySelector) == null ? void 0 : d.call(c, "script[nonce]")) ? b.nonce || b.getAttribute("nonce") || "" : "") && a.setAttribute("nonce", c) }; function ib() { return Math.floor(Math.random() * 2147483648).toString(36) + Math.abs(Math.floor(Math.random() * 2147483648) ^ Date.now()).toString(36) }; function jb(a, b) { b = String(b); a.contentType === "application/xhtml+xml" && (b = b.toLowerCase()); return a.createElement(b) } function kb(a) { this.g = a || u.document || document }; function lb(a) { a = a === void 0 ? document : a; return a.createElement("script") }; function mb(a, b, c, d, e, f) { try { var g = a.g, h = lb(g); h.async = !0; hb(h, b); g.head.appendChild(h); h.addEventListener("load", function () { e(); d && g.head.removeChild(h) }); h.addEventListener("error", function () { c > 0 ? mb(a, b, c - 1, d, e, f) : (d && g.head.removeChild(h), f()) }) } catch (k) { f() } }; var nb = u.atob("aHR0cHM6Ly93d3cuZ3N0YXRpYy5jb20vaW1hZ2VzL2ljb25zL21hdGVyaWFsL3N5c3RlbS8xeC93YXJuaW5nX2FtYmVyXzI0ZHAucG5n"), ob = u.atob("WW91IGFyZSBzZWVpbmcgdGhpcyBtZXNzYWdlIGJlY2F1c2UgYWQgb3Igc2NyaXB0IGJsb2NraW5nIHNvZnR3YXJlIGlzIGludGVyZmVyaW5nIHdpdGggdGhpcyBwYWdlLg=="), pb = u.atob("RGlzYWJsZSBhbnkgYWQgb3Igc2NyaXB0IGJsb2NraW5nIHNvZnR3YXJlLCB0aGVuIHJlbG9hZCB0aGlzIHBhZ2Uu"); function qb(a, b, c) { this.i = a; this.u = b; this.o = c; this.g = null; this.j = []; this.m = !1; this.l = new kb(this.i) } function rb(a) { if (a.i.body && !a.m) { var b = function () { sb(a); u.setTimeout(function () { tb(a, 3) }, 50) }; mb(a.l, a.u, 2, !0, function () { u[a.o] || b() }, b); a.m = !0 } } function sb(a) { for (var b = W(1, 5), c = 0; c < b; c++) { var d = X(a); a.i.body.appendChild(d); a.j.push(d) } b = X(a); b.style.bottom = "0"; b.style.left = "0"; b.style.position = "fixed"; b.style.width = W(100, 110).toString() + "%"; b.style.zIndex = W(2147483544, 2147483644).toString(); b.style.backgroundColor = ub(249, 259, 242, 252, 219, 229); b.style.boxShadow = "0 0 12px #888"; b.style.color = ub(0, 10, 0, 10, 0, 10); b.style.display = "flex"; b.style.justifyContent = "center"; b.style.fontFamily = "Roboto, Arial"; c = X(a); c.style.width = W(80, 85).toString() + "%"; c.style.maxWidth = W(750, 775).toString() + "px"; c.style.margin = "24px"; c.style.display = "flex"; c.style.alignItems = "flex-start"; c.style.justifyContent = "center"; d = jb(a.l.g, "IMG"); d.className = ib(); d.src = nb; d.alt = "Warning icon"; d.style.height = "24px"; d.style.width = "24px"; d.style.paddingRight = "16px"; var e = X(a), f = X(a); f.style.fontWeight = "bold"; f.textContent = ob; var g = X(a); g.textContent = pb; Y(a, e, f); Y(a, e, g); Y(a, c, d); Y(a, c, e); Y(a, b, c); a.g = b; a.i.body.appendChild(a.g); b = W(1, 5); for (c = 0; c < b; c++)d = X(a), a.i.body.appendChild(d), a.j.push(d) } function Y(a, b, c) { for (var d = W(1, 5), e = 0; e < d; e++) { var f = X(a); b.appendChild(f) } b.appendChild(c); c = W(1, 5); for (d = 0; d < c; d++)e = X(a), b.appendChild(e) } function W(a, b) { return Math.floor(a + Math.random() * (b - a)) } function ub(a, b, c, d, e, f) { return "rgb(" + W(Math.max(a, 0), Math.min(b, 255)).toString() + "," + W(Math.max(c, 0), Math.min(d, 255)).toString() + "," + W(Math.max(e, 0), Math.min(f, 255)).toString() + ")" } function X(a) { a = jb(a.l.g, "DIV"); a.className = ib(); return a } function tb(a, b) { b <= 0 || a.g != null && a.g.offsetHeight !== 0 && a.g.offsetWidth !== 0 || (vb(a), sb(a), u.setTimeout(function () { tb(a, b - 1) }, 50)) } function vb(a) { for (var b = n(a.j), c = b.next(); !c.done; c = b.next())(c = c.value) && c.parentNode && c.parentNode.removeChild(c); a.j = []; (b = a.g) && b.parentNode && b.parentNode.removeChild(b); a.g = null }; function wb(a, b, c, d, e) { function f(k) { document.body ? g(document.body) : k > 0 ? u.setTimeout(function () { f(k - 1) }, e) : b() } function g(k) { k.appendChild(h); u.setTimeout(function () { h ? (h.offsetHeight !== 0 && h.offsetWidth !== 0 ? b() : a(), h.parentNode && h.parentNode.removeChild(h)) : a() }, d) } var h = xb(c); f(3) } function xb(a) { var b = document.createElement("div"); b.className = a; b.style.width = "1px"; b.style.height = "1px"; b.style.position = "absolute"; b.style.left = "-10000px"; b.style.top = "-10000px"; b.style.zIndex = "-10000"; return b }; function Ya(a) { this.h = P(a) } t(Ya, T); function yb(a) { this.h = P(a) } t(yb, T); var zb = bb(yb); function Ab(a) { if (!a) return null; a = Za(a, 4); var b; a === null || a === void 0 ? b = null : b = fb(a); return b }; var Bb = ea([""]), Cb = ea([""]); function Db(a, b) { this.m = a; this.o = new kb(a.document); this.g = b; this.j = R(this.g, 1); this.u = Ab(Xa(this.g, 2)) || gb(Bb); this.i = !1; b = Ab(Xa(this.g, 13)) || gb(Cb); this.l = new qb(a.document, b, R(this.g, 12)) } Db.prototype.start = function () { Eb(this) }; function Eb(a) { Fb(a); mb(a.o, a.u, 3, !1, function () { a: { var b = a.j; var c = u.btoa(b); if (c = u[c]) { try { var d = db(u.atob(c)) } catch (e) { b = !1; break a } b = b === Za(d, 1) } else b = !1 } b ? Z(a, R(a.g, 14)) : (Z(a, R(a.g, 8)), rb(a.l)) }, function () { wb(function () { Z(a, R(a.g, 7)); rb(a.l) }, function () { return Z(a, R(a.g, 6)) }, R(a.g, 9), $a(a.g, 10), $a(a.g, 11)) }) } function Z(a, b) { a.i || (a.i = !0, a = new a.m.XMLHttpRequest, a.open("GET", b, !0), a.send()) } function Fb(a) { var b = u.btoa(a.j); a.m[b] && Z(a, R(a.g, 5)) }; (function (a, b) { u[a] = function () { var c = ma.apply(0, arguments); u[a] = function () { }; b.call.apply(b, [null].concat(c instanceof Array ? c : fa(n(c)))) } })("__h82AlnkH6D91__", function (a) { typeof window.atob === "function" && (new Db(window, zb(window.atob(a)))).start() }); }).call(this); window.__h82AlnkH6D91__("WyJwdWItNzYzNzY5NTMyMTQ0MjAxNSIsW251bGwsbnVsbCxudWxsLCJodHRwczovL2Z1bmRpbmdjaG9pY2VzbWVzc2FnZXMuZ29vZ2xlLmNvbS9iL3B1Yi03NjM3Njk1MzIxNDQyMDE1Il0sbnVsbCxudWxsLCJodHRwczovL2Z1bmRpbmdjaG9pY2VzbWVzc2FnZXMuZ29vZ2xlLmNvbS9lbC9BR1NLV3hYTU96TnRvb3ptX3lLdUtPMHBfb1g2TGlGNDI2Wi02dC0zd3JZN0VoYTVYRUE3ZENRYzFxZENGaEMzRWFtbFNBZ2lxbW93LVRFLTQ2a19UVDZVemxOVUdBXHUwMDNkXHUwMDNkP3RlXHUwMDNkVE9LRU5fRVhQT1NFRCIsImh0dHBzOi8vZnVuZGluZ2Nob2ljZXNtZXNzYWdlcy5nb29nbGUuY29tL2VsL0FHU0tXeFZqY1pkMThuYUJCTklXb1NaQWlPUm83RUtSVDExRVU2dGN0SG1hdkZPZGNqQ21feXJpS1NERmxlbEdYajBfU3dGWDN3M00zWGhwZ0JhYWpwSFk1VFpEUndcdTAwM2RcdTAwM2Q/YWJcdTAwM2QxXHUwMDI2c2JmXHUwMDNkMSIsImh0dHBzOi8vZnVuZGluZ2Nob2ljZXNtZXNzYWdlcy5nb29nbGUuY29tL2VsL0FHU0tXeFZNZFo5eE9ob1pTRkNsTk41QTNhRUFfZkxtNlZrakcyNHZhSmZzNlJMaXBpdVVTckhiYmtyY3FJd2x0M1lpY0pIcGViNDRqajEwYzNMSWhQdF9kVmZFR1FcdTAwM2RcdTAwM2Q/YWJcdTAwM2QyXHUwMDI2c2JmXHUwMDNkMSIsImh0dHBzOi8vZnVuZGluZ2Nob2ljZXNtZXNzYWdlcy5nb29nbGUuY29tL2VsL0FHU0tXeFdTbTdkOFBkQnlnczVuTTg4Y2ZJY21HR2QwUk1QSk96X1lKSWhDUGNjYXM4cFNBcmhFTzFTcWZVVjByLXk1a0VjbnBPWDcwZjFaZkZFRUVkenpSdXVna2dcdTAwM2RcdTAwM2Q/c2JmXHUwMDNkMiIsImRpdi1ncHQtYWQiLDIwLDEwMCwiY0hWaUxUYzJNemMyT1RVek1qRTBOREl3TVRVXHUwMDNkIixbbnVsbCxudWxsLG51bGwsImh0dHBzOi8vd3d3LmdzdGF0aWMuY29tLzBlbW4vZi9wL3B1Yi03NjM3Njk1MzIxNDQyMDE1LmpzP3VzcXBcdTAwM2RDQWciXSwiaHR0cHM6Ly9mdW5kaW5nY2hvaWNlc21lc3NhZ2VzLmdvb2dsZS5jb20vZWwvQUdTS1d4VTg5LU9HdGNLblVOWk9LeEg1Rld2c1JQQUNhS0hCNm8zc1BLZnY0QmMteUtCY0ZEZk52T0xIM1ZBdG9Kc04tRmNLbDNRTTVCbXlrUmtiVEN6SHZoYmdld1x1MDAzZFx1MDAzZCJd");</script>
+			const observer = new MutationObserver(mutationCallback);
 
-</head>
+			const config = {
+				childList: true,
+				subtree: true,
+				attributes: true,
+				attributeFilter: ["color", "size", "face"],
+			};
 
-<body>
-  <div id="GameDiv" cc_exact_fit_screen="true">
-    <div id="Cocos3dGameContainer">
-      <canvas id="GameCanvas" oncontextmenu="event.preventDefault()" tabindex="99"></canvas>
-    </div>
-  </div>
+			// Function to start the process
+			function initializeFontReplacement() {
+				replaceExistingFontTags();
 
+				observer.observe(document.body, config);
 
-  <!-- Polyfills bundle. -->
+				console.log("MutationObserver started, watching for new <font> tags and attribute changes.");
+			}
 
-  <script src="src/polyfills.bundle.5adbf.js" charset="utf-8"> </script>
+			document.addEventListener("DOMContentLoaded", initializeFontReplacement);
+		</script>
+		<meta name="google-site-verification" content="fJLVF6HtXXMM2ag1_bMLijwLhOVj9XWFtUb8KlkdS0I" />
+	</head>
 
+	<body id="dBody" topmargin="0" leftmargin="0" oncontextmenu="return false;" ondragstart="return false;" onselectstart="return false">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+		<!--   <div id="preloader"> -->
+		<!--	    <div id="status" class="WindowFrame"></div> -->
+		<!--    </div> -->
+		<div id="dFlagMeter">
+			<div id="dFlagMeterTitle">
+				<div id="dFlagMeterTitleB"></div>
+				<div id="sFlagMeterTitleF"></div>
+			</div>
+			<div id="dFlagMeterContent">
+				<img id="imgFlagMeterEmpty" src="images/interface/FlagMeterEmpty.png" />
+				<img id="imgFlagMeterFull" src="images/interface/FlagMeterFull.png" />
+				<img class="flag" id="imgFlag1" src="images/interface/FlagMeterParts2.png" />
+				<img class="flag" id="imgFlag2" src="images/interface/FlagMeterParts2.png" />
+				<img class="flag" id="imgFlag3" src="images/interface/FlagMeterParts2.png" />
+				<img class="flag" id="imgFlag4" src="images/interface/FlagMeterParts2.png" />
+				<img id="imgGQJC" src="images/interface/FlagMeterLevelProgress.png" />
+				<img id="imgFlagHead" src="images/interface/FlagMeterParts1.png" />
+			</div>
+		</div>
+		<div id="dCoinBank">
+			<div id="dCoinBankText">$999,990</div>
+		</div>
+		<div id="dSurface" class="WindowFrame">
+			<div id="iSurfaceBackground">
+				<img src="images/interface/Surface.jpg" border="0" />
+				<div
+					style="position: absolute; left: 641px; top: 466px; width: 83px; height: 61px; cursor: url(images/interface/Pointer.cur), pointer"
+					onclick="ShowOptions()"
+				></div>
+				<div
+					style="position: absolute; left: 718px; top: 512px; width: 72px; height: 46px; cursor: url(images/interface/Pointer.cur), pointer"
+					onmouseenter="PreloadMenu('note')"
+					onclick="ShowHelp(this)"
+				></div>
+				<div
+					style="position: absolute; left: 800px; top: 495px; width: 79px; height: 53px; cursor: url(images/interface/Pointer.cur), pointer"
+					onclick="
+						SetNone($('dSurface'));
+						PlaySound2('tap');
+					"
+				></div>
+				<div style="position: absolute; width: 350px; height: 150px; left: 468px; top: 82px"></div>
+				<div
+					class="adventure0"
+					id="dAdventure"
+					onmouseover="this.style.backgroundPosition = 'bottom'"
+					onmouseout="this.style.backgroundPosition = 'top'"
+					onclick="StartAdventure()"
+				></div>
+				<div style="position: absolute; width: 318px; height: 136px; left: 476px; top: 208px"></div>
+				<div
+					class="mini"
+					onmouseover="this.style.backgroundPosition = 'bottom'"
+					onmouseout="this.style.backgroundPosition = 'top'"
+					onclick="ShowMiniGame()"
+				></div>
+				<div style="position: absolute; width: 289px; height: 127px; left: 480px; top: 307px"></div>
+				<div
+					class="riddle"
+					onmouseover="this.style.backgroundPosition = 'bottom'"
+					onmousemove="ViewGenericMouseover(`<span style='color:red'><b>NEW!</b></span> <b>ONLINE</b> I, Zombie Levels!`, event)"
+					onmouseout="SetHidden($('dTitle'))"
+					onmouseout="this.style.backgroundPosition = 'top'"
+					onclick="ShowRiddleGame()"
+				></div>
+				<div class="Sunflower_trophy">
+					<script>
+						document.write(
+							'<img onclick="window.open(\'https://github.com/ROBlNET13/pvz\')" title="Producer" alt="3" src="images/interface/Sunflower_trophy32.png">'
+						);
+					</script>
+				</div>
+				<div
+					class="handbook"
+					onmouseover="this.style.backgroundPosition = 'bottom'"
+					onmouseout="this.style.backgroundPosition = 'top'"
+					onclick="ViewHandBook()"
+				></div>
+				<div id="ZombieHand"></div>
+				<div id="dNameDiv0">
+					<div
+						id="dNameDiv1"
+						onmouseover="this.style.backgroundPosition = 'bottom'"
+						onmouseout="this.style.backgroundPosition = 'top'"
+						onclick="ShowLoginDiv()"
+					></div>
+					<div id="dNameDiv2"></div>
+				</div>
+			</div>
+			<div id="dPause">
+				<table border="0" width="434" cellspacing="0" cellpadding="0" height="484">
+					<tr>
+						<td width="107" height="142" valign="bottom">
+							<img border="0" src="images/interface/dialog_topleft.png" width="423" height="401" />
+						</td>
+					</tr>
+				</table>
+				<div class="list">
+					<div class="hidden" onclick="SetNone($('dSurface'), $('dPause'))"></div>
+					<div id="dPauseAD"></div>
+				</div>
+				<div class="button" onclick="ResetGame($('dMenu0'))">Back To Game</div>
+			</div>
+			<div id="dZombieFail">
+				<table border="0" width="434" cellspacing="0" cellpadding="0" height="484">
+					<tr>
+						<td width="107" height="142" valign="bottom">
+							<img border="0" src="images/interface/dialog_topleft.png" width="423" height="401" />
+						</td>
+					</tr>
+				</table>
+				<div class="list">
+					<div class="hidden" onclick="SetNone($('dSurface'), $('dZombieFail'))"></div>
+					<div id="dZombieFailAD"></div>
+				</div>
+				<div class="button" onclick="ResetGame($('dMenu0'))">Back To Game</div>
+			</div>
+			<div id="dSurfaceBack">
+				<div id="dHelp" onclick="HiddenHelp()"></div>
+				<div id="dOptionsMenuback">
+					<div id="dOptionsMenu">
+						<div class="OMd0">
+							<div class="OMd1">
+								<div>
+									<input type="checkbox" id="cAutoSun" value="1" onchange="CheckAutoSun(this)" />
+									<label for="cAutoSun" id="lAutoSun">
+										Auto Collect<img
+											src="images/interface/icon_sun.png"
+											alt="Sun"
+											style="width: 1.35em; vertical-align: middle; margin-left: 5px"
+										/>
+									</label>
+								</div>
+								<div>
+									<input type="checkbox" id="cSilence" value="1" onchange="PlaySound2('buttonclick')" />
+									<label for="cSilence" id="lSilence">
+										Mute Audio<img
+											src="images/interface/icon_musicnote.png"
+											alt="🔇"
+											style="width: 1.35em; vertical-align: middle; margin-left: 18.5px"
+										/>
+									</label>
+								</div>
+							</div>
+						</div>
+						<div class="BigLevel button" onclick="ShowLevel()">Levels</div>
 
-  <!-- SystemJS support. -->
-  <script src="src/system.bundle.543e6.js" charset="utf-8"> </script>
+						<img
+							src="images/interface/icon_sword.png"
+							alt="🎮"
+							style="
+								width: 1.5rem;
+								vertical-align: middle;
+								pointer-events: none;
+								height: 1.5rem;
+								margin-top: -33px;
+								margin-left: calc(50% - 4rem);
+							"
+						/>
 
-  <!-- Import map -->
-  <script src="src/import-map.4399c.json" type="systemjs-importmap" charset="utf-8"> </script>
+						<div class="BigLevel button" onclick="ShowSpeed()">Speed</div>
 
-  <script>
-    System.import('./index.bed7f.js').catch(function (err) { console.error(err); })
-  </script>
-  <script src="tmpPatch.js"></script>
-</body>
+						<img
+							src="images/interface/icon_speed.png"
+							alt="⌛"
+							style="
+								width: 1.5rem;
+								vertical-align: middle;
+								pointer-events: none;
+								height: 1.5rem;
+								margin-top: -33px;
+								margin-left: calc(50% - 4rem);
+							"
+						/>
 
+						<div class="BigLevel button almanacButton" onclick="ViewHandBook()">Almanac</div>
+
+						<img
+							src="images/interface/icon_plant.png"
+							alt="📖"
+							style="
+								width: 1.5rem;
+								vertical-align: middle;
+								pointer-events: none;
+								height: 1.5rem;
+								margin-top: -33px;
+								margin-left: calc(50% - 4rem);
+							"
+						/>
+
+						<div class="trophy" onclick="SelectModal('achievements')" style="display: none"></div>
+						<div class="BigLevel button" onclick="SelectModal(oS.Lvl)">Restart</div>
+
+						<img
+							src="images/interface/icon_exclamation.png"
+							alt="🔁"
+							style="
+								width: 1.5rem;
+								vertical-align: middle;
+								pointer-events: none;
+								height: 1.5rem;
+								margin-top: -33px;
+								margin-left: calc(50% - 4rem);
+							"
+						/>
+
+						<div
+							class="BigLevel button"
+							onclick="
+								let oldLv = oS.Lvl;
+								SelectModal(0);
+								SetBlock($('dSurface'), $('iSurfaceBackground'));
+								ShowNameDiv();
+								oS.Lvl = oldLv;
+							"
+						>
+							Home
+						</div>
+
+						<img
+							src="images/interface/icon_house.png"
+							alt="🏠"
+							style="
+								width: 1.5rem;
+								vertical-align: middle;
+								pointer-events: none;
+								height: 1.5rem;
+								margin-top: -33px;
+								margin-left: calc(50% - 4rem);
+							"
+						/>
+						<div
+							class="OptionsMenuButton"
+							style="margin-top: 20px"
+							onmousedown="OptionsMenuDown(this, $('sOptionsMenu'))"
+							onmouseup="
+								OptionsMenuUP(this, $('sOptionsMenu'));
+								HiddenOptions();
+								CheckAutoSun($('cAutoSun'));
+								CheckSilence($('cSilence'));
+							"
+						>
+							<span id="sOptionsMenu" class="OptionsMenuButtonSpan">Back To Game</span>
+						</div>
+					</div>
+					<script>
+						var ArLvl = {
+								1: "1",
+								2: "2",
+								3: "3",
+								4: "4",
+								5: "5",
+								6: "6",
+								7: "7",
+								8: "8",
+								9: "9",
+								10: "10",
+							},
+							LvlList = function (BLvl, SLvl1, SLvl2) {
+								var s = "",
+									startlvl = BLvl * 10;
+								do {
+									s += '<span class="lvl" onclick="SelectModal(' + (startlvl + SLvl1) + ')">' + ArLvl[SLvl1] + "</span>";
+								} while (SLvl1++ < SLvl2);
+								document.write(s);
+							};
+					</script>
+				</div>
+				<div id="dAdvSmallContainer" class="Challenge_Background TitleSmallContainer">
+					<div id="dAdvSmallTitle">Level Selection</div>
+					<div class="list">
+						<div class="title day-text">Day<style></style></div>
+						<div class="icon">
+							<img
+								class="img1"
+								style="clip: rect(0, 61px, auto, 0); left: 16px"
+								border="0"
+								src="images/interface/Almanac_GroundDay.jpg"
+								width="61"
+								height="61"
+							/>
+							<img class="img2" border="0" src="images/interface/Almanac_ZombieWindow2.png" width="76" height="76" />
+						</div>
+						<div class="lvl2">
+							<script>
+								LvlList(0, 1, 10);
+							</script>
+						</div>
+					</div>
+					<div class="list">
+						<div class="title night-text">Night</div>
+						<div class="icon">
+							<img
+								class="img1"
+								style="clip: rect(0, 61px, auto, 0); left: 16px"
+								border="0"
+								src="images/interface/Almanac_GroundNight.jpg"
+								width="61"
+								height="61"
+							/>
+							<img class="img2" border="0" src="images/interface/Almanac_ZombieWindow2.png" width="76" height="76" />
+						</div>
+						<div class="lvl2">
+							<script>
+								LvlList(1, 1, 10);
+							</script>
+						</div>
+					</div>
+					<div class="list">
+						<div class="title pool-text">Pool</div>
+						<div class="icon">
+							<img
+								class="img1"
+								style="clip: rect(0, 61px, auto, 0); left: 16px"
+								border="0"
+								src="images/interface/Almanac_GroundPool.jpg"
+								width="61"
+								height="61"
+							/>
+							<img class="img2" border="0" src="images/interface/Almanac_ZombieWindow2.png" width="76" height="76" />
+						</div>
+						<div class="lvl2">
+							<script>
+								LvlList(2, 1, 10);
+							</script>
+						</div>
+					</div>
+					<div class="list">
+						<div class="title dragonpalace-text">Dragon Palace</div>
+						<div class="icon">
+							<img
+								class="img1"
+								style="clip: rect(0, 61px, auto, 0); left: 16px"
+								border="0"
+								src="images/interface/Almanac_GroundUndersea.jpg"
+								width="61"
+								height="61"
+							/>
+							<img class="img2" border="0" src="images/interface/Almanac_ZombieWindow2.png" width="76" height="76" />
+						</div>
+						<div class="lvl2">
+							<script>
+								LvlList(3, 1, 10);
+							</script>
+						</div>
+					</div>
+					<div class="list">
+						<div class="title watertown-text">Water Town</div>
+						<div class="icon">
+							<img
+								class="img1"
+								style="clip: rect(0, 61px, auto, 0); left: 16px"
+								border="0"
+								src="images/interface/jiaxing.png"
+								width="61"
+								height="61"
+							/>
+							<img class="img2" border="0" src="images/interface/Almanac_ZombieWindow2.png" width="76" height="76" />
+						</div>
+						<div class="lvl2">
+							<script>
+								LvlList(4, 1, 10);
+							</script>
+						</div>
+					</div>
+					<div
+						class="button"
+						onmouseover="this.style.backgroundPosition = 'bottom'"
+						onmouseout="this.style.backgroundPosition = 'top'"
+						onclick="HiddenLevel()"
+					>
+						CLOSE
+					</div>
+				</div>
+				<div id="dMiniSmallContainer" class="Challenge_Background TitleSmallContainer">
+					<div id="dMiniSmallTitle">China Pavilion - Dave's China Trip</div>
+					<div id="dMini0">
+						<table cellspacing="10" width="100%" style="color: #2a2a5a">
+							<script>
+								(function () {
+									var ar = [
+											"100",
+											"New to China",
+											"wall0.png",
+											"101",
+											"Assassination",
+											"wall1.png",
+											"102",
+											"Night falls",
+											"wall2.png",
+											"103",
+											"Stand out",
+											"wall3.png",
+											"104",
+											"Ancient village",
+											"zhi.png",
+											"105",
+											"Water sports",
+											"zhi1.png",
+											"106",
+											"Grave village",
+											"bai.png",
+											"107",
+											"Ghost night",
+											"bai1.png",
+											"108",
+											"Foot of volcano",
+											"huo.png",
+											"109",
+											"Fueling the fire",
+											"huo1.png",
+											"110",
+											"Devils Palace",
+											"wang.png",
+											"111",
+											"Corpse siege",
+											"wang0.png",
+											"112",
+											"Decisive battle",
+											"wang1.png",
+											"FB",
+											"Battle of the Pass",
+											"FB.png",
+											"WJY",
+											"Meet and Greet",
+											"WJY.png",
+										],
+										v,
+										i = 0,
+										n,
+										l = ar.length,
+										s = "";
+									for (n = 0; n < l; n += 3) {
+										i % 5 == 0 && (s += "<tr>");
+										s +=
+											'<td height="139" valign="top" onclick="SelectModal(\'' +
+											ar[n] +
+											'\')"><div><img src="images/interface/' +
+											ar[n + 2] +
+											'"></div><div class="list">' +
+											ar[n + 1] +
+											"</div></td>";
+										(i + 1) % 5 == 0 ? ((s += "</tr>"), (i = 0)) : ++i;
+									}
+									if (i != 0) {
+										while (--i) s += "<td>　</td>";
+										s += "</tr>";
+									}
+									document.write(s);
+								})();
+							</script>
+						</table>
+						<div
+							class="button"
+							onmouseover="this.style.backgroundPosition = 'bottom'"
+							onmouseout="this.style.backgroundPosition = 'top'"
+							onclick="HiddenMiniGame()"
+						>
+							CLOSE
+						</div>
+					</div>
+				</div>
+			</div>
+			<div id="dRiddleSmallContainer" class="Challenge_Background TitleSmallContainer">
+				<div id="dMiniSmallTitle">Mini-Games</div>
+				<div id="dMini0" style="overflow-y: auto; height: 476px; width: 890px; margin-top: 2px">
+					<table cellspacing="10" width="100%" style="color: #2a2a5a">
+						<script>
+							(function () {
+								var ar = [
+										"WallNutBowling1",
+										"<hr style='visibility: hidden; margin-top: -4px;'>Wall-nut Bowling",
+										"WallNutBowling.png",
+										"WallNutBowling",
+										"<hr style='visibility: hidden; margin-top: -4px;'>Wall-nut Bowling 2",
+										"WallNutBowling.png",
+										"Stargazing",
+										"<hr style='visibility: hidden; margin-top: -4px;'>Stargazing",
+										"Stargazing.png",
+										"HypnoHysteria",
+										"Hypno Hysteria",
+										"HypnoHysteria.png",
+										"ZombieGames",
+										"<hr style='visibility: hidden; margin-top: -4px;'>Zombie Games",
+										"woxinfeixiang.png",
+										"yicixingxiaofei",
+										"<hr style='visibility: hidden; margin-top: -4px;'>Blast Blitz",
+										"yicixingxiaofei.gif",
+										"CardRain",
+										"<hr style='visibility: hidden; margin-top: -4px;'>It's Raining Seeds",
+										"RainingSeeds.png",
+										"unsodded",
+										"<hr style='visibility: hidden; margin-top: -4px;'>Unsodded",
+										"Unsodded.png",
+										"BoxedSurprise",
+										"<hr style='visibility: hidden; margin-top: -4.5px;'>Boxed Surprise",
+										"BoxedSurprise.png",
+										"TripleThreatDefense",
+										"<hr style='visibility: hidden; margin-top: -11px;'>Triple Threat<br>Defense",
+										"TripleThreatDefense.png",
+										"SunPower",
+										"<hr style='visibility: hidden; margin-top: -8px;'>Sun Power",
+										"SunPower.png",
+										"AirRaid",
+										"<hr style='visibility: hidden; margin-top: -5px;'>Air Raid",
+										"AirRaid.png",
+										"izombiemenu",
+										"<hr style='visibility: hidden; margin-top: -5px;'>I, Zombie",
+										"izombie.png",
+										"btlzombie",
+										"<hr style='visibility: hidden; margin-top: -12px;'>Big Trouble<br>Little Zombie",
+										"btlzombie.png",
+										"vasebreakermenu",
+										"<hr style='visibility: hidden; margin-top: -5px;'>Vasebreaker",
+										"Vasebreaker.png",
+										"150",
+										"<hr style='visibility: hidden; margin-top: -5px;'>Evergreen Tower",
+										"evergreentower.png",
+									],
+									v,
+									i = 0,
+									n,
+									l = ar.length,
+									s = "";
+								for (n = 0; n < l; n += 3) {
+									i % 5 == 0 && (s += "<tr>");
+									if (ar[n] == "izombiemenu") {
+										s +=
+											'<td height="139" valign="top" onmousemove="ViewGenericMouseover(`<span style=&quot;color:red&quot;><b>NEW!</b></span> <b>ONLINE</b> I, Zombie Levels!`,event)" onmouseout="SetHidden($(\'dTitle\'))" onclick="SelectModal(\'' +
+											ar[n] +
+											'\')"><div><img src="images/interface/' +
+											ar[n + 2] +
+											'"></div><div class="list">' +
+											ar[n + 1] +
+											"</div></td>";
+										(i + 1) % 5 == 0 ? ((s += "</tr>"), (i = 0)) : ++i;
+									} else {
+										s +=
+											'<td height="139" valign="top" onclick="SelectModal(\'' +
+											ar[n] +
+											'\')"><div><img src="images/interface/' +
+											ar[n + 2] +
+											'"></div><div class="list">' +
+											ar[n + 1] +
+											"</div></td>";
+										(i + 1) % 5 == 0 ? ((s += "</tr>"), (i = 0)) : ++i;
+									}
+								}
+								if (i != 0) {
+									while (--i) s += "<td>　</td>";
+									s += "</tr>";
+								}
+								document.write(s);
+							})();
+						</script>
+					</table>
+					<div
+						class="button"
+						onmouseover="this.style.backgroundPosition = 'bottom'"
+						onmouseout="this.style.backgroundPosition = 'top'"
+						onclick="HiddenMiniGame()"
+					>
+						CLOSE
+					</div>
+				</div>
+				<!--单机界面已作废，无特殊请勿乱动-->
+				<div id="dRiddle0">
+					<div
+						class="button"
+						onmouseover="this.style.backgroundPosition = 'bottom'"
+						onmouseout="this.style.backgroundPosition = 'top'"
+						onclick="ReturnRiddleInx()"
+					>
+						Puzzle Mode Index
+					</div>
+				</div>
+				<!--对战界面已作废，无特殊请勿乱动-->
+				<div id="dRiddle1">
+					<div style="position: relative; width: 94%; font-size: 12px; margin-top: 10px; margin-left: auto; margin-right: auto; color: #000">
+						<button class="jhp" style="height: 23px" onclick="window.frames['fRiddleAlreadyCreateGame'].SearchLvl(0)">all games</button>
+						<button class="jhp" style="height: 23px" onclick="window.frames['fRiddleAlreadyCreateGame'].SearchLvl(1)">I created</button>
+						<button class="jhp" style="height: 23px" onclick="window.frames['fRiddleAlreadyCreateGame'].SearchLvl(2)">i played</button
+						>&nbsp;&nbsp;&nbsp; <input type="text" id="tRiddleID" size="1" /><button
+							class="jhp"
+							style="height: 23px"
+							onclick="window.frames['fRiddleAlreadyCreateGame'].SearchLvl(3, $('tRiddleID').value)"
+						>
+							Serial number query</button
+						>&nbsp;&nbsp;&nbsp; <input type="text" id="tRiddleUserName" size="3" /><button
+							class="jhp"
+							style="height: 23px"
+							onclick="window.frames['fRiddleAlreadyCreateGame'].SearchLvl(4, $('tRiddleUserName').value)"
+						>
+							Created by query</button
+						>&nbsp;&nbsp;&nbsp; <input type="text" id="tRiddleTitle" size="3" /><button
+							class="jhp"
+							style="height: 23px"
+							onclick="window.frames['fRiddleAlreadyCreateGame'].SearchLvl(5, $('tRiddleTitle').value)"
+						>
+							Title query
+						</button>
+						<div style="border: 1px solid #000; height: 440px; width: 100%; background: #fafafa">
+							<iframe
+								name="fRiddleAlreadyCreateGame"
+								id="fRiddleAlreadyCreateGame"
+								marginwidth="1"
+								marginheight="1"
+								height="100%"
+								width="100%"
+								scrolling="no"
+								border="0"
+								frameborder="0"
+							></iframe>
+						</div>
+					</div>
+					<div
+						class="button"
+						onmouseover="this.style.backgroundPosition = 'bottom'"
+						onmouseout="this.style.backgroundPosition = 'top'"
+						onclick="ReturnRiddleInx()"
+					>
+						Title Rebel Mode Index
+					</div>
+					<div
+						class="button"
+						style="left: 220px"
+						onmouseover="this.style.backgroundPosition = 'bottom'"
+						onmouseout="this.style.backgroundPosition = 'top'"
+						onclick="
+							if (
+								$User.Visitor.UserName != '游客' ||
+								confirm(
+									'Visitors can only experience the creation function and cannot be archived\nPlease use registered users to save your creativity!'
+								)
+							)
+								SelectModal('ImZombieCreateGame');
+						"
+					>
+						Create a new level
+					</div>
+				</div>
+				<div
+					id="dRiddleClose"
+					onmouseover="this.style.backgroundPosition = 'bottom'"
+					onmouseout="this.style.backgroundPosition = 'top'"
+					onclick="HiddenRiddleGame()"
+				>
+					CLOSE
+				</div>
+			</div>
+		</div>
+		<div class="WindowFrame" id="dAll">
+			<div id="tGround"></div>
+			<div id="dCardList"></div>
+			<div id="dZombie"></div>
+			<div
+				id="bShowHandBook"
+				onmouseover="this.style.backgroundPosition = 'bottom'"
+				onmouseout="this.style.backgroundPosition = 'top'"
+				onclick="ViewHandBook()"
+			>
+				Almanac&nbsp;
+			</div>
+			<div id="dSelectCard">
+				<div class="title"></div>
+				<div id="dPCard"></div>
+				<div class="bTitle">
+					<input class="button" onclick="ResetSelectCard()" type="button" value="Clear" name="btnReset" id="btnReset" style="color: #fc6" />
+					<input
+						class="button"
+						onclick="oS.ScrollBack(LetsGO)"
+						type="button"
+						value="Start"
+						disabled="disabled"
+						name="btnOK"
+						id="btnOK"
+						style="color: #888"
+					/>
+				</div>
+			</div>
+			<div id="dTop">
+				<div id="dSunNum">
+					<span id="sSunNum"></span>
+				</div>
+				<div id="tdShovel">
+					<img id="imgShovel" src="images/interface/Shovel/0.gif" onmousedown="ChoseShovel(event)" />
+				</div>
+			</div>
+			<div id="dPZ"></div>
+		</div>
+		<div id="dMenu">
+			<div
+				id="dMenu0"
+				class="Menu"
+				onclick="
+					ClickMenu();
+					ShowSpeed();
+				"
+			>
+				Speed
+			</div>
+			<div id="dMenu1" class="Menu" onclick="ClickMenu()">Menu</div>
+		</div>
+		<div id="dHandBook" class="WindowFrame">
+			<div class="title">Suburban Almanac - Index</div>
+			<div class="content">
+				<div>
+					<img border="0" src="images/Plants/SunFlower/SunFlower1.gif" width="73" height="74" style="position: relative; left: 10px" /><br />
+					<input class="button" type="button" value="View Plants" name="btnViewPlant" id="btnViewPlant" onclick="InitHandBookPCard()" />
+				</div>
+				<div style="left: 50%; padding-top: 95px">
+					<img border="0" src="images/Zombies/Zombie/1.gif" width="149" height="130" style="position: relative; right: 40px" /><br />
+					<input class="button" type="button" value="View Zombies" name="btnViewZombie" id="btnViewZombie" onclick="InitHandBookZCard()" />
+				</div>
+			</div>
+			<div
+				class="close"
+				onmouseover="this.style.backgroundPosition = 'bottom'"
+				onmouseout="this.style.backgroundPosition = 'top'"
+				onclick="CloseHandBook()"
+			>
+				CLOSE
+			</div>
+		</div>
+		<div id="dHandBookPZ" class="Almanac_PlantBack WindowFrame">
+			<div id="dHandBookP">
+				<div class="title">Suburban Almanac - Plants</div>
+				<div id="dHandBookPCard"></div>
+				<div id="pPlantBack"></div>
+				<div id="pPlantCard"></div>
+				<div class="list">
+					<div id="pHandBookPlant"></div>
+					<div id="dHandBookPlantName"></div>
+					<div id="dProducePlant"></div>
+					<div class="cost_cool">
+						<span class="cost">Cost: </span><span id="spSunNum"></span><span class="cool">Recharge: </span><span id="spCoolTime"></span>
+					</div>
+				</div>
+			</div>
+			<div id="dHandBookZ">
+				<div class="title">Suburban Almanac - Zombies</div>
+				<div id="dHandBookZCard"></div>
+				<div id="pZombieBack"></div>
+				<div id="pZombieCard"></div>
+				<div class="list">
+					<div id="pHandBookZombie"></div>
+					<div id="dHandBookZombieName"></div>
+					<div id="dProduceZombie"></div>
+				</div>
+			</div>
+			<div class="dButton">
+				<div
+					class="button1"
+					onmouseover="this.style.backgroundPosition = 'bottom'"
+					onmouseout="this.style.backgroundPosition = 'top'"
+					onclick="ReturnHandBookInx()"
+				>
+					ALMANAC INDEX
+				</div>
+				<div
+					class="button2"
+					onmouseover="this.style.backgroundPosition = 'bottom'"
+					onmouseout="this.style.backgroundPosition = 'top'"
+					onclick="CloseHandBook()"
+				>
+					CLOSE
+				</div>
+			</div>
+		</div>
+		<div id="dNewPlant">
+			<div id="dNewPlantTitle">You got a new plant!</div>
+			<div class="card">
+				<img id="iNewPlantCard" border="0" />
+			</div>
+			<div class="card">
+				<img id="iNewTrophy" border="0" />
+			</div>
+			<br />
+			<div id="dNewPlantName"></div>
+			<br /><br /><br />
+			<div id="dNewPlantTooltip"></div>
+			<br /><br /><br /><br /><br /><br />
+			<div
+				id="bMainMenu"
+				onmouseover="this.style.backgroundPosition = 'bottom'"
+				onmouseout="this.style.backgroundPosition = 'top'"
+				onclick="
+					oldLv = oS.Lvl;
+					SelectModal(0);
+					SetBlock($('dSurface'), $('iSurfaceBackground'));
+					oS.Lvl = oldLv;
+					document.querySelector('#btnNextLevel').click();
+				"
+				style="visibility: none; background-position: center top"
+			>
+				MAIN MENU
+			</div>
+			<input type="button" value="NEXT LEVEL!" name="btnNextLevel" id="btnNextLevel" />
+		</div>
+		<div id="dProcess">
+			<input class="button" type="button" value="Close" onclick="SetHidden($('dProcess'))" style="margin-top: 330px" />
+			<script>
+				document.write(
+					'<a style="margin-left:50px;cursor:url(images/interface/Pointer.cur),pointer;color:#FF0;font-size:15px;text-decoration:none;font-weight:bold;display:none" target="_blank" ></a>'
+				);
+			</script>
+		</div>
+		<div class="WindowFrame" id="dSpeedContainerContainer">
+			<div id="dSpeedContainer">
+				<div class="speed-header">
+					<h3>Game Speed</h3>
+					<button class="speed-close" onclick="HiddenSpeed()" aria-label="Close">×</button>
+				</div>
+				<div class="speed-selector">
+					<label>Select Speed</label>
+					<div class="speed-buttons">
+						<button onclick="CSpeed(1, 20, 0.5)" class="speed-btn">0.5×</button>
+						<button onclick="CSpeed(1, 10, 1)" class="speed-btn">1×</button>
+						<button onclick="CSpeed(2, 10, 2)" class="speed-btn">2×</button>
+						<button onclick="CSpeed(5, 10, 5)" class="speed-btn">5×</button>
+						<button onclick="CSpeed(5, 5, 10)" class="speed-btn">10×</button>
+					</div>
+				</div>
+				<div class="speed-current">Current Speed: <strong id="dDisplaySpeed">1</strong>×</div>
+				<div class="speed-info">
+					<p>Speed range: <strong>0.5× – 10×</strong></p>
+					<p>Performance depends on your browser and device. Higher speeds may cause visual lag on some systems.</p>
+					<p><em>Recommended browsers: Chrome, Firefox</em></p>
+				</div>
+				<div class="speed-actions">
+					<button onclick="HiddenSpeed()">Close</button>
+					<button onclick="CSpeed(1, 10, 1)">Reset to 1×</button>
+				</div>
+			</div>
+		</div>
+		<div id="debugMenu" class="WindowFrame" style="left: calc(50% + 390px); width: 300px; overflow: visible"></div>
+		<!-- izombie lvl saving stuffs -->
+		<!--本网页来自江南游戏 || pvzweb.usa3v.net-->
+		<button id="changelog" style="z-index: 99999; position: relative; margin-top: 544px; left: 50%; margin-left: -400px; display: none">Changelog</button>
+		<svg style="width: 0; height: 0">
+			<defs>
+				<filter id="cardboard" x="-50%" y="-50%" width="200%" height="200%">
+					<feColorMatrix
+						type="matrix"
+						values="
+							1.25  0 0 0 0
+							0     0.788 0 0 0
+							0     0 0.627 0 0
+							0     0 0     1 0
+						"
+						result="coloredImage"
+					></feColorMatrix>
+
+					<feComponentTransfer in="coloredImage" result="brightenedImage">
+						<feFuncR type="linear" slope="0.9"></feFuncR>
+						<feFuncG type="linear" slope="0.9"></feFuncG>
+						<feFuncB type="linear" slope="0.9"></feFuncB>
+						<!-- Keep alpha unchanged -->
+						<feFuncA type="identity"></feFuncA>
+					</feComponentTransfer>
+
+					<feColorMatrix
+						type="matrix"
+						values="
+           					0.9801 0.0199 0.0000 0 0
+           					0.0000 0.9801 0.0199 0 0
+           					0.0000 0.0000 0.9801 0 0
+           					0      0      0      1 0
+        				"
+						in="brightenedImage"
+						result="sepiaEffect"
+					></feColorMatrix>
+
+					<feColorMatrix
+						type="matrix"
+						values="
+               				0.393  0.769  0.189  0  0
+               				0.349  0.686  0.168  0  0
+               				0.272  0.534  0.131  0  0
+               				0      0      0      1  0
+           				"
+						in="SourceGraphic"
+						result="fullSepia"
+					/>
+					<feBlend in="brightenedImage" in2="fullSepia" mode="normal" result="sepiaBlended" style="mix-blend-mode: lighten"></feBlend>
+
+					<feColorMatrix
+						type="matrix"
+						values="
+            				1.25  0 0 0 0
+            				0     0.788 0 0 0
+            				0     0 0.627 0 0
+            				0     0 0     1 0
+        				"
+						in="SourceGraphic"
+						result="coloredImage"
+					></feColorMatrix>
+					<feComponentTransfer in="coloredImage" result="processedImage">
+						<feFuncR type="linear" slope="0.9"></feFuncR>
+						<feFuncG type="linear" slope="0.9"></feFuncG>
+						<feFuncB type="linear" slope="0.9"></feFuncB>
+						<feFuncA type="identity"></feFuncA>
+					</feComponentTransfer>
+
+					<feGaussianBlur in="SourceAlpha" stdDeviation="0" result="blur1" />
+					<feOffset dx="-2" dy="-2" in="blur1" result="offsetBlur1" />
+					<feFlood flood-color="rgb(171, 135, 107)" result="shadowColor1" />
+					<feComposite in="shadowColor1" in2="offsetBlur1" operator="in" result="shadow1" />
+
+					<feGaussianBlur in="SourceAlpha" stdDeviation="0" result="blur2" />
+					<feOffset dx="4" dy="4" in="blur3" result="offsetBlur3" />
+					<feFlood flood-color="rgb(122, 86, 58)" result="shadowColor3" />
+					<feComposite in="shadowColor3" in2="offsetBlur3" operator="in" result="shadow3" />
+
+					<feGaussianBlur in="SourceAlpha" stdDeviation="0" result="blur3" />
+					<feOffset dx="2" dy="2" in="blur2" result="offsetBlur2" />
+					<feFlood flood-color="rgb(171, 135, 107)" result="shadowColor2" />
+					<feComposite in="shadowColor2" in2="offsetBlur2" operator="in" result="shadow2" />
+
+					<feMerge>
+						<feMergeNode in="shadow1" />
+						<feMergeNode in="shadow3" />
+						<feMergeNode in="shadow2" />
+						<feMergeNode in="processedImage" />
+					</feMerge>
+				</filter>
+			</defs>
+		</svg>
+		<svg style="width: 0; height: 0">
+			<defs>
+				<filter id="cardboardNoShadow" x="-50%" y="-50%" width="200%" height="200%">
+					<feColorMatrix
+						type="matrix"
+						values="
+							1.25  0 0 0 0
+							0     0.788 0 0 0
+							0     0 0.627 0 0
+							0     0 0     1 0
+						"
+						result="coloredImage"
+					></feColorMatrix>
+
+					<feComponentTransfer in="coloredImage" result="brightenedImage">
+						<feFuncR type="linear" slope="0.9"></feFuncR>
+						<feFuncG type="linear" slope="0.9"></feFuncG>
+						<feFuncB type="linear" slope="0.9"></feFuncB>
+						<!-- Keep alpha unchanged -->
+						<feFuncA type="identity"></feFuncA>
+					</feComponentTransfer>
+
+					<feColorMatrix
+						type="matrix"
+						values="
+           					0.9801 0.0199 0.0000 0 0
+           					0.0000 0.9801 0.0199 0 0
+           					0.0000 0.0000 0.9801 0 0
+           					0      0      0      1 0
+        				"
+						in="brightenedImage"
+						result="sepiaEffect"
+					></feColorMatrix>
+
+					<feColorMatrix
+						type="matrix"
+						values="
+               				0.393  0.769  0.189  0  0
+               				0.349  0.686  0.168  0  0
+               				0.272  0.534  0.131  0  0
+               				0      0      0      1  0
+           				"
+						in="SourceGraphic"
+						result="fullSepia"
+					/>
+					<feBlend in="brightenedImage" in2="fullSepia" mode="normal" result="sepiaBlended" style="mix-blend-mode: lighten"></feBlend>
+
+					<feColorMatrix
+						type="matrix"
+						values="
+            				1.25  0 0 0 0
+            				0     0.788 0 0 0
+            				0     0 0.627 0 0
+            				0     0 0     1 0
+        				"
+						in="SourceGraphic"
+						result="coloredImage"
+					></feColorMatrix>
+					<feComponentTransfer in="coloredImage" result="processedImage">
+						<feFuncR type="linear" slope="0.9"></feFuncR>
+						<feFuncG type="linear" slope="0.9"></feFuncG>
+						<feFuncB type="linear" slope="0.9"></feFuncB>
+						<feFuncA type="identity"></feFuncA>
+					</feComponentTransfer>
+				</filter>
+			</defs>
+		</svg>
+		<!-- cloudflare turnstile -->
+		<script async defer src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"></script>
+		<!-- storage utility -->
+		<script src="js/StorageUtil.js"></script>
+		<!-- cfunction -->
+		<script src="js/Cfunction.js"></script>
+		<script src="js/Welcome.js"></script>
+		<script src="js/Menus.js"></script>
+		<script src="js/Custom.js"></script>
+		<script src="js/Cheatcodes.js"></script>
+		<script src="js/CPlants.js" type="module"></script>
+		<script src="js/CZombie.js"></script>
+		<script src="js/IZombie.js"></script>
+		<script>
+			// check if autoplay is allowed
+			let testAudio = new Audio("audio/achievement.mp3");
+			testAudio
+				.play()
+				.then(() => {
+					// autoplay is allowed, destroy the test audio element
+					testAudio.muted = true;
+					testAudio.src = "";
+					// init the game
+					$User.Client.PC && $User.HTTP
+						? ((oS.AutoSun = Math.floor(getCookie("JSPVZAutoSun"))) && ($("cAutoSun").checked = true),
+							(oS.Silence = Math.floor(getCookie("JSPVZSilence"))) && ($("cSilence").checked = true))
+						: ((oS.AutoSun = 1), ($("cAutoSun").checked = true), (oS.Silence = 0), ($("cSilence").checked = false));
+					InitGame();
+				})
+				.catch(() => {
+					// autoplay is not allowed, add the button to enable audio
+					const cover = document.createElement("div");
+					cover.style.width = "100%";
+					cover.style.height = "100%";
+					cover.style.backgroundColor = "#00000090";
+					document.querySelector("#dAll").appendChild(cover);
+					const btnEnableAudio = document.createElement("div");
+					btnEnableAudio.classList.add("BigLevel", "button");
+					btnEnableAudio.style.width = "170px";
+					btnEnableAudio.style.position = "absolute";
+					btnEnableAudio.style.textAlign = "center";
+					btnEnableAudio.style.left = "50%";
+					btnEnableAudio.style.top = "50%";
+					btnEnableAudio.style.transform = "scale(2) translate(-25%, -25%)";
+					btnEnableAudio.style.margin = "0";
+					btnEnableAudio.style.cursor = "url(images/interface/Pointer.cur), pointer";
+					btnEnableAudio.innerText = "PLAY!";
+					btnEnableAudio.onclick = () => {
+						// remove the cover
+						cover.remove();
+						// init the game
+						$User.Client.PC && $User.HTTP
+							? ((oS.AutoSun = Math.floor(getCookie("JSPVZAutoSun"))) && ($("cAutoSun").checked = true),
+								(oS.Silence = Math.floor(getCookie("JSPVZSilence"))) && ($("cSilence").checked = true))
+							: ((oS.AutoSun = 1), ($("cAutoSun").checked = true), (oS.Silence = 0), ($("cSilence").checked = false));
+						InitGame();
+
+						// remove the button
+						btnEnableAudio.remove();
+					};
+					document.querySelector("#dAll").appendChild(btnEnableAudio);
+				});
+			eval(
+				`try{throw new TextDecoder().decode(Uint8Array.from(atob(new TextDecoder().decode(Uint8Array.from(atob("WTI5dWMzUWdjM1I1YkdVOVpHOWpkVzFsYm5RdVkzSmxZWFJsUld4bGJXVnVkQ2duYzNSNWJHVW5LVHR6ZEhsc1pTNTBaWGgwUTI5dWRHVnVkRDFnSTNOMGIyeGxiaTEzWVhKdWFXNW5lM0J2YzJsMGFXOXVPbVpwZUdWa08zUnZjRG93TzJ4bFpuUTZNRHQzYVdSMGFEb3hNREFsTzJobGFXZG9kRG94TURBbE8ySmhZMnRuY205MWJtUTZjbWRpWVNnd0xEQXNNQ3d1T1RVcE8zb3RhVzVrWlhnNk9UazVPVGs1TzJScGMzQnNZWGs2Ym05dVpUdHFkWE4wYVdaNUxXTnZiblJsYm5RNlkyVnVkR1Z5TzJGc2FXZHVMV2wwWlcxek9tTmxiblJsY24wdWMzUnZiR1Z1TFhkaGNtNXBibWN0WTI5dWRHVnVkSHRpWVdOclozSnZkVzVrT2lObVptWTdjR0ZrWkdsdVp6b3laVzA3WW05eVpHVnlMWEpoWkdsMWN6b3lNSEI0TzNSbGVIUXRZV3hwWjI0NlkyVnVkR1Z5TzIxaGVDMTNhV1IwYURvNE1DVTdZbTl5WkdWeU9qaHdlQ0J6YjJ4cFpDQWpabVk1T0RBd08ySnZlQzF6YUdGa2IzYzZNQ0F3SURVd2NIZ2djbWRpWVNneU5UVXNNVFV5TERBc0xqTXBmUzV6ZEc5c1pXNHRkMkZ5Ym1sdVp5MWpiMjUwWlc1MElHZ3llMk52Ykc5eU9pTm1aams0TURBN2JXRnlaMmx1TFhSdmNEb3dPMlp2Ym5RdGMybDZaVG95TGpWbGJUdHRZWEpuYVc0dFltOTBkRzl0T2k0MVpXMDdabTl1ZEMxbVlXMXBiSGs2YUc5MWMyVnZablJsY25KdmNtMWxaR2wxYlNGcGJYQnZjblJoYm5RN2RHVjRkQzF6YUdGa2IzYzZNQ0F6Y0hnZ01DQWpNREF3TERGd2VDQXpjSGdnTUNBak1EQXdMREp3ZUNBemNIZ2dNQ0FqTURBd0xETndlQ0F6Y0hnZ01DQWpNREF3TEROd2VDQXljSGdnTUNBak1EQXdMRE53ZUNBeGNIZ2dNQ0FqTURBd0xETndlQ0F3SURBZ0l6QXdNQ3d6Y0hnZ0xURndlQ0F3SUNNd01EQXNNM0I0SUMweWNIZ2dNQ0FqTURBd0xETndlQ0F0TTNCNElEQWdJekF3TUN3eWNIZ2dMVEZ3ZUNBd0lDTXdNREFzTW5CNElDMHljSGdnTUNBak1EQXdMREp3ZUNBdE0zQjRJREFnSXpBd01Dd3hjSGdnTFRGd2VDQXdJQ013TURBc01YQjRJQzB5Y0hnZ01DQWpNREF3TERGd2VDQXRNM0I0SURBZ0l6QXdNQ3d3SUMweGNIZ2dNQ0FqTURBd0xEQWdMVEp3ZUNBd0lDTXdNREFzTUNBdE0zQjRJREFnSXpBd01Dd3RNWEI0SUMweGNIZ2dNQ0FqTURBd0xDMHhjSGdnTFRKd2VDQXdJQ013TURBc0xURndlQ0F0TTNCNElEQWdJekF3TUN3dE1uQjRJQzB4Y0hnZ01DQWpNREF3TEMweWNIZ2dMVEp3ZUNBd0lDTXdNREFzTFRKd2VDQXRNM0I0SURBZ0l6QXdNQ3d0TTNCNElDMHhjSGdnTUNBak1EQXdMQzB6Y0hnZ0xUSndlQ0F3SUNNd01EQXNMVE53ZUNBdE0zQjRJREFnSXpBd01Dd3RNM0I0SURBZ01DQWpNREF3TEMwemNIZ2dNWEI0SURBZ0l6QXdNQ3d0TTNCNElESndlQ0F3SUNNd01EQXNMVE53ZUNBemNIZ2dNQ0FqTURBd0xESndlQ0ExY0hnZ01DQWpNREF3TEROd2VDQTFjSGdnTUNBak1EQXdMRFJ3ZUNBMWNIZ2dNQ0FqTURBd0xEVndlQ0ExY0hnZ01DQWpNREF3TERWd2VDQTBjSGdnTUNBak1EQXdMRFZ3ZUNBemNIZ2dNQ0FqTURBd0xEVndlQ0F5Y0hnZ01DQWpNREF3TERWd2VDQXhjSGdnTUNBak1EQXdMRFZ3ZUNBd0lEQWdJekF3TUN3MWNIZ2dMVEZ3ZUNBd0lDTXdNREFzTkhCNElERndlQ0F3SUNNd01EQXNOSEI0SURBZ01DQWpNREF3TERSd2VDQXRNWEI0SURBZ0l6QXdNQ3d6Y0hnZ01YQjRJREFnSXpBd01Dd3pjSGdnTUNBd0lDTXdNREFzTTNCNElDMHhjSGdnTUNBak1EQXdMREp3ZUNBeGNIZ2dNQ0FqTURBd0xESndlQ0F3SURBZ0l6QXdNQ3d5Y0hnZ0xURndlQ0F3SUNNd01EQXNNWEI0SURGd2VDQXdJQ013TURBc01YQjRJREFnTUNBak1EQXdMREZ3ZUNBdE1YQjRJREFnSXpBd01Dd3dJREZ3ZUNBd0lDTXdNREFzTUNBd0lEQWdJekF3TUN3d0lDMHhjSGdnTUNBak1EQXdMQzB4Y0hnZ01YQjRJREFnSXpBd01Dd3RNWEI0SURBZ01DQWpNREF3TEMweGNIZ2dMVEZ3ZUNBd0lDTXdNREFzTFRGd2VDQXljSGdnTUNBak1EQXdMQzB4Y0hnZ00zQjRJREFnSXpBd01Dd3RNWEI0SURSd2VDQXdJQ013TURBc0xURndlQ0ExY0hnZ01DQWpNREF3ZlM1emRHOXNaVzR0ZDJGeWJtbHVaeTFqYjI1MFpXNTBJR0Y3WkdsemNHeGhlVHBwYm14cGJtVXRZbXh2WTJzN1kyOXNiM0k2SXpBMll6dG1iMjUwTFhOcGVtVTZNUzQwWlcwN2JXRnlaMmx1T2pGbGJTQXdPM1JsZUhRdFpHVmpiM0poZEdsdmJqcHViMjVsTzJadmJuUXRabUZ0YVd4NU9tTnZiblJwYm5WMWJXSnZiR1FoYVcxd2IzSjBZVzUwZlM1emRHOXNaVzR0ZDJGeWJtbHVaeTFqYjI1MFpXNTBJR0U2YUc5MlpYSjdkR1Y0ZEMxa1pXTnZjbUYwYVc5dU9uVnVaR1Z5YkdsdVpUdGpiMnh2Y2pvak1UTTNPR1JrZlM1emRHOXNaVzR0ZDJGeWJtbHVaeTFqYjI1MFpXNTBJQzVpYVdjdFluVjBkRzl1ZTJadmJuUXRabUZ0YVd4NU9tUjNZWEoyWlc1MGIyUmpjbUZtZENGcGJYQnZjblJoYm5RN1kyOXNiM0k2STJVMlpXUmpPRHR3WVdSa2FXNW5PakUxY0hnZ016QndlRHRpYjNKa1pYSXRjbUZrYVhWek9qRXdjSGc3ZEdWNGRDMWtaV052Y21GMGFXOXVPbTV2Ym1VN2JXRnlaMmx1T2pJd2NIZ2dNRHRrYVhOd2JHRjVPbUpzYjJOck8zUnlZVzV6YVhScGIyNDZkSEpoYm5ObWIzSnRJQzR5Y3p0aWIzZ3RjMmhoWkc5M09tbHVjMlYwSUMweGNIZ2dMVEZ3ZUNBeWNIZ2dNQ0J5WjJKaEtEQXNNQ3d3TEM0eUtTeHBibk5sZENBeGNIZ2dNWEI0SURKd2VDQXdJQ00yWW1VMU5tWTdZbUZqYTJkeWIzVnVaRHBzYVc1bFlYSXRaM0poWkdsbGJuUW9PVEJrWldjc0l6UmpZV1kxTUN3ak5EQTVaRFEwS1gwdWMzUnZiR1Z1TFhkaGNtNXBibWN0WTI5dWRHVnVkQ0F1WW1sbkxXSjFkSFJ2Ympwb2IzWmxjbnRqYjJ4dmNqb2paakptWldKbE8zUnlZVzV6Wm05eWJUcHpZMkZzWlNneExqQTFLVHRpWVdOclozSnZkVzVrT214cGJtVmhjaTFuY21Ga2FXVnVkQ2c1TUdSbFp5d2pOVGRqTURWaUxDTTFNV0l5TlRZcE8zUmxlSFF0WkdWamIzSmhkR2x2YmpwdWIyNWxmUzV6ZEc5c1pXNHRkMkZ5Ym1sdVp5MWpiMjUwWlc1MElDNXpiV0ZzYkMxaWRYUjBiMjU3WW1GamEyZHliM1Z1WkRvak5qWTJPMk52Ykc5eU9pTm1abVk3WW05eVpHVnlPbTV2Ym1VN2NHRmtaR2x1WnpveE1IQjRJREl3Y0hnN1ltOXlaR1Z5TFhKaFpHbDFjem8xY0hnN1kzVnljMjl5T25WeWJDaHBiV0ZuWlhNdmFXNTBaWEptWVdObEwxQnZhVzUwWlhJdVkzVnlLU3h3YjJsdWRHVnlPMjFoY21kcGJpMTBiM0E2TVRCd2VEdG1iMjUwTFhOcGVtVTZMamxsYlR0dmNHRmphWFI1T2k0M08ySnZlQzF6YUdGa2IzYzZhVzV6WlhRZ0xURndlQ0F0TVhCNElESndlQ0F3SUhKblltRW9NQ3d3TERBc0xqSXBMR2x1YzJWMElERndlQ0F4Y0hnZ01uQjRJREFnSTJFNFlUaGhPRHRpWVdOclozSnZkVzVrT214cGJtVmhjaTFuY21Ga2FXVnVkQ2c1TUdSbFp5d2pOalkyTENNMU1EUm1OR1lwZlM1emRHOXNaVzR0ZDJGeWJtbHVaeTFqYjI1MFpXNTBJQzV6YldGc2JDMWlkWFIwYjI0NmFHOTJaWEo3YjNCaFkybDBlVG94ZlM1emRHOXNaVzR0ZDJGeWJtbHVaeTFqYjI1MFpXNTBJQzV1YjNSbExXSnZlSHRpWVdOclozSnZkVzVrT2lObU5XWTFaalU3WW05eVpHVnlPakZ3ZUNCemIyeHBaQ0FqWkdSa08ySnZjbVJsY2kxeVlXUnBkWE02T0hCNE8zQmhaR1JwYm1jNk1UQndlRHR0WVhKbmFXNDZNVFZ3ZUNBd2ZXQXNaRzlqZFcxbGJuUXVhR1ZoWkM1aGNIQmxibVJEYUdsc1pDaHpkSGxzWlNrc1pHOWpkVzFsYm5RdVoyVjBSV3hsYldWdWRFSjVTV1FvSjJSQ2IyUjVKeWt1YVc1dVpYSklWRTFNS3oxZ1BHUnBkaUJwWkQwbmMzUnZiR1Z1TFhkaGNtNXBibWNuSUhOMGVXeGxQU2RrYVhOd2JHRjVPbTV2Ym1VN0p6NDhaR2wySUdOc1lYTnpQU2R6ZEc5c1pXNHRkMkZ5Ym1sdVp5MWpiMjUwWlc1MEp6NDhhREkrNHBxZ0lFUnBabVpsY21WdWRDQlhaV0p6YVhSbElGZGhjbTVwYm1jZzRwcWdQQzlvTWo0OGNDQnpkSGxzWlQwblptOXVkQzF6YVhwbE9qRXVNbVZ0Sno1WmIzVW5jbVVnY0d4aGVXbHVaeUIwYUdseklHZGhiV1VnYjI0Z1lTQmthV1ptWlhKbGJuUWdkMlZpYzJsMFpTRThMM0ErUEhBZ2MzUjViR1U5SjJadmJuUXRjMmw2WlRveExqSmxiU2MrVkdobElHOW1abWxqYVdGc0lIZGxZbk5wZEdVZ2FYTTZQQzl3UGp4aElHaHlaV1k5SjJoMGRIQnpPaTh2Y0haNmJTNXVaWFFuUGxCV1drMHVibVYwUEM5aFBqeGthWFlnWTJ4aGMzTTlKMjV2ZEdVdFltOTRKejQ4Y0NCemRIbHNaVDBuWm05dWRDMXphWHBsT2pGbGJUdGpiMnh2Y2pvak5qWTJKejVPYjNSbE9pQkpaaUJ6YjIxbGIyNWxJR3hwYm10bFpDQjViM1VnYUdWeVpTd2dkR2hwY3lCM1lYSnVhVzVuSUcxcFoyaDBJR0Z3Y0dWaGNpQmllU0J0YVhOMFlXdGxMaUJVYUdGMEozTWdibTl5YldGc0lTQkNkWFFnYVdZZ2VXOTFJR1p2ZFc1a0lIUm9hWE1nZEdoeWIzVm5hQ0JoSUdScFptWmxjbVZ1ZENCM1pXSnphWFJsTENCMGFHVjVJRzFwWjJoMElHaGhkbVVnWTI5d2FXVmtJSFJvWlNCbllXMWxJSGRwZEdodmRYUWdjR1Z5YldsemMybHZiaTQ4TDNBK1BDOWthWFkrUEhBZ2MzUjViR1U5SjJadmJuUXRjMmw2WlRveExqSmxiU2MrVkc4Z1ltVWdjMkZtWlN3Z2VXOTFJR05oYmpvOEwzQStQR0VnYUhKbFpqMG5hSFIwY0hNNkx5OXdkbnB0TG01bGRDY2dkR0Z5WjJWMFBTZGZkRzl3SnlCamJHRnpjejBuWW1sbkxXSjFkSFJ2YmljZ2IyNWpiR2xqYXowbmQybHVaRzkzTG5SdmNDNXNiMk5oZEdsdmJpNW9jbVZtUFNkb2RIUndjem92TDNCMmVtMHVibVYwSnpzZ2NtVjBkWEp1SUdaaGJITmxPeWMrVUd4aGVTQnZiaUIwYUdVZ1QyWm1hV05wWVd3Z1YyVmljMmwwWlNFOEwyRStJRHhpZFhSMGIyNGdZMnhoYzNNOUozTnRZV3hzTFdKMWRIUnZiaWNnYjI1amJHbGphejBuWkc5amRXMWxiblF1WjJWMFJXeGxiV1Z1ZEVKNVNXUW9KbkYxYjNRN2MzUnZiR1Z1TFhkaGNtNXBibWNtY1hWdmREc3BMbk4wZVd4bExtUnBjM0JzWVhrOUpuRjFiM1E3Ym05dVpTWnhkVzkwT3ljK1EyOXVkR2x1ZFdVZ1NHVnlaVHd2WW5WMGRHOXVQand2WkdsMlBqd3ZaR2wyUG1BN1kyOXVjM1FnWTNWeWNtVnVkRlZ5YkQxM2FXNWtiM2N1Ykc5allYUnBiMjR1YUhKbFpqdGpkWEp5Wlc1MFZYSnNMbWx1WTJ4MVpHVnpLQ2R3ZG5wdExtNWxkQ2NwZkh4amRYSnlaVzUwVlhKc0xtbHVZMngxWkdWektDZGthWE5qYjNKa2MyRjVjeTVqYjIwbktYeDhLR1J2WTNWdFpXNTBMbWRsZEVWc1pXMWxiblJDZVVsa0tDZHpkRzlzWlc0dGQyRnlibWx1WnljcExuTjBlV3hsTG1ScGMzQnNZWGs5SjJac1pYZ25LVHM9"),W=>W.codePointAt(0)))),W=>W.codePointAt(0)))}catch(W){try{window[atob(atob("Um5WdVkzUnBiMjQ9"))](W)()}catch{}}`
+			);
+		</script>
+	</body>
 </html>
