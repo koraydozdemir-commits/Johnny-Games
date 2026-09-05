@@ -382,5 +382,90 @@
   }, { passive: false });
 })();
 </script>
+
+<!--
+  INTERACT BUTTON (E key). Bottom-right, opposite the joystick.
+  Press-and-hold: touching it holds E down, lifting your finger releases it.
+  This matters for Granny specifically since some prompts (sawing bars, etc.)
+  need E held for a duration, not just tapped once.
+  If a prompt ever calls for a different key, change INTERACT_KEY below.
+-->
+<style>
+  #vjoy-interact {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    border: 2px solid rgba(255,255,255,0.4);
+    color: #fff;
+    font-family: Arial, sans-serif;
+    font-weight: bold;
+    font-size: 22px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+    z-index: 999999;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  #vjoy-interact.pressed {
+    background: rgba(255,255,255,0.4);
+  }
+  @media (pointer: coarse) {
+    #vjoy-interact { display: flex; }
+  }
+</style>
+
+<div id="vjoy-interact">E</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var INTERACT_KEY = { key: 'e', code: 'KeyE', keyCode: 69 };
+
+  var btn = document.getElementById('vjoy-interact');
+  var pressed = false;
+
+  function fireInteract(type) {
+    var opts = {
+      key: INTERACT_KEY.key, code: INTERACT_KEY.code,
+      keyCode: INTERACT_KEY.keyCode, which: INTERACT_KEY.keyCode,
+      bubbles: true, cancelable: true
+    };
+    var targets = [document, window];
+    var canvas = document.querySelector('canvas');
+    if (canvas) targets.push(canvas);
+    var ruffle = document.querySelector('ruffle-player');
+    if (ruffle) targets.push(ruffle);
+    for (var i = 0; i < targets.length; i++) {
+      targets[i].dispatchEvent(new KeyboardEvent(type, opts));
+    }
+  }
+
+  btn.addEventListener('touchstart', function (e) {
+    e.preventDefault();
+    if (pressed) return;
+    pressed = true;
+    btn.classList.add('pressed');
+    fireInteract('keydown');
+  }, { passive: false });
+
+  function release(e) {
+    e.preventDefault();
+    if (!pressed) return;
+    pressed = false;
+    btn.classList.remove('pressed');
+    fireInteract('keyup');
+  }
+
+  btn.addEventListener('touchend', release, { passive: false });
+  btn.addEventListener('touchcancel', release, { passive: false });
+})();
+</script>
 </body>
 </html>
