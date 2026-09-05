@@ -2,28 +2,25 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Examinations.ie</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background: url('images/Wallpaper.jpg') no-repeat center center fixed;
-            background-size: cover;
+        * {
+            box-sizing: border-box;
         }
 
-        /* Responsive banner image */
-        .banner {
-            display: flex;
-            justify-content: center; /* center horizontally */
-            padding: 20px 0;
+        html, body {
+            margin: 0;
+            padding: 0;
         }
-        .banner img {
-            width: 100%;        /* scales down to fit smaller screens */
-            max-width: 1536px;  /* natural width of the image */
-            height: auto;       /* keep original aspect ratio */
-            display: block;
+
+        body {
+            font-family: Arial, sans-serif;
+            /* background-attachment: fixed is buggy/janky on iOS Safari during scroll,
+               so this uses "scroll" instead. Looks identical on desktop. */
+            background: url('images/Wallpaper.jpg') no-repeat center center scroll;
+            background-size: cover;
+            min-height: 100vh;
         }
 
         h1 {
@@ -33,159 +30,323 @@
             text-shadow: 2px 2px 5px rgba(0,0,0,0.7);
         }
 
+        .hero-image {
+            width: 100%;
+            overflow: hidden;
+        }
+        .hero-image img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* Toolbar: search + sort. Sticky so it's reachable one-thumb on a tablet
+           without scrolling back up. */
+        .toolbar {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            padding: 12px 20px;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+        }
+
+        .toolbar input[type="search"],
+        .toolbar select {
+            /* 16px minimum stops iOS Safari from auto-zooming on focus */
+            font-size: 16px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            background: #111;
+            color: #fff;
+            -webkit-appearance: none;
+            appearance: none;
+            min-height: 44px; /* comfortable tap target */
+        }
+
+        .toolbar input[type="search"] {
+            flex: 1 1 220px;
+            min-width: 0;
+        }
+
+        .toolbar select {
+            flex: 0 0 auto;
+        }
+
+        .toolbar .result-count {
+            color: #aaa;
+            font-size: 14px;
+            flex: 0 0 auto;
+        }
+
         .game-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); /* bigger cards */
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
             gap: 20px;
             padding: 20px;
         }
 
         .game-card {
+            position: relative;
             text-align: center;
-            background: rgba(0,0,0,0.9); /* black background */
+            background: rgba(0,0,0,0.9);
             padding: 10px;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.5);
             transition: transform 0.2s;
         }
-        .game-card:hover {
+        .game-card:hover,
+        .game-card:active {
             transform: scale(1.05);
+        }
+
+        .game-card a {
+            display: block;
         }
 
         .game-card img {
             width: 100%;
             height: auto;
             border-radius: 10px;
+            aspect-ratio: 16 / 9;
+            object-fit: cover;
+            background: #222;
         }
 
         .game-card p {
             margin-top: 10px;
             font-weight: bold;
-            color: #fff; /* white captions */
+            color: #fff;
+        }
+
+        .warn-badge {
+            display: none;
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #e2453c;
+            color: #fff;
+            font-weight: bold;
+            font-size: 16px;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+            cursor: default;
+        }
+
+        .empty-msg {
+            grid-column: 1 / -1;
+            text-align: center;
+            color: #ddd;
+            font-size: 18px;
+            padding: 40px 0;
+        }
+
+        @media (max-width: 480px) {
+            .toolbar {
+                padding: 10px;
+            }
         }
     </style>
 </head>
 <body>
 
-<!-- Banner at natural size, responsive -->
-<!-- Full-width image taking full screen width -->
 <div class="hero-image">
     <img src="images/Banner.png" alt="Johnny Games Hero Image">
 </div>
-<style>
-    .hero-image {
-        width: 100%;        /* full width of the viewport */
-        overflow: hidden;   /* prevent any overflow */
-    }
-    .hero-image img {
-        width: 100%;        /* stretch image to full width */
-        height: auto;       /* keep natural aspect ratio */
-        display: block;     /* remove small gaps under image */
-    }
-</style>
 
-<div class="game-grid">
-    <div class="game-card">
-        <a href="games/A Small World Cup.html"><img src="thumbnails/A Small World Cup.png" alt="A Small World Cup"></a>
-        <p>A Small World Cup</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Age of War.html"><img src="thumbnails/Age of War .png" alt="Age of War"></a>
-        <p>Age of War</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Among Us.html"><img src="thumbnails/Among Us.png" alt="Among Us"></a>
-        <p>Among Us</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Angry Birds.html"><img src="thumbnails/Angry Birds.png" alt="Angry Birds"></a>
-        <p>Angry Birds</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Bad Piggies.html"><img src="thumbnails/Bad Piggies.png" alt="Bad Piggies"></a>
-        <p>Bad Piggies</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Bloons Tower Defense.html"><img src="thumbnails/Bloons Tower Defense.png" alt="Bloons Tower Defense"></a>
-        <p>Bloons Tower Defense</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Burrito Bison.html"><img src="thumbnails/Burrito Bison.png" alt="Burrito Bison"></a>
-        <p>Burrito Bison</p>
-    </div>
-<div class="game-card">
-    <a href="https://cookieclickernew.com/">
-        <img src="thumbnails/Cookie Clicker.png" alt="Cookie Clicker">
-    </a>
-    <p>Cookie Clicker</p>
+<div class="toolbar">
+    <input type="search" id="searchInput" placeholder="Search games..." aria-label="Search games">
+    <select id="sortSelect" aria-label="Sort games">
+        <option value="asc">Name: A &rarr; Z</option>
+        <option value="desc">Name: Z &rarr; A</option>
+    </select>
+    <span class="result-count" id="resultCount"></span>
 </div>
-    <div class="game-card">
-        <a href="games/Cover Orange.html"><img src="thumbnails/Cover Orange.png" alt="Cover Orange"></a>
-        <p>Cover Orange</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Drift Boss.html"><img src="thumbnails/Drift Boss.png" alt="Drift Boss"></a>
-        <p>Drift Boss</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Drive Mad.html"><img src="thumbnails/Drive Mad.png" alt="Drive Mad"></a>
-        <p>Drive Mad</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Five Nights At Johnny's.html"><img src="thumbnails/Five Nights At Johnny's.png" alt="Five Nights At Johnny's"></a>
-        <p>Five Nights At Johnny's</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Geometry Dash.html"><img src="thumbnails/Geometry Dash.png" alt="Geometry Dash"></a>
-        <p>Geometry Dash</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Getting Over It.html"><img src="thumbnails/Getting Over It.png" alt="Getting Over It"></a>
-        <p>Getting Over It</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Island Simulator.html"><img src="thumbnails/Island Simulator.png" alt="Island Simulator"></a>
-        <p>Island Simulator</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Johnny Obby.html"><img src="thumbnails/Johnny Obby.png" alt="Johnny Obby"></a>
-        <p>Johnny Obby</p>
-    </div>
-<div class="game-card">
-    <a href="https://tlk.io/mysite-chat">
-        <img src="thumbnails/Messages.png" alt="Messages">
-    </a>
-    <p>Messages</p>
+
+<div class="game-grid" id="gameGrid">
+    <p class="empty-msg">Loading games...</p>
 </div>
-    <div class="game-card">
-        <a href="games/Monkey Mart.html"><img src="thumbnails/Monkey Mart.png" alt="Monkey Mart"></a>
-        <p>Monkey Mart</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Plants vs Zombies.html"><img src="thumbnails/Plants vs Zombies.png" alt="Plants vs Zombies"></a>
-        <p>Plants vs Zombies</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Retro Bowl.html"><img src="thumbnails/Retro Bowl.png" alt="Retro Bowl"></a>
-        <p>Retro Bowl</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Rocket League.html"><img src="thumbnails/Rocket League.png" alt="Rocket League"></a>
-        <p>Rocket League</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Steal a Brainrot.html"><img src="thumbnails/Steal a Brainrot.png" alt="Steal a Brainrot"></a>
-        <p>Steal a Brainrot</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Stickman Hook.html"><img src="thumbnails/Stickman Hook.png" alt="Stickman Hook"></a>
-        <p>Stickman Hook</p>
-    </div>
-    <div class="game-card">
-        <a href="games/Subway Surfers.html"><img src="thumbnails/Subway Surfers.png" alt="Subway Surfers"></a>
-        <p>Subway Surfers</p>
-    </div>
-</div>
+
+<script>
+(function () {
+    'use strict';
+
+    // Tiny gray placeholder so a missing thumbnail doesn't leave a broken-image icon.
+    const FALLBACK_THUMB =
+        'data:image/svg+xml;utf8,' + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="220" height="124" viewBox="0 0 220 124">' +
+            '<rect width="220" height="124" fill="#2a2a2a"/>' +
+            '<text x="50%" y="50%" fill="#888" font-family="Arial" font-size="14" ' +
+            'text-anchor="middle" dominant-baseline="middle">no thumbnail</text></svg>'
+        );
+
+    const grid = document.getElementById('gameGrid');
+    const searchInput = document.getElementById('searchInput');
+    const sortSelect = document.getElementById('sortSelect');
+    const resultCount = document.getElementById('resultCount');
+
+    const state = {
+        games: [],          // normalized {name, html, thumb, external}
+        checks: new Map(),  // name -> {thumbOk, htmlOk}
+        badgeEls: new Map(),// name -> badge element currently in the DOM
+        search: '',
+        sortDir: 'asc'
+    };
+
+    function normalize(entry) {
+        const name = entry.name;
+        const isExternal = !!entry.url;
+        return {
+            name: name,
+            html: isExternal ? entry.url : ('games/' + name + '.html'),
+            thumb: entry.thumb || ('thumbnails/' + name + '.png'),
+            external: isExternal
+        };
+    }
+
+    async function checkHtml(url) {
+        try {
+            let res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+            if (res.status === 405 || res.status === 501) {
+                // Some static hosts reject HEAD requests; fall back to a GET.
+                res = await fetch(url, { method: 'GET', cache: 'no-store' });
+            }
+            return res.ok;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function markCheck(name, key, value) {
+        const existing = state.checks.get(name) || {};
+        existing[key] = value;
+        state.checks.set(name, existing);
+        updateBadge(name);
+    }
+
+    function updateBadge(name) {
+        const badge = state.badgeEls.get(name);
+        if (!badge) return;
+        const c = state.checks.get(name) || {};
+        const missing = [];
+        if (c.thumbOk === false) missing.push('thumbnail');
+        if (c.htmlOk === false) missing.push('game file');
+        if (missing.length) {
+            badge.style.display = 'flex';
+            badge.title = 'Missing ' + missing.join(' and ');
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    function getFilteredSorted() {
+        const q = state.search.trim().toLowerCase();
+        let list = state.games.filter(g => g.name.toLowerCase().includes(q));
+        list.sort((a, b) => {
+            const cmp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+            return state.sortDir === 'asc' ? cmp : -cmp;
+        });
+        return list;
+    }
+
+    function render() {
+        const list = getFilteredSorted();
+        grid.innerHTML = '';
+        state.badgeEls.clear();
+        resultCount.textContent = list.length + (list.length === 1 ? ' game' : ' games');
+
+        if (list.length === 0) {
+            const msg = document.createElement('p');
+            msg.className = 'empty-msg';
+            msg.textContent = 'No games match your search.';
+            grid.appendChild(msg);
+            return;
+        }
+
+        for (const g of list) {
+            const card = document.createElement('div');
+            card.className = 'game-card';
+
+            const link = document.createElement('a');
+            link.href = g.html;
+            if (g.external) {
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+            }
+
+            const img = document.createElement('img');
+            img.alt = g.name;
+            img.loading = 'lazy';
+            img.src = g.thumb;
+            img.addEventListener('error', function onErr() {
+                img.removeEventListener('error', onErr);
+                img.src = FALLBACK_THUMB;
+                markCheck(g.name, 'thumbOk', false);
+            });
+            img.addEventListener('load', function onLoad() {
+                if (!state.checks.has(g.name) || state.checks.get(g.name).thumbOk !== false) {
+                    markCheck(g.name, 'thumbOk', true);
+                }
+            });
+
+            link.appendChild(img);
+            card.appendChild(link);
+
+            const caption = document.createElement('p');
+            caption.textContent = g.name;
+            card.appendChild(caption);
+
+            const badge = document.createElement('div');
+            badge.className = 'warn-badge';
+            badge.textContent = '!';
+            badge.setAttribute('aria-hidden', 'true');
+            card.appendChild(badge);
+            state.badgeEls.set(g.name, badge);
+
+            grid.appendChild(card);
+
+            // Only run the HTML existence check once per game, not on every re-render.
+            if (!g.external && !state.checks.has(g.name)) {
+                checkHtml(g.html).then(ok => markCheck(g.name, 'htmlOk', ok));
+            } else {
+                updateBadge(g.name);
+            }
+        }
+    }
+
+    searchInput.addEventListener('input', () => {
+        state.search = searchInput.value;
+        render();
+    });
+
+    sortSelect.addEventListener('change', () => {
+        state.sortDir = sortSelect.value;
+        render();
+    });
+
+    fetch('games.json', { cache: 'no-store' })
+        .then(res => res.json())
+        .then(data => {
+            state.games = data.map(normalize);
+            render();
+        })
+        .catch(err => {
+            grid.innerHTML = '<p class="empty-msg">Could not load games.json. ' +
+                'Make sure it sits next to index.html.</p>';
+            console.error(err);
+        });
+})();
+</script>
 
 </body>
 </html>
