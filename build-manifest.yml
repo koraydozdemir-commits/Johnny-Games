@@ -1,0 +1,29 @@
+# Optional. If your site is a GitHub repo (looks like it, given your
+# jsdelivr.net/gh/... asset links), drop this file at
+# .github/workflows/build-manifest.yml and games.json will regenerate
+# itself every time you push a new file into games/ or thumbnails/.
+# No more running the script by hand.
+
+name: Rebuild game manifest
+
+on:
+  push:
+    paths:
+      - 'games/**'
+      - 'thumbnails/**'
+      - 'generate-manifest.js'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate games.json
+        run: node generate-manifest.js
+
+      - name: Commit updated manifest
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: auto-update games.json"
+          file_pattern: games.json
