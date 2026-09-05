@@ -1,1 +1,265 @@
-<iframe src="https://magic-8ball.com/embed_widget/" scrolling="no" style="width:100%;border:none;overflow:hidden;height:750px"></iframe>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cosmic 8-Ball</title>
+  <style>
+    :root {
+      --bg-img: url('Wallpaper.jpg');
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #0a0a10 var(--bg-img) center/cover no-repeat fixed;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+      color: #fff;
+    }
+
+    /* Ambient Overlay Grid & Blur */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at center, transparent 20%, rgba(5, 5, 12, 0.85) 100%);
+      backdrop-filter: blur(8px) contrast(1.1);
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2.5rem;
+      perspective: 1000px;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 300;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+      opacity: 0.9;
+    }
+
+    /* Magic 8-Ball Sphere */
+    .ball-wrapper {
+      position: relative;
+      width: 320px;
+      height: 320px;
+      border-radius: 50%;
+      cursor: pointer;
+      transform-style: preserve-3d;
+      transition: transform 0.1s ease-out;
+    }
+
+    .ball {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, 
+        rgba(255, 255, 255, 0.15) 0%, 
+        rgba(20, 20, 30, 0.6) 40%, 
+        rgba(5, 5, 10, 0.95) 100%
+      );
+      box-shadow: 
+        inset -10px -10px 30px rgba(0, 0, 0, 0.9),
+        inset 10px 10px 20px rgba(255, 255, 255, 0.2),
+        0 20px 50px rgba(0, 0, 0, 0.8),
+        0 0 40px rgba(180, 160, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Iridescent Sheen Layer */
+    .ball::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: var(--bg-img) center/cover;
+      opacity: 0.25;
+      mix-blend-mode: screen;
+      filter: saturate(2) hue-rotate(0deg);
+      animation: shiftHue 20s linear infinite;
+    }
+
+    /* Dynamic Holographic Window */
+    .window {
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #090a15 0%, #020205 100%);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 
+        inset 0 0 20px rgba(0, 0, 0, 0.9),
+        0 0 15px rgba(120, 100, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      z-index: 2;
+    }
+
+    /* Floating Triangle Response */
+    .triangle {
+      width: 0;
+      height: 0;
+      border-left: 50px solid transparent;
+      border-right: 50px solid transparent;
+      border-bottom: 86px solid rgba(130, 90, 255, 0.35);
+      filter: drop-shadow(0 0 10px rgba(160, 120, 255, 0.6));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+      opacity: 0.2;
+      transform: scale(0.8) rotate(0deg);
+    }
+
+    .answer {
+      position: absolute;
+      top: 48px;
+      width: 70px;
+      text-align: center;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #e2d9ff;
+      text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+      line-height: 1.2;
+    }
+
+    /* Shake Animation */
+    .shaking {
+      animation: cosmicShake 0.6s ease-in-out;
+    }
+
+    .revealed .triangle {
+      opacity: 1;
+      transform: scale(1) rotate(360deg);
+      border-bottom-color: rgba(140, 100, 255, 0.7);
+    }
+
+    /* Prompt Text */
+    .hint {
+      font-size: 0.85rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      opacity: 0.5;
+      transition: opacity 0.3s;
+    }
+
+    @keyframes shiftHue {
+      0% { filter: saturate(2) hue-rotate(0deg); }
+      100% { filter: saturate(2) hue-rotate(360deg); }
+    }
+
+    @keyframes cosmicShake {
+      0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+      20% { transform: translate3d(-12px, 8px, 0) rotate(-5deg); }
+      40% { transform: translate3d(12px, -8px, 0) rotate(5deg); }
+      60% { transform: translate3d(-8px, -4px, 0) rotate(-3deg); }
+      80% { transform: translate3d(8px, 4px, 0) rotate(3deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="overlay"></div>
+
+  <div class="container">
+    <h1>Oracle</h1>
+
+    <div class="ball-wrapper" id="ballWrapper">
+      <div class="ball" id="ball">
+        <div class="window">
+          <div class="triangle" id="triangle">
+            <span class="answer" id="answer">Seek</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="hint" id="hint">Click or tap to consult the void</p>
+  </div>
+
+  <script>
+    const answers = [
+      "As aligned",
+      "Visions clear",
+      "Without doubt",
+      "Stars reflect yes",
+      "Signs point yes",
+      "Nebula hazy",
+      "Ask again later",
+      "Cosmos veiled",
+      "Cannot foresee",
+      "Focus intent",
+      "Void says no",
+      "Outlook dark",
+      "Doubtful",
+      "Fate denies",
+      "Not aligned"
+    ];
+
+    const ballWrapper = document.getElementById('ballWrapper');
+    const ball = document.getElementById('ball');
+    const triangle = document.getElementById('triangle');
+    const answerEl = document.getElementById('answer');
+    const hint = document.getElementById('hint');
+    let isShaking = false;
+
+    // Interactive 3D tilt effect on hover
+    document.addEventListener('mousemove', (e) => {
+      if (isShaking) return;
+      const { innerWidth, innerHeight } = window;
+      const x = (e.clientX - innerWidth / 2) / (innerWidth / 2);
+      const y = (e.clientY - innerHeight / 2) / (innerHeight / 2);
+      
+      ballWrapper.style.transform = `rotateY(${x * 20}deg) rotateX(${-y * 20}deg)`;
+    });
+
+    // Oracle reading trigger
+    ballWrapper.addEventListener('click', () => {
+      if (isShaking) return;
+      
+      isShaking = true;
+      ball.classList.remove('revealed');
+      ballWrapper.classList.add('shaking');
+      hint.style.opacity = '0.2';
+
+      setTimeout(() => {
+        const randomAnswer = answers[Math.floor(Math.random() * answers.length)];
+        answerEl.textContent = randomAnswer;
+        
+        ballWrapper.classList.remove('shaking');
+        ball.classList.add('revealed');
+        hint.style.opacity = '0.5';
+        isShaking = false;
+      }, 600);
+    });
+  </script>
+</body>
+</html>
