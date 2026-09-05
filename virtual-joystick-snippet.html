@@ -1,0 +1,165 @@
+<!--
+  VIRTUAL JOYSTICK — paste this whole block right before </body> in ONE game's
+  HTML file (e.g. games/Monkey Mart.html). Do NOT reference this as an external
+  file; several of your games use <base href="https://cdn.jsdelivr.net/..."> which
+  will silently break relative script paths pointing back at your own domain.
+
+  Only shows up on touch/coarse-pointer devices. Desktop is untouched.
+
+  IMPORTANT: this only helps games that read keyboard input for movement
+  (arrow keys or WASD). It does nothing for mouse/click/drag games
+  (tower defense, RTS, physics puzzles). Wrong tool for those, don't use it there.
+
+  Set KEY_SCHEME below to whatever this specific game actually listens for.
+  If you don't know, try 'arrows' first, test on the actual game, switch to
+  'wasd' if arrows don't move anything.
+-->
+<style>
+  #vjoy-base {
+    position: fixed;
+    left: 24px;
+    bottom: 24px;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    border: 2px solid rgba(255,255,255,0.4);
+    touch-action: none;
+    z-index: 999999;
+    display: none;
+  }
+  #vjoy-stick {
+    position: absolute;
+    left: 35px;
+    top: 35px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.55);
+    pointer-events: none;
+  }
+  /* Only show this on touch-primary devices, leaves desktop untouched */
+  @media (pointer: coarse) {
+    #vjoy-base { display: block; }
+  }
+</style>
+
+<div id="vjoy-base"><div id="vjoy-stick"></div></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // Change this to 'wasd' if the game uses WASD instead of arrow keys.
+  var KEY_SCHEME = 'arrows';
+
+  var SCHEMES = {
+    arrows: {
+      up:    { key: 'ArrowUp',    code: 'ArrowUp',    keyCode: 38 },
+      down:  { key: 'ArrowDown',  code: 'ArrowDown',  keyCode: 40 },
+      left:  { key: 'ArrowLeft',  code: 'ArrowLeft',  keyCode: 37 },
+      right: { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39 }
+    },
+    wasd: {
+      up:    { key: 'w', code: 'KeyW', keyCode: 87 },
+      down:  { key: 's', code: 'KeyS', keyCode: 83 },
+      left:  { key: 'a', code: 'KeyA', keyCode: 65 },
+      right: { key: 'd', code: 'KeyD', keyCode: 68 }
+    }
+  };
+  var keys = SCHEMES[KEY_SCHEME];
+
+  var base = document.getElementById('vjoy-base');
+  var stick = document.getElementById('vjoy-stick');
+  var activeDirs = {};
+  var touchId = null;
+
+  function fireKey(type, dir) {
+    var k = keys[dir];
+    if (!k) return;
+    var opts = {
+      key: k.key, code: k.code, keyCode: k.keyCode, which: k.keyCode,
+      bubbles: true, cancelable: true
+    };
+    // Fire on every plausible listener target. Different engines (Unity/Emscripten,
+    // Ruffle/Flash, GameMaker, Defold) attach keyboard listeners in different places,
+    // so we cover document, window, the canvas, and a ruffle-player if present.
+    var targets = [document, window];
+    var canvas = document.querySelector('canvas');
+    if (canvas) targets.push(canvas);
+    var ruffle = document.querySelector('ruffle-player');
+    if (ruffle) targets.push(ruffle);
+    for (var i = 0; i < targets.length; i++) {
+      targets[i].dispatchEvent(new KeyboardEvent(type, opts));
+    }
+  }
+
+  function setDirections(newDirs) {
+    var dir;
+    for (dir in activeDirs) {
+      if (activeDirs[dir] && !newDirs[dir]) fireKey('keyup', dir);
+    }
+    for (dir in newDirs) {
+      if (newDirs[dir] && !activeDirs[dir]) fireKey('keydown', dir);
+    }
+    activeDirs = newDirs;
+  }
+
+  function handleMove(clientX, clientY) {
+    var rect = base.getBoundingClientRect();
+    var cx = rect.left + rect.width / 2;
+    var cy = rect.top + rect.height / 2;
+    var dx = clientX - cx;
+    var dy = clientY - cy;
+    var maxDist = rect.width / 2;
+    var rawDist = Math.hypot(dx, dy);
+    var dist = Math.min(rawDist, maxDist);
+    var angle = Math.atan2(dy, dx);
+
+    stick.style.left = (35 + Math.cos(angle) * dist - 15) + 'px';
+    stick.style.top = (35 + Math.sin(angle) * dist - 15) + 'px';
+
+    var newDirs = {};
+    var deadzone = maxDist * 0.25;
+    if (rawDist > deadzone) {
+      var deg = angle * 180 / Math.PI;
+      if (deg > -135 && deg < -45) newDirs.up = true;
+      else if (deg > 45 && deg < 135) newDirs.down = true;
+      if (deg > 135 || deg < -135) newDirs.left = true;
+      else if (deg > -45 && deg < 45) newDirs.right = true;
+    }
+    setDirections(newDirs);
+  }
+
+  function reset() {
+    stick.style.left = '35px';
+    stick.style.top = '35px';
+    setDirections({});
+  }
+
+  base.addEventListener('touchstart', function (e) {
+    e.preventDefault();
+    var t = e.changedTouches[0];
+    touchId = t.identifier;
+    handleMove(t.clientX, t.clientY);
+  }, { passive: false });
+
+  base.addEventListener('touchmove', function (e) {
+    e.preventDefault();
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      var t = e.changedTouches[i];
+      if (t.identifier === touchId) handleMove(t.clientX, t.clientY);
+    }
+  }, { passive: false });
+
+  base.addEventListener('touchend', function (e) {
+    e.preventDefault();
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === touchId) {
+        touchId = null;
+        reset();
+      }
+    }
+  }, { passive: false });
+})();
+</script>
