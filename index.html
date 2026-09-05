@@ -114,7 +114,7 @@
             width: 100%;
             height: auto;
             border-radius: 10px;
-            aspect-ratio: 16 / 9;
+            aspect-ratio: 1 / 1;
             object-fit: cover;
             background: #222;
         }
@@ -184,11 +184,14 @@
     // Tiny gray placeholder so a missing thumbnail doesn't leave a broken-image icon.
     const FALLBACK_THUMB =
         'data:image/svg+xml;utf8,' + encodeURIComponent(
-            '<svg xmlns="http://www.w3.org/2000/svg" width="220" height="124" viewBox="0 0 220 124">' +
-            '<rect width="220" height="124" fill="#2a2a2a"/>' +
+            '<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220" viewBox="0 0 220 220">' +
+            '<rect width="220" height="220" fill="#2a2a2a"/>' +
             '<text x="50%" y="50%" fill="#888" font-family="Arial" font-size="14" ' +
             'text-anchor="middle" dominant-baseline="middle">no thumbnail</text></svg>'
         );
+
+    // Extensions to try, in order, when a manifest entry doesn't specify one explicitly.
+    const THUMB_EXTENSIONS = ['png', 'jpg', 'jpeg'];
 
     const grid = document.getElementById('gameGrid');
     const searchInput = document.getElementById('searchInput');
@@ -206,10 +209,15 @@
     function normalize(entry) {
         const name = entry.name;
         const isExternal = !!entry.url;
+        // If the manifest explicitly names a thumbnail file, trust it as-is (single try).
+        // Otherwise build a list of candidates to try in order: name.png, name.jpg, name.jpeg.
+        const thumbCandidates = entry.thumb
+            ? [entry.thumb]
+            : THUMB_EXTENSIONS.map(ext => 'thumbnails/' + name + '.' + ext);
         return {
             name: name,
             html: isExternal ? entry.url : ('games/' + name + '.html'),
-            thumb: entry.thumb || ('thumbnails/' + name + '.png'),
+            thumbCandidates: thumbCandidates,
             external: isExternal
         };
     }
@@ -287,17 +295,23 @@
             const img = document.createElement('img');
             img.alt = g.name;
             img.loading = 'lazy';
-            img.src = g.thumb;
-            img.addEventListener('error', function onErr() {
-                img.removeEventListener('error', onErr);
-                img.src = FALLBACK_THUMB;
-                markCheck(g.name, 'thumbOk', false);
-            });
+
+            let candidateIndex = 0;
+            const tryNextThumb = () => {
+                if (candidateIndex >= g.thumbCandidates.length) {
+                    img.src = FALLBACK_THUMB;
+                    markCheck(g.name, 'thumbOk', false);
+                    return;
+                }
+                img.src = g.thumbCandidates[candidateIndex++];
+            };
+            img.addEventListener('error', tryNextThumb);
             img.addEventListener('load', function onLoad() {
-                if (!state.checks.has(g.name) || state.checks.get(g.name).thumbOk !== false) {
+                if (img.src.indexOf('data:image/svg') === -1) {
                     markCheck(g.name, 'thumbOk', true);
                 }
             });
+            tryNextThumb();
 
             link.appendChild(img);
             card.appendChild(link);
