@@ -190,7 +190,7 @@
   <div class="overlay"></div>
 
   <div class="container">
-    <h1>Oracle</h1>
+    <h1>Johnny</h1>
 
     <div class="ball-wrapper" id="ballWrapper">
       <div class="ball" id="ball">
@@ -202,7 +202,7 @@
       </div>
     </div>
 
-    <p class="hint" id="hint">Click or tap to consult the void</p>
+    <p class="hint" id="hint">Click or tap to consult Johnny</p>
   </div>
 
   <script>
@@ -217,11 +217,12 @@
       "Cosmos veiled",
       "Cannot foresee",
       "Focus intent",
-      "Void says no",
+      "Johnny says no",
       "Outlook dark",
       "Doubtful",
       "Fate denies",
-      "Not aligned"
+      "Not aligned",
+      "Ask Connor McMahon"
     ];
 
     const ballWrapper = document.getElementById('ballWrapper');
@@ -241,7 +242,7 @@
       ballWrapper.style.transform = `rotateY(${x * 20}deg) rotateX(${-y * 20}deg)`;
     });
 
-    // Oracle reading trigger
+    // Johnny reading trigger
     ballWrapper.addEventListener('click', () => {
       if (isShaking) return;
       
