@@ -1,160 +1,294 @@
+```html
+<!-- Ultimate Game Stash file-->
+<!-- Local-save version for website hosting -->
+
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
- 
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible"  content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>
-        Hill Climb Racing Mod | Kadirof Texno
-    </title>
-    <link rel='icon' href="img/balaca logo.png">
+  <base href="https://cdn.jsdelivr.net/gh/bubbls/youtube-playables@ed57fd6dbc91143221b05fdf61be73bacc375843/hill-climb-racing-lite/">
 
-    <!--Icon linkleri qarrdasim-->
-    <link rel="shortcut icon" href="https://www.gamezawy.com/wp-content/uploads/2021/11/cropped-app_icon.png">
-    <link rel="shortcut icont" href="img/fav.png" type="image/x-icon">
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, minimal-ui, shrink-to-fit=no">
+  <meta name="mobile-web-app-capable" content="yes">
 
-    <!--Css ucun link brat-->
+  <!-- =========================================================
+       LOCAL SAVE SYSTEM
+       ========================================================= -->
 
-    <link rel="stylesheet" href="css/style.css">
+  <script>
+    (function () {
+      "use strict";
 
-    <!--Box Icons-->
+      const SAVE_KEY = "hcr_lite_save_data";
 
-    <link  href='https://unpkg.com/boxicons@2.1.1/css/boxicons.min.css' rel='stylesheet'>
-    
-    <!--Swiper ucun link ama css olan-->
+      // ---------------------------------------------------------
+      // Local storage helpers
+      // ---------------------------------------------------------
 
-    <link rel="stylesheet" href="css/swiper-bundle.min.css">
+      function saveToLocalStorage(data) {
+        try {
+          if (data === undefined || data === null) return;
 
+          let value;
+
+          if (typeof data === "string") {
+            value = data;
+          } else {
+            value = JSON.stringify(data);
+          }
+
+          localStorage.setItem(SAVE_KEY, value);
+
+          console.log("[HCR Save] Game data saved locally.");
+        } catch (error) {
+          console.warn("[HCR Save] Could not save data:", error);
+        }
+      }
+
+      function loadFromLocalStorage() {
+        try {
+          const value = localStorage.getItem(SAVE_KEY);
+
+          if (value === null) {
+            console.log("[HCR Save] No previous save found.");
+            return null;
+          }
+
+          console.log("[HCR Save] Save data loaded.");
+
+          // Try to restore JSON data.
+          try {
+            return JSON.parse(value);
+          } catch (e) {
+            // If the game expects a string, return it unchanged.
+            return value;
+          }
+
+        } catch (error) {
+          console.warn("[HCR Save] Could not load data:", error);
+          return null;
+        }
+      }
+
+      // ---------------------------------------------------------
+      // Expose save functions globally
+      // ---------------------------------------------------------
+
+      window.HCRSave = {
+        save: saveToLocalStorage,
+        load: loadFromLocalStorage,
+
+        clear: function () {
+          try {
+            localStorage.removeItem(SAVE_KEY);
+            console.log("[HCR Save] Save deleted.");
+          } catch (error) {
+            console.warn("[HCR Save] Could not delete save:", error);
+          }
+        }
+      };
+
+      // ---------------------------------------------------------
+      // Playables API compatibility layer
+      // ---------------------------------------------------------
+
+      // Create a temporary compatibility object if ytgame.js
+      // has not created one yet.
+      window.ytgame = window.ytgame || {};
+      window.ytgame.game = window.ytgame.game || {};
+
+      const game = window.ytgame.game;
+
+      // Preserve any existing functions.
+      const originalSaveData = game.saveData;
+      const originalLoadData = game.loadData;
+
+      game.saveData = function (data) {
+
+        // Save locally first.
+        saveToLocalStorage(data);
+
+        // If the original Playables API exists,
+        // allow it to run as well.
+        if (typeof originalSaveData === "function") {
+          try {
+            return originalSaveData.call(this, data);
+          } catch (error) {
+            console.warn(
+              "[HCR Save] Original saveData failed:",
+              error
+            );
+          }
+        }
+
+        return Promise.resolve();
+      };
+
+      game.loadData = function () {
+
+        const localData = loadFromLocalStorage();
+
+        // If we have local data, return it.
+        if (localData !== null) {
+          return Promise.resolve(localData);
+        }
+
+        // Otherwise allow the original Playables API to load.
+        if (typeof originalLoadData === "function") {
+          try {
+            return originalLoadData.call(this);
+          } catch (error) {
+            console.warn(
+              "[HCR Save] Original loadData failed:",
+              error
+            );
+          }
+        }
+
+        return Promise.resolve(null);
+      };
+
+      // ---------------------------------------------------------
+      // Backup automatic save
+      // ---------------------------------------------------------
+
+      // This does NOT invent game data.
+      // It only saves data when the game exposes it through
+      // the Playables save system.
+      window.addEventListener("beforeunload", function () {
+        console.log("[HCR Save] Leaving game.");
+      });
+
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "hidden") {
+          console.log("[HCR Save] Page hidden.");
+        }
+      });
+
+    })();
+  </script>
+
+  <!-- YouTube Playables API -->
+  <script
+    src="https://cdn.jsdelivr.net/gh/bubbls/youtube-playables@main/ytgame.js"
+    nonce="TPIafyWGMIB2_8Gk5HFfiA">
+  </script>
+
+  <!-- Engine configuration -->
+
+  <div id="engine-config"
+       data-engine-arguments="--verify-graphics-calls=false,"
+       data-custom-heap-size="33554432"
+       data-exe-name="HCRLite"
+       data-display-width="470"
+       data-display-height="836">
+  </div>
+
+  <!-- Game loader -->
+
+  <script
+    src="loader.js"
+    nonce="TPIafyWGMIB2_8Gk5HFfiA">
+  </script>
+
+  <script
+    src="yt-functions.js"
+    nonce="TPIafyWGMIB2_8Gk5HFfiA">
+  </script>
+
+  <title>HCR Lite 1.0</title>
+
+  <style type="text/css">
+
+    /*
+     * Disable user selection to avoid strange bug in Chrome
+     * on Windows:
+     *
+     * Selecting text outside the canvas and dragging can
+     * interfere with mouse events.
+     */
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+    }
+
+    body {
+      position: fixed;
+    }
+
+    .canvas-app-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .canvas-app-container:-webkit-full-screen {
+      width: auto;
+      height: auto;
+    }
+
+    #canvas-container {
+      position: relative;
+    }
+
+    #canvas {
+      outline: none;
+      border: 0;
+      width: 100%;
+      vertical-align: bottom;
+      display: block;
+    }
+
+    canvas:focus,
+    canvas:active {
+      outline: none;
+      border: 0;
+      -moz-outline-style: none;
+    }
+
+    div {
+      -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      -khtml-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+
+  </style>
 </head>
+
 <body>
 
-    <!--Header-->
+  <div id="app-container" class="canvas-app-container">
 
-    <header>
+    <div id="canvas-container"
+         class="canvas-app-canvas-container">
 
-        <!--Nav-->
+      <canvas
+        id="canvas"
+        class="canvas-app-canvas"
+        tabindex="1"
+        width="470"
+        height="836">
+      </canvas>
 
-        <div class="nav container">
-
-            <!-- LOGO brat-->
-
-            <a class="logo" href="index.html"><img src="esas/logom.png"></a>
-
-            <!--Navbar iconlari-->
-
-            <div class="nav-icons">
-                <i class='bx bx-bell bx-tada' id="bell-icon"><span></span></i>
-                <a href="https://www.instagram.com/kadirof_texno/?hl=tr"><i class='bx bxl-instagram-alt' ></i></a>
-                <a href="https://www.youtube.com/channel/UCbgNryxWYY_rDfGG3AXw1Qg"><i class='bx bxl-youtube' ></i></a>
-            <div class="menu-icon">
-                    <div class="line1"></div>
-                    <div class="line2"></div>
-                    <div class="line3"></div>
-                </div>
-            </div>
-
-            <!--Menu basladi-->
-
-            <div class="menu">
-                <img src="esas/menu.png" alt="">
-                <div class="navbar">
-                    <li> <a href="index.html">Əsas Səhifə</a></li>
-                    <li> <a href="index.html">Programlar</a></li>
-                    <li> <a href="oyunlar1.html">Oyunlar</a></li>
-                    <li> <a href="mobil-proqramlar.html">Mobil Programlar</a></li>
-                    <li> <a href="mobil-oyunlar.html">Mobil Oyunlar</a></li>
-                    <li> <a href="https://www.instagram.com/kadirof._/">Elaqe</a></li>
-                </div>
-            </div>
-
-            <!--Bildirisler-->
-
-            <div class="notification">
-                
-                <div class="notification-box">
-                    <i class='bx bxs-check-circle' ></i>
-                    <p>Telefonunuzda kənardan yükləmələrə icazə verinki oyunlar açılsın</p>
-                </div>
-                <div class="notification-box box-color">
-                    <i class='bx bxs-x-circle' ></i>
-                    <p>İstədiyiniz proqram ya da oyunları instagramda yazıb bildirə bilərsiniz</p>
-                   
-                </div>
-            </div>
-        </div>
-    </header>
-
-    <!--Video-->
-
-    <div class="video-container container wp-embed-responsive .wp-has-aspect-ratio ">
-<video controls autoplay src="mobil videolar/y2meta.com-Hill Climb Racing Trailer 2015-(480p).mp4"></video>
     </div>
 
-    <!--About-->
+  </div>
 
-    <div class="about container">
-        <h2>Oyun Haqqında </h2>
-        <p>
-Oyun hilə modudur və hər şey sonsuzdu.
-            
-        </p>
-    </div>
-
-    <!--Numuneler qaqi-->
-
-    <div class="screenshots container">
-        <h2>Nümunələr</h2>
-        <div class="screenshots-content">
-            <img src="https://images.sftcdn.net/images/t_app-cover-l,f_auto/p/6637ea74-9b2f-11e6-b7b4-00163ec9f5fa/2818902603/hill-climb-racing-screenshot.jpg" alt="">
-            <img src="https://fingersoft.com/app/uploads/2019/09/fingersoft_web_page_hcr2.png" alt="">
-            <img src="https://i.ytimg.com/vi/pXswF-Qdspo/maxresdefault.jpg" alt="">
-            
-        </div>
-    </div>
-
-    <!--Download-->
-
-    <div class="download ">
-        <h2>Android üçün yüklə</h2>
-        <div class="download-links">
-            <div></div>
-            <a target="_blank" rel="nofollow" href="https://dosya.co/twpln6cnub3l/Hill_Climb_Racing_v1.54.2_Mod-Kadirof_Texno.apk.html" download="">Yüklə (69mb)</a>
-            <div></div>
-            
-            
-            <div></div>
-            <a ref="" download="">PROBLEMLƏ BAĞLI İNSTAGRAMDA YAZ</a>
-            <div></div>
-
-            
-        </div>
-    </div>
-    <div style="margin-left: 48.5%; margin-top: -1%;" class="nav-icons">
-    <a href="https://www.instagram.com/kadirof_texno/?hl=tr"><i class='bx bxl-instagram-alt' ></i></a>
-    </div>
-    <!-- Copyright -->
-
-    <div class="copyright container">
-        <a class="logo" href="index.html">Kadirof <span>Texno</span></a>
-        <p>&#169; Saytın bütün haqqları aiddir <br> (Yusif Qədirli) <br><a href="https://yusifqedirli66@gmail.com"> (yusifqedirli66@gmail.com)</a></p>
-    </div>
-            
-        
-        
-        
-    
-
-    <!--Swiper ucun link braaat-->
-
-    <script src="js/swiper-bundle.min.js"></script>
-
-    <!--Java Script ucun link braaat ama javascript olan-->
-
-    <script src="js/main.js"></script>
-    
 </body>
-
-
 </html>
+```
