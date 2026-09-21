@@ -1,213 +1,23 @@
 ```html
-<!-- Ultimate Game Stash file-->
-<!-- Local-save version for website hosting -->
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
+
   <base href="https://cdn.jsdelivr.net/gh/bubbls/youtube-playables@ed57fd6dbc91143221b05fdf61be73bacc375843/hill-climb-racing-lite/">
 
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, minimal-ui, shrink-to-fit=no">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, minimal-ui, shrink-to-fit=no"
+  >
+
   <meta name="mobile-web-app-capable" content="yes">
-
-  <!-- =========================================================
-       LOCAL SAVE SYSTEM
-       ========================================================= -->
-
-  <script>
-    (function () {
-      "use strict";
-
-      const SAVE_KEY = "hcr_lite_save_data";
-
-      // ---------------------------------------------------------
-      // Local storage helpers
-      // ---------------------------------------------------------
-
-      function saveToLocalStorage(data) {
-        try {
-          if (data === undefined || data === null) return;
-
-          let value;
-
-          if (typeof data === "string") {
-            value = data;
-          } else {
-            value = JSON.stringify(data);
-          }
-
-          localStorage.setItem(SAVE_KEY, value);
-
-          console.log("[HCR Save] Game data saved locally.");
-        } catch (error) {
-          console.warn("[HCR Save] Could not save data:", error);
-        }
-      }
-
-      function loadFromLocalStorage() {
-        try {
-          const value = localStorage.getItem(SAVE_KEY);
-
-          if (value === null) {
-            console.log("[HCR Save] No previous save found.");
-            return null;
-          }
-
-          console.log("[HCR Save] Save data loaded.");
-
-          // Try to restore JSON data.
-          try {
-            return JSON.parse(value);
-          } catch (e) {
-            // If the game expects a string, return it unchanged.
-            return value;
-          }
-
-        } catch (error) {
-          console.warn("[HCR Save] Could not load data:", error);
-          return null;
-        }
-      }
-
-      // ---------------------------------------------------------
-      // Expose save functions globally
-      // ---------------------------------------------------------
-
-      window.HCRSave = {
-        save: saveToLocalStorage,
-        load: loadFromLocalStorage,
-
-        clear: function () {
-          try {
-            localStorage.removeItem(SAVE_KEY);
-            console.log("[HCR Save] Save deleted.");
-          } catch (error) {
-            console.warn("[HCR Save] Could not delete save:", error);
-          }
-        }
-      };
-
-      // ---------------------------------------------------------
-      // Playables API compatibility layer
-      // ---------------------------------------------------------
-
-      // Create a temporary compatibility object if ytgame.js
-      // has not created one yet.
-      window.ytgame = window.ytgame || {};
-      window.ytgame.game = window.ytgame.game || {};
-
-      const game = window.ytgame.game;
-
-      // Preserve any existing functions.
-      const originalSaveData = game.saveData;
-      const originalLoadData = game.loadData;
-
-      game.saveData = function (data) {
-
-        // Save locally first.
-        saveToLocalStorage(data);
-
-        // If the original Playables API exists,
-        // allow it to run as well.
-        if (typeof originalSaveData === "function") {
-          try {
-            return originalSaveData.call(this, data);
-          } catch (error) {
-            console.warn(
-              "[HCR Save] Original saveData failed:",
-              error
-            );
-          }
-        }
-
-        return Promise.resolve();
-      };
-
-      game.loadData = function () {
-
-        const localData = loadFromLocalStorage();
-
-        // If we have local data, return it.
-        if (localData !== null) {
-          return Promise.resolve(localData);
-        }
-
-        // Otherwise allow the original Playables API to load.
-        if (typeof originalLoadData === "function") {
-          try {
-            return originalLoadData.call(this);
-          } catch (error) {
-            console.warn(
-              "[HCR Save] Original loadData failed:",
-              error
-            );
-          }
-        }
-
-        return Promise.resolve(null);
-      };
-
-      // ---------------------------------------------------------
-      // Backup automatic save
-      // ---------------------------------------------------------
-
-      // This does NOT invent game data.
-      // It only saves data when the game exposes it through
-      // the Playables save system.
-      window.addEventListener("beforeunload", function () {
-        console.log("[HCR Save] Leaving game.");
-      });
-
-      document.addEventListener("visibilitychange", function () {
-        if (document.visibilityState === "hidden") {
-          console.log("[HCR Save] Page hidden.");
-        }
-      });
-
-    })();
-  </script>
-
-  <!-- YouTube Playables API -->
-  <script
-    src="https://cdn.jsdelivr.net/gh/bubbls/youtube-playables@main/ytgame.js"
-    nonce="TPIafyWGMIB2_8Gk5HFfiA">
-  </script>
-
-  <!-- Engine configuration -->
-
-  <div id="engine-config"
-       data-engine-arguments="--verify-graphics-calls=false,"
-       data-custom-heap-size="33554432"
-       data-exe-name="HCRLite"
-       data-display-width="470"
-       data-display-height="836">
-  </div>
-
-  <!-- Game loader -->
-
-  <script
-    src="loader.js"
-    nonce="TPIafyWGMIB2_8Gk5HFfiA">
-  </script>
-
-  <script
-    src="yt-functions.js"
-    nonce="TPIafyWGMIB2_8Gk5HFfiA">
-  </script>
 
   <title>HCR Lite 1.0</title>
 
-  <style type="text/css">
-
-    /*
-     * Disable user selection to avoid strange bug in Chrome
-     * on Windows:
-     *
-     * Selecting text outside the canvas and dragging can
-     * interfere with mouse events.
-     */
+  <style>
 
     html,
     body {
@@ -254,11 +64,10 @@
     canvas:active {
       outline: none;
       border: 0;
-      -moz-outline-style: none;
     }
 
     div {
-      -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+      -webkit-tap-highlight-color: rgba(0,0,0,0);
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       -khtml-user-select: none;
@@ -268,18 +77,17 @@
     }
 
   </style>
+
 </head>
 
 <body>
 
   <div id="app-container" class="canvas-app-container">
 
-    <div id="canvas-container"
-         class="canvas-app-canvas-container">
+    <div id="canvas-container">
 
       <canvas
         id="canvas"
-        class="canvas-app-canvas"
         tabindex="1"
         width="470"
         height="836">
@@ -288,6 +96,383 @@
     </div>
 
   </div>
+
+  <!-- =====================================================
+       YOUTUBE PLAYABLES API
+       ===================================================== -->
+
+  <script
+    src="https://cdn.jsdelivr.net/gh/bubbls/youtube-playables@main/ytgame.js">
+  </script>
+
+
+  <!-- =====================================================
+       LOCAL SAVE PATCH
+       ===================================================== -->
+
+  <script>
+
+    (function () {
+
+      "use strict";
+
+      const SAVE_KEY = "HCR_LITE_SAVE";
+
+      console.log("[HCR SAVE] Save system starting...");
+
+
+      /*
+       * ----------------------------------------------------
+       * LOCAL STORAGE
+       * ----------------------------------------------------
+       */
+
+      function saveLocal(data) {
+
+        try {
+
+          if (data === undefined || data === null) {
+            console.warn("[HCR SAVE] Nothing to save.");
+            return;
+          }
+
+          let saveData;
+
+          /*
+           * Playables games can pass either a string
+           * or an object.
+           */
+
+          if (typeof data === "string") {
+            saveData = data;
+          } else {
+            saveData = JSON.stringify(data);
+          }
+
+          localStorage.setItem(SAVE_KEY, saveData);
+
+          console.log(
+            "[HCR SAVE] Successfully saved:",
+            saveData
+          );
+
+        } catch (error) {
+
+          console.error(
+            "[HCR SAVE] Save failed:",
+            error
+          );
+
+        }
+
+      }
+
+
+      function loadLocal() {
+
+        try {
+
+          const data =
+            localStorage.getItem(SAVE_KEY);
+
+          if (!data) {
+
+            console.log(
+              "[HCR SAVE] No save found."
+            );
+
+            return null;
+
+          }
+
+          console.log(
+            "[HCR SAVE] Save found."
+          );
+
+          /*
+           * Try JSON first.
+           */
+
+          try {
+
+            return JSON.parse(data);
+
+          } catch {
+
+            /*
+             * Otherwise return the raw string.
+             */
+
+            return data;
+
+          }
+
+        } catch (error) {
+
+          console.error(
+            "[HCR SAVE] Load failed:",
+            error
+          );
+
+          return null;
+
+        }
+
+      }
+
+
+      /*
+       * ----------------------------------------------------
+       * WAIT FOR YTGAME
+       * ----------------------------------------------------
+       *
+       * ytgame.js may initialize its game object
+       * asynchronously, so don't patch it only once.
+       */
+
+      function installSavePatch() {
+
+        if (
+          !window.ytgame ||
+          !window.ytgame.game
+        ) {
+
+          console.log(
+            "[HCR SAVE] Waiting for ytgame..."
+          );
+
+          setTimeout(
+            installSavePatch,
+            50
+          );
+
+          return;
+
+        }
+
+
+        const game = window.ytgame.game;
+
+
+        /*
+         * Don't install the patch twice.
+         */
+
+        if (game.__HCR_LOCAL_SAVE_PATCHED) {
+          return;
+        }
+
+        game.__HCR_LOCAL_SAVE_PATCHED = true;
+
+
+        console.log(
+          "[HCR SAVE] Installing local save patch..."
+        );
+
+
+        /*
+         * ------------------------------------------------
+         * SAVE
+         * ------------------------------------------------
+         */
+
+        const originalSaveData =
+          typeof game.saveData === "function"
+            ? game.saveData.bind(game)
+            : null;
+
+
+        game.saveData = function (data) {
+
+          console.log(
+            "[HCR SAVE] saveData() called."
+          );
+
+          /*
+           * Save to GitHub site's browser storage.
+           */
+
+          saveLocal(data);
+
+
+          /*
+           * Also let the original Playables
+           * save function run if available.
+           */
+
+          if (originalSaveData) {
+
+            try {
+
+              return originalSaveData(data);
+
+            } catch (error) {
+
+              console.warn(
+                "[HCR SAVE] Original save failed:",
+                error
+              );
+
+            }
+
+          }
+
+          return Promise.resolve();
+
+        };
+
+
+        /*
+         * ------------------------------------------------
+         * LOAD
+         * ------------------------------------------------
+         */
+
+        const originalLoadData =
+          typeof game.loadData === "function"
+            ? game.loadData.bind(game)
+            : null;
+
+
+        game.loadData = function () {
+
+          console.log(
+            "[HCR SAVE] loadData() called."
+          );
+
+
+          const localSave =
+            loadLocal();
+
+
+          /*
+           * If we have a local save,
+           * give it back to the game.
+           */
+
+          if (localSave !== null) {
+
+            console.log(
+              "[HCR SAVE] Loading local save."
+            );
+
+            return Promise.resolve(
+              localSave
+            );
+
+          }
+
+
+          /*
+           * No local save yet.
+           * Try the original Playables API.
+           */
+
+          if (originalLoadData) {
+
+            try {
+
+              return originalLoadData();
+
+            } catch (error) {
+
+              console.warn(
+                "[HCR SAVE] Original load failed:",
+                error
+              );
+
+            }
+
+          }
+
+
+          return Promise.resolve(null);
+
+        };
+
+
+        console.log(
+          "[HCR SAVE] Local save patch installed!"
+        );
+
+      }
+
+
+      installSavePatch();
+
+
+      /*
+       * ----------------------------------------------------
+       * DEBUG FUNCTIONS
+       * ----------------------------------------------------
+       *
+       * These are useful for testing from the browser
+       * console.
+       */
+
+      window.HCRSave = {
+
+        get: function () {
+
+          return loadLocal();
+
+        },
+
+        clear: function () {
+
+          localStorage.removeItem(
+            SAVE_KEY
+          );
+
+          console.log(
+            "[HCR SAVE] Save deleted."
+          );
+
+        },
+
+        exists: function () {
+
+          return (
+            localStorage.getItem(
+              SAVE_KEY
+            ) !== null
+          );
+
+        }
+
+      };
+
+    })();
+
+  </script>
+
+
+  <!-- =====================================================
+       GAME CONFIG
+       ===================================================== -->
+
+  <div
+    id="engine-config"
+    data-engine-arguments="--verify-graphics-calls=false,"
+    data-custom-heap-size="33554432"
+    data-exe-name="HCRLite"
+    data-display-width="470"
+    data-display-height="836">
+  </div>
+
+
+  <!-- =====================================================
+       GAME LOADER
+       ===================================================== -->
+
+  <script
+    src="loader.js">
+  </script>
+
+  <script
+    src="yt-functions.js">
+  </script>
+
 
 </body>
 </html>
