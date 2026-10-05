@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Games">
+<meta name="theme-color" content="#0b0b14">
+<link rel="apple-touch-icon" href="images/Wallpaper.jpg">
+<title>Examinations.ie</title>
+<style>
+:root{--bg:#0b0b14;--card:#161624;--line:#2a2a40;--txt:#f2f2f7;--dim:#9a9ab0;--acc:#7c5cff;--hot:#ff4d6d}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:var(--txt);
+ background:linear-gradient(rgba(11,11,20,.88),rgba(11,11,20,.96)),url(images/Wallpaper.jpg) center/cover fixed var(--bg);
+ min-height:100vh;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.hero img{display:block;width:100%;max-height:260px;object-fit:cover;object-position:center}
+.bar{position:sticky;top:0;z-index:10;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 16px;
+ background:rgba(11,11,20,.82);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.bar input,.bar select{font-size:16px;min-height:44px;padding:0 14px;border-radius:12px;border:1px solid var(--line);
+ background:var(--card);color:var(--txt);-webkit-appearance:none;appearance:none}
+.bar input{flex:1 1 220px;min-width:0}
+.tabs{display:flex;gap:6px}
+.tab{min-height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--dim);font:600 15px inherit;font-family:inherit}
+.tab.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.count{color:var(--dim);font-size:14px}
+main{max-width:1400px;margin:0 auto;padding:16px}
+h2{font-size:15px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin:18px 4px 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:16px}
+.card{position:relative;background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;
+ transition:transform .15s}
+.card:active{transform:scale(.96)}
+@media(hover:hover){.card:hover{transform:translateY(-3px);border-color:var(--acc)}}
+.card a{display:block;color:inherit;text-decoration:none;-webkit-touch-callout:none}
+.card img{display:block;width:100%;aspect-ratio:1/1;object-fit:cover;background:#222}
+.card p{margin:0;padding:10px 12px 12px;font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fav{position:absolute;top:6px;right:6px;width:44px;height:44px;border:0;border-radius:50%;
+ background:rgba(0,0,0,.55);color:#fff;font-size:22px;line-height:1;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.fav.on{color:var(--hot)}
+.empty{grid-column:1/-1;text-align:center;color:var(--dim);padding:48px 0}
+</style>
+</head>
+<body>
+<div class="hero"><img src="images/Banner.png" alt="Johnny Games"></div>
+<div class="bar">
+ <input id="q" type="search" placeholder="Search games..." aria-label="Search games" autocomplete="off">
+ <div class="tabs">
+  <button class="tab on" data-t="all">All</button>
+  <button class="tab" data-t="fav">&#9829; Favorites</button>
+ </div>
+ <select id="sort" aria-label="Sort"><option value="az">A to Z</option><option value="za">Z to A</option></select>
+ <span class="count" id="count"></span>
+</div>
+<main>
+ <div id="recentWrap" hidden><h2>Recently played</h2><div class="grid" id="recent"></div></div>
+ <h2 id="allTitle">All games</h2>
+ <div class="grid" id="grid"><p class="empty">Loading games...</p></div>
+</main>
+<script>
+(function(){
+'use strict';
+var store={
+ get:function(k,d){try{var v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},
+ set:function(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+};
+var FALLBACK='data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#222"/><text x="50%" y="50%" fill="#777" font-family="Arial" font-size="14" text-anchor="middle">no thumbnail</text></svg>');
+var EXT=['png','jpg','jpeg'];
+var $=function(id){return document.getElementById(id)};
+var S={games:[],q:'',tab:'all',sort:'az',favs:store.get('jg_favs',[]),recent:store.get('jg_recent',[])};
+
+function norm(e){
+ var ext=!!e.url;
+ return {name:e.name,href:ext?e.url:'play.html?g='+encodeURIComponent(e.name),ext:ext,
+  thumbs:e.thumb?[e.thumb]:EXT.map(function(x){return 'thumbnails/'+e.name+'.'+x})};
+}
+function toggleFav(n){
+ var i=S.favs.indexOf(n);
+ if(i<0)S.favs.push(n);else S.favs.splice(i,1);
+ store.set('jg_favs',S.favs);render();
+}
+function card(g){
+ var d=document.createElement('div');d.className='card';
+ var a=document.createElement('a');a.href=g.href;
+ if(g.ext){a.target='_blank';a.rel='noopener noreferrer'}
+ var im=document.createElement('img');im.alt=g.name;im.loading='lazy';im.decoding='async';
+ var k=0;
+ im.onerror=function(){im.onerror=null;if(k<g.thumbs.length){im.onerror=arguments.callee;im.src=g.thumbs[k++]}else{im.src=FALLBACK}};
+ (function next(){if(k<g.thumbs.length){im.src=g.thumbs[k++]}else{im.src=FALLBACK}})();
+ var p=document.createElement('p');p.textContent=g.name;
+ a.appendChild(im);a.appendChild(p);d.appendChild(a);
+ var f=document.createElement('button');var on=S.favs.indexOf(g.name)>-1;
+ f.className='fav'+(on?' on':'');f.innerHTML=on?'&#9829;':'&#9825;';
+ f.setAttribute('aria-label',(on?'Remove ':'Add ')+g.name+(on?' from':' to')+' favorites');
+ f.onclick=function(){toggleFav(g.name)};
+ d.appendChild(f);return d;
+}
+function fill(el,list){el.innerHTML='';list.forEach(function(g){el.appendChild(card(g))})}
+function render(){
+ var q=S.q.trim().toLowerCase();
+ var list=S.games.filter(function(g){
+  return g.name.toLowerCase().indexOf(q)>-1&&(S.tab==='all'||S.favs.indexOf(g.name)>-1);
+ }).sort(function(a,b){var c=a.name.localeCompare(b.name,undefined,{sensitivity:'base'});return S.sort==='az'?c:-c});
+ $('count').textContent=list.length+(list.length===1?' game':' games');
+ var g=$('grid');
+ if(!list.length){g.innerHTML='<p class="empty">'+(S.tab==='fav'&&!q?'No favorites yet. Tap the heart on any game.':'No games match your search.')+'</p>'}
+ else fill(g,list);
+ $('allTitle').textContent=S.tab==='fav'?'Favorites':'All games';
+ var rec=S.recent.map(function(n){return S.games.filter(function(x){return x.name===n})[0]}).filter(Boolean).slice(0,6);
+ var showRec=rec.length&&!q&&S.tab==='all';
+ $('recentWrap').hidden=!showRec;
+ if(showRec)fill($('recent'),rec);
+}
+$('q').addEventListener('input',function(e){S.q=e.target.value;render()});
+$('sort').addEventListener('change',function(e){S.sort=e.target.value;render()});
+document.querySelectorAll('.tab').forEach(function(b){
+ b.addEventListener('click',function(){
+  S.tab=b.dataset.t;
+  document.querySelectorAll('.tab').forEach(function(x){x.classList.toggle('on',x===b)});
+  render();
+ });
+});
+window.addEventListener('pageshow',function(){S.recent=store.get('jg_recent',[]);S.favs=store.get('jg_favs',[]);if(S.games.length)render()});
+fetch('games.json').then(function(r){return r.json()}).then(function(d){S.games=d.map(norm);render()})
+ .catch(function(){$('grid').innerHTML='<p class="empty">Could not load games.json.</p>'});
+})();
+</script>
+</body>
+</html>
