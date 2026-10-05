@@ -1,13 +1,8 @@
 [
   { "name": "A Small World Cup" },
-  { "name": "Jetpack Joyride" },
   { "name": "Minecraft" },
   { "name": "Cut The Rope" },
-  { "name": "Pou" },
   { "name": "Age of War" },
-  { "name": "Orb of Creation" },
-  { "name": "99 Nights In The Forest" },
-  { "name": "Kour" },
   { "name": "Penalty Shooters" },
   { "name": "Angry Birds" },
   { "name": "Bad Piggies" },
@@ -22,7 +17,6 @@
   { "name": "Getting Over It" },
   { "name": "Among Us" },
   { "name": "Johnny Obby" },
-  { "name": "Magic 8 Ball" },
   { "name": "Monkey Mart" },
   { "name": "Plants vs Zombies" },
   { "name": "Retro Bowl" },
@@ -31,9 +25,6 @@
   { "name": "Stickman Hook" },
   { "name": "Subway Surfers" },
   { "name": "Cookie Clicker" },
-  { "name": "Granny" },
   { "name": "Grow A Garden" },
-  { "name": "Smash Hit" },
   { "name": "Hill Climb Racing" },
-  { "name": "Messages", "url": "https://tlk.io/mysite-chat" }
 ]
