@@ -14,15 +14,15 @@ body{font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 .nav{display:flex;gap:5px}.nav button,button{height:40px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);cursor:pointer;padding:0 11px}
 .nav button{width:38px;padding:0}.nav button:disabled{opacity:.35;cursor:not-allowed}
 .form{display:flex;gap:7px;flex:1;min-width:0}.url{min-width:0;flex:1;height:40px;border:1px solid var(--line);border-radius:10px;background:#030308;color:#fff;padding:0 13px;outline:none}
-.url:focus{border-color:var(--accent)}.go{background:var(--accent);border-color:var(--accent);font-weight:800}.settings{width:40px;padding:0}
+.url:focus{border-color:var(--accent)}.go{background:var(--accent);border-color:var(--accent);font-weight:800}.settings{width:40px;padding:0}.remote-mode-button{white-space:nowrap}.remote-mode .nav,.remote-mode .form{display:none}.remote-mode .view{background:var(--bg)}.remote-mode #site{background:var(--bg)!important}
 .view{height:calc(100% - 64px);overflow:auto;background:#fff}.status{position:fixed;left:12px;bottom:12px;padding:7px 10px;border:1px solid var(--line);background:#080811ef;border-radius:9px;color:var(--muted);font-size:11px;z-index:5}
-.overlay{position:fixed;inset:0;background:#05050bdd;display:grid;place-items:center;padding:20px;z-index:20}
-.card{width:min(520px,100%);background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:0 20px 70px #0008}
+.overlay{position:fixed;inset:0;background:#05050bdd;display:grid;place-items:center;padding:20px;z-index:20;overflow:auto}
+.card{width:min(520px,100%);max-height:calc(100vh - 40px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:0 20px 70px #0008}.section-divider{border:0;border-top:1px solid var(--line);margin:22px 0}.card h3{margin:0 0 6px;font-size:15px}
 .card h2{margin:0 0 8px}.card p{color:var(--muted);line-height:1.5}.proxy-input{width:100%;height:44px;border:1px solid var(--line);border-radius:10px;background:#05050b;color:#fff;padding:0 12px;outline:none}
 .proxy-input:focus{border-color:var(--accent)}.card-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}.primary{background:var(--accent);border-color:var(--accent);font-weight:800}
 .badge{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}.dot{width:7px;height:7px;border-radius:50%;background:var(--bad)}.dot.good{background:var(--good)}
 .notice{font-size:12px;color:var(--muted);margin-top:10px}
-@media(max-width:700px){.brand{display:none}.bar{padding:8px}.nav button{width:34px}.status{display:none}}
+@media(max-width:700px){.brand{display:none}.bar{padding:8px}.nav button{width:34px}.remote-mode-button{height:36px;padding:0 8px;font-size:11px}.status{display:none}}
 </style>
 </head>
 <body>
@@ -37,7 +37,8 @@ body{font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     <input class="url" id="url" placeholder="Enter a website address or search" autocomplete="off" spellcheck="false">
     <button class="go">Go</button>
   </form>
-  <button class="settings" id="settings" title="Proxy settings" aria-label="Proxy settings">⚙</button>
+  <button class="remote-mode-button" id="remoteMode" type="button" aria-pressed="false" title="Open the real Chromium browser">Real</button>
+  <button class="settings" id="settings" title="Browser settings" aria-label="Browser settings">⚙</button>
 </header>
 <main id="view" class="view"><iframe id="site" title="Website" style="width:100%;height:100%;border:0;background:#fff"></iframe></main>
 <div id="status" class="status">Proxy not connected</div>
@@ -45,11 +46,16 @@ body{font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 <div class="overlay" id="setup">
   <div class="card">
     <h2>Johnny Games Web</h2>
-    <p>Connect your free Render proxy once, then you can use this tab to visit websites through it.</p>
+    <p>Choose the classic proxy or connect a real Chromium browser.</p>
     <div class="badge"><span class="dot" id="dot"></span><span id="connection">Not connected</span></div>
-    <p class="notice">Paste the Render service URL only, for example: https://your-service.onrender.com</p>
+    <p class="notice">Classic proxy URL</p>
     <input class="proxy-input" id="proxyOrigin" placeholder="https://your-service.onrender.com" autocomplete="off" spellcheck="false">
-    <div class="card-actions"><button id="test">Test connection</button><button class="primary" id="save">Save & Continue</button></div>
+    <div class="card-actions"><button id="test">Test proxy</button><button class="primary" id="save">Save proxy</button></div>
+    <hr class="section-divider">
+    <h3>Real Chromium browser</h3>
+    <p class="notice">Connect to the hosted browser service. It will ask for its access token when it opens.</p>
+    <input class="proxy-input" id="remoteOrigin" placeholder="https://your-browser-service.onrender.com" autocomplete="off" spellcheck="false">
+    <div class="card-actions"><button class="primary" id="connectRemote" type="button">Open real browser</button></div>
   </div>
 </div>
 
@@ -58,7 +64,15 @@ body{font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   const $=id=>document.getElementById(id);
   const HOME='https://example.com/';
   let proxyOrigin=localStorage.getItem('johnnyGamesProxyOrigin')||'';
+  let remoteOrigin=localStorage.getItem('johnnyGamesRemoteBrowserOrigin')||'';
   let current='';
+  let remoteMode=false;
+  function updateRemoteModeButton(){
+    document.body.classList.toggle('remote-mode',remoteMode);
+    $('remoteMode').textContent=remoteMode?'Proxy':'Real';
+    $('remoteMode').setAttribute('aria-pressed',String(remoteMode));
+    $('site').title=remoteMode?'Remote Chromium browser':'Website';
+  }
   function setStatus(text,good=false){$('status').textContent=text;$('dot').classList.toggle('good',good);$('connection').textContent=good?'Connected':'Not connected'}
   function cleanProxyOrigin(value){
     value=value.trim().replace(/\/$/,'');
@@ -66,6 +80,29 @@ body{font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     const u=new URL(value);
     if(u.pathname!=='/'||u.search||u.hash) throw new Error('Enter only the Render service URL, without a path.');
     return u.origin;
+  }
+  function cleanRemoteOrigin(value){
+    value=value.trim().replace(/\\/$/,'');
+    if(!/^https:\\/\\//i.test(value)) throw new Error('Use the HTTPS URL of the remote browser service.');
+    const u=new URL(value);
+    if(u.pathname!=='/'||u.search||u.hash) throw new Error('Enter only the remote browser service URL, without a path.');
+    return u.origin;
+  }
+  function openRemoteBrowser(){
+    if(!remoteOrigin){
+      $('setup').style.display='grid';
+      $('status').textContent='Enter the hosted browser service URL in settings.';
+      $('remoteOrigin').focus();
+      return;
+    }
+    remoteMode=true;updateRemoteModeButton();$('setup').style.display='none';
+    $('status').textContent='Connecting to real Chromium…';
+    $('site').src=remoteOrigin+'/';
+  }
+  function closeRemoteBrowser(){
+    remoteMode=false;updateRemoteModeButton();
+    if(proxyOrigin)load(current||HOME);
+    else{$('setup').style.display='grid';$('status').textContent='Connect a proxy or configure the real browser.'}
   }
   function proxy(u){if(!proxyOrigin)throw new Error('Connect the Render proxy first.');return proxyOrigin+'/proxy?url='+encodeURIComponent(u)}
   function normalize(v){
@@ -80,8 +117,8 @@ body{font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
       current=u;$('url').value=u;$('status').textContent='Loading…';
       $('site').src=proxy(u);
     }catch(e){
-      $('view').innerHTML='<div style="padding:40px;font:16px system-ui;color:#222"><h2>Unable to load this site</h2><p>'+String(e.message).replace(/[<>]/g,'')+'</p></div>';
-      $('status').textContent='Request failed';
+      $('site').removeAttribute('src');
+      $('status').textContent='Unable to load site: '+String(e.message).replace(/[<>]/g,'');
     }
   }
   async function testProxy(origin){
@@ -97,16 +134,23 @@ body{font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   }
   $('test').onclick=async()=>{try{const clean=await testProxy($('proxyOrigin').value);$('proxyOrigin').value=clean}catch{}};
   $('save').onclick=async()=>{
-    try{const clean=await testProxy($('proxyOrigin').value);proxyOrigin=clean;localStorage.setItem('johnnyGamesProxyOrigin',clean);$('setup').style.display='none';load(HOME)}catch{}
+    try{const clean=await testProxy($('proxyOrigin').value);proxyOrigin=clean;localStorage.setItem('johnnyGamesProxyOrigin',clean);remoteMode=false;updateRemoteModeButton();$('setup').style.display='none';load(HOME)}catch{}
   };
-  $('settings').onclick=()=>{$('proxyOrigin').value=proxyOrigin;$('setup').style.display='grid'};
+  $('connectRemote').onclick=()=>{
+    try{remoteOrigin=cleanRemoteOrigin($('remoteOrigin').value);localStorage.setItem('johnnyGamesRemoteBrowserOrigin',remoteOrigin);openRemoteBrowser()}catch(e){setStatus(e.message||'Could not connect to remote browser.',false)}
+  };
+  $('remoteMode').onclick=()=>remoteMode?closeRemoteBrowser():openRemoteBrowser();
+  $('settings').onclick=()=>{$('proxyOrigin').value=proxyOrigin;$('remoteOrigin').value=remoteOrigin;$('setup').style.display='grid'};
   $('form').onsubmit=e=>{e.preventDefault();load(normalize($('url').value))};
   $('back').onclick=()=>{try{$('site').contentWindow.history.back()}catch{}};
   $('forward').onclick=()=>{try{$('site').contentWindow.history.forward()}catch{}};
   $('reload').onclick=()=>current&&load(current);
   $('url').addEventListener('focus',e=>e.target.select());
-  $('site').addEventListener('load',()=>{$('status').textContent='Proxy: '+(current?new URL(current).hostname:'Connected')});
-  if(proxyOrigin){$('proxyOrigin').value=proxyOrigin;testProxy(proxyOrigin).then(()=>{$('setup').style.display='none';load(HOME)}).catch(()=>{$('setup').style.display='grid'})}
+  $('site').addEventListener('load',()=>{$('status').textContent=remoteMode?'Remote browser page loaded. Enter its access token to start Chromium.':'Proxy: '+(current?new URL(current).hostname:'Connected')});
+  $('remoteOrigin').value=remoteOrigin;
+  updateRemoteModeButton();
+  if(remoteOrigin){openRemoteBrowser()}
+  else if(proxyOrigin){$('proxyOrigin').value=proxyOrigin;testProxy(proxyOrigin).then(()=>{$('setup').style.display='none';load(HOME)}).catch(()=>{$('setup').style.display='grid'})}
 })();
 </script>
 </body>
