@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#7656ff">
+  <title>Johnny Games Remote Browser Prototype</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">JOHNNY GAMES <span>REMOTE BROWSER PROTOTYPE</span></div>
+    <div class="state" id="state" role="status">Browser starting…</div>
+    <button id="connect" type="button">Connect</button>
+  </header>
+  <main>
+    <section id="gate" class="gate">
+      <div class="card">
+        <p class="eyebrow">REAL BROWSER SESSION</p>
+        <h1>Try the remote browser</h1>
+        <p>Chromium runs in its own container. The page is opened in that browser, not rewritten into this page.</p>
+        <label for="accessToken">Local access token</label>
+        <input id="accessToken" type="password" autocomplete="off" spellcheck="false">
+        <button id="start" class="primary" type="button">Connect to Chromium</button>
+        <p class="hint">The token is kept only in this page’s memory and is not saved.</p>
+      </div>
+    </section>
+    <section id="screen" aria-label="Remote Chromium display"></section>
+  </main>
+</body>
+</html>
