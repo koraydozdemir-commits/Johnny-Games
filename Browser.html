@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WhiteDragon Browser</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
+        body{height:100vh;display:flex;flex-direction:column;overflow:hidden;--bg:#fff;--bar:#fff;--text:#202124;--btn:#f1f3f4;--border:#dadce0;--accent:#1a73e8;background:#fff}
+        body.dark{--bg:#202124;--bar:#35363a;--text:#e8eaed;--btn:#3c4043;--border:#5f6368;--accent:#8ab4f8;background:#202124}
+        .tabs{height:34px;background:var(--bar);display:flex;overflow-x:auto;border-bottom:1px solid var(--border);padding:0 4px;align-items:flex-end;flex-shrink:0}
+        .tab{display:flex;align-items:center;padding:0 10px;background:var(--btn);color:var(--text);border-radius:8px 8px 0 0;cursor:pointer;max-width:160px;min-width:60px;flex-shrink:0;font-size:11px;height:30px;margin-right:2px}
+        .tab.active{background:var(--bg);font-weight:500}
+        .tab span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;pointer-events:none}
+        .tab .close{margin-left:4px;background:none;border:none;color:var(--text);cursor:pointer;font-size:14px;opacity:0.5}
+        .newtab-btn{width:26px;height:26px;background:transparent;color:var(--text);border:none;font-size:18px;cursor:pointer;border-radius:50%;flex-shrink:0}
+        .topbar{height:42px;background:var(--bar);display:flex;align-items:center;padding:0 6px;gap:2px;border-bottom:1px solid var(--border);flex-shrink:0}
+        .topbar button{width:28px;height:28px;background:transparent;color:#5f6368;border:none;border-radius:50%;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+        .topbar button:active{background:var(--btn)}
+        .topbar button:disabled{opacity:0.3}
+        .topbar .star-btn{font-size:18px;color:var(--text);opacity:0.6}
+        .topbar .star-btn.active{color:#f5c518;opacity:1}
+        .url-wrapper{flex:1;display:flex;align-items:center;min-width:0;gap:0}
+        .url-wrapper select{height:30px;padding:0 4px;background:var(--btn);color:var(--text);border:1px solid var(--border);border-radius:15px 0 0 15px;font-size:10px;border-right:none;max-width:70px;flex-shrink:0;cursor:pointer}
+        .url-wrapper input{flex:1;height:30px;padding:0 8px;background:var(--btn);color:var(--text);border:1px solid var(--border);border-radius:0 15px 15px 0;outline:none;font-size:11px;min-width:0}
+        .right-btns{display:flex;gap:1px;position:relative}
+        .right-btns button{width:28px;height:28px;font-size:13px}
+        .menu{position:fixed;top:80px;right:6px;background:var(--bar);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);min-width:220px;max-height:60vh;overflow-y:auto;z-index:99999;display:none;padding:4px 0}
+        .menu.show{display:block}
+        .menu-item{padding:10px 14px;color:var(--text);font-size:12px;cursor:pointer;display:flex;justify-content:space-between}
+        .menu-item:hover{background:var(--btn)}
+        .menu-divider{height:1px;background:var(--border);margin:4px 0}
+        .container{flex:1;position:relative;background:var(--bg);overflow:hidden}
+        .render-container{width:100%;height:100%;display:none}
+        .render-container.active{display:block}
+        .render-container iframe{width:100%;height:100%;border:none;display:block}
+        .page{position:absolute;top:0;left:0;width:100%;height:100%;overflow-y:auto;display:none;padding:14px;background:var(--bg);z-index:10}
+        .page.active{display:block}
+        .home-content{max-width:560px;margin:0 auto;padding:16px 0}
+        .home-title{text-align:center;color:var(--text);font-size:22px;margin:14px 0 6px}
+        .home-credit{text-align:center;color:var(--text);font-size:10px;margin-bottom:10px;opacity:0.6}
+        .home-credit a{color:var(--text);text-decoration:none}
+        .home-credit a:hover{text-decoration:underline}
+        .search-row{display:flex;margin-bottom:10px}
+        .search-row input{flex:1;height:34px;padding:0 12px;background:var(--bar);border:1px solid var(--border);border-radius:17px 0 0 17px;color:var(--text);font-size:12px;outline:none;min-width:0}
+        .search-row button{width:48px;background:var(--accent);color:#fff;border:none;border-radius:0 17px 17px 0;cursor:pointer;font-size:11px}
+        .weather-row{display:flex;justify-content:space-between;padding:10px 12px;background:var(--bar);border:1px solid var(--border);border-radius:8px;color:var(--text);margin-bottom:10px}
+        .weather-temp{font-size:24px}.weather-time{font-size:14px}
+        .bookmarks-bar{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;background:var(--bar);border:1px solid var(--border);border-radius:8px;margin-bottom:10px}
+        .bookmarks-bar .bm-item{padding:4px 10px;background:var(--btn);border-radius:12px;font-size:11px;color:var(--text);cursor:pointer;white-space:nowrap}
+        .bookmarks-bar .bm-item:hover{opacity:0.7}
+        .panel{max-width:560px;margin:0 auto}
+        .panel h2{color:var(--text);margin-bottom:10px;font-size:15px}
+        .list-item{padding:8px 0;color:var(--text);border-bottom:1px solid var(--border);cursor:pointer;font-size:12px;display:flex;justify-content:space-between}
+        .list-item:active{opacity:0.7}
+        .list-item small{display:block;opacity:0.5;font-size:9px;margin-top:2px}
+        .btn{padding:5px 10px;background:var(--accent);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:10px;margin-right:4px;margin-bottom:6px}
+        .btn-gray{padding:5px 10px;background:var(--btn);color:var(--text);border:none;border-radius:5px;cursor:pointer;font-size:10px;margin-right:4px}
+        .btn-red{padding:5px 10px;background:#dc3545;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:10px}
+        .form-input{width:100%;padding:7px;margin-bottom:6px;background:var(--bar);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:11px}
+        .settings-item{padding:10px 0;color:var(--text);display:flex;justify-content:space-between;border-bottom:1px solid var(--border);cursor:pointer;font-size:12px}
+        .settings-item:active{background:var(--btn)}
+        .settings-proxy{padding:12px 0;border-bottom:1px solid var(--border)}
+        .settings-proxy label{color:var(--text);font-size:12px;display:block;margin-bottom:4px}
+        .settings-proxy input{width:100%;padding:6px 10px;background:var(--btn);color:var(--text);border:1px solid var(--border);border-radius:4px;font-size:12px}
+        .settings-proxy button{margin-top:6px;padding:5px 15px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px}
+        .settings-toggle{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
+        .settings-toggle span{color:var(--text);font-size:12px}
+        .settings-toggle .toggle-track{width:40px;height:22px;background:var(--btn);border-radius:12px;cursor:pointer;position:relative;transition:0.2s;border:1px solid var(--border)}
+        .settings-toggle .toggle-track.active{background:var(--accent)}
+        .settings-toggle .toggle-thumb{width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;top:2px;left:2px;transition:0.2s}
+        .settings-toggle .toggle-track.active .toggle-thumb{left:20px}
+        .about-section{text-align:center;padding:14px;color:var(--text)}
+        .toast{position:fixed;bottom:40px;right:10px;background:var(--bar);color:var(--text);padding:7px 12px;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:99999;font-size:10px;animation:fadeOut 0.3s ease 2s forwards}
+        @keyframes fadeOut{0%{opacity:1}100%{opacity:0}}
+        .status{height:2px;background:var(--accent);width:0}
+        .status.loading{width:100%;animation:load 1.5s infinite}
+        @keyframes load{0%{opacity:0.4}50%{opacity:1}100%{opacity:0.4}}
+        .error-page{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text);padding:20px;text-align:center}
+        .error-page h2{font-size:20px;margin-bottom:10px}
+        .error-page p{font-size:13px;opacity:0.7;margin-bottom:15px;max-width:400px}
+        /* Converter styles */
+        .converter-container{max-width:700px;margin:0 auto;padding:10px 0}
+        .converter-container textarea{width:100%;height:300px;padding:12px;border:1.5px solid var(--border);border-radius:8px;font-family:monospace;font-size:13px;background:var(--bg);color:var(--text);resize:vertical}
+        .converter-container textarea:focus{outline:none;border-color:var(--accent)}
+        .converter-container .ext-btn{padding:4px 12px;border:1.5px solid var(--border);border-radius:4px;background:var(--btn);color:var(--text);cursor:pointer;font-size:11px;margin:2px}
+        .converter-container .ext-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+        .converter-container .conv-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+        .converter-container .conv-row input{flex:1;padding:6px 10px;border:1.5px solid var(--border);border-radius:4px;background:var(--btn);color:var(--text);font-size:12px;min-width:100px}
+        .converter-container .conv-row input:focus{outline:none;border-color:var(--accent)}
+        .converter-container .conv-btn{padding:8px 16px;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}
+        .converter-container .conv-btn.download{background:var(--accent);color:#fff}
+        .converter-container .conv-btn.open{background:var(--btn);color:var(--text);border:1px solid var(--border)}
+        .converter-container .conv-btn.copy{background:var(--btn);color:var(--text);border:1px solid var(--border)}
+        .converter-container .conv-btn.clear{background:#dc3545;color:#fff}
+        .converter-container .conv-status{font-size:12px;color:var(--text);opacity:0.7;margin-top:6px}
+    </style>
+</head>
+<body>
+    <div class="tabs" id="tabsBar"><button class="newtab-btn" id="newTabBtn">+</button></div>
+    <div class="topbar">
+        <button id="backBtn">&#8592;</button>
+        <button id="forwardBtn">&#8594;</button>
+        <button id="refreshBtn">&#8635;</button>
+        <button id="bookmarkBtn" class="star-btn" title="Bookmark this page">☆</button>
+        <div class="url-wrapper">
+            <select id="engineSelect">
+                <option value="google">Google</option>
+                <option value="bing">Bing</option>
+                <option value="duckduckgo">DuckDuckGo</option>
+                <option value="yandex">Yandex</option>
+                <option value="startpage">Startpage</option>
+            </select>
+            <input id="urlInput" placeholder="Search or enter URL">
+        </div>
+        <div class="right-btns">
+            <button id="homeBtn">&#8962;</button>
+            <button id="menuBtn">&#9776;</button>
+        </div>
+        <div class="menu" id="menuDropdown"></div>
+    </div>
+    <div class="status" id="statusBar"></div>
+    <div class="container" id="mainContainer"></div>
+<script>
+(function(){
+// User-Agent override
+Object.defineProperty(navigator,'userAgent',{value:'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',configurable:!1,writable:!1});
+Object.defineProperty(navigator,'platform',{value:'Win32',configurable:!1,writable:!1});
+Object.defineProperty(navigator,'vendor',{value:'Google Inc.',configurable:!1,writable:!1});
+
+var T={title:'WhiteDragon Browser',newTab:'New Tab',bookmarks:'Bookmarks',history:'History',proxy:'Proxy',zoom:'Zoom',darkMode:'Dark Mode',settings:'Settings',clearData:'Clear All Data',on:'ON',off:'OFF',search:'Search or enter URL',go:'Go',noBookmarks:'No bookmarks',addBookmark:'Add Current Page',delete:'Delete',noHistory:'No history',clearHistory:'Clear History',historyCleared:'History cleared',bookmarkAdded:'Bookmark added',bookmarkRemoved:'Bookmark removed',proxyOn:'Proxy: ON',proxyOff:'Proxy: OFF',about:'About',aboutTitle:'WhiteDragon Browser',aboutVersion:'v2.0',aboutAuthor:'WhiteDragon-dev',aboutProxy:'Direct iframe + custom proxy',name:'Name',loading:'Loading...',errorLoading:'Unable to load this page',errorMessage:'The site may be blocking access',retry:'Retry',customProxy:'Custom Proxy Prefix',save:'Save',httpsAuto:'Auto-add HTTPS',converter:'Code Converter'};
+function t(k){return T[k]||k}
+function toast(m){var d=document.createElement('div');d.className='toast';d.textContent=m;document.body.appendChild(d);setTimeout(function(){d.remove()},2500)}
+function fixUrl(u){return u.startsWith('mttbrowser://')||u.startsWith('intent://')?(u.match(/url=([^&]+)/i)?decodeURIComponent(RegExp.$1):'whitedragon://home'):u}
+var tabs=[],activeId=null,hist={},histPos={},closedTabs=[],visits=JSON.parse(localStorage.getItem('visits')||'[]'),bookmarks=JSON.parse(localStorage.getItem('bookmarks')||'[]'),zoom=parseFloat(localStorage.getItem('zoom')||'1'),isDark=localStorage.getItem('darkMode')==='true',proxyEnabled=localStorage.getItem('proxyEnabled')!=='false',customProxy=localStorage.getItem('customProxy')||'',httpsAuto=localStorage.getItem('httpsAuto')!=='false';
+if(isDark)document.body.classList.add('dark');
+
+// Ensure default bookmark exists
+var defaultBookmark = {name:'WhiteDragon-dev', url:'https://whitedragon.nxtdev.xyz'};
+if(!bookmarks.some(function(b){ return b.url === defaultBookmark.url; })){
+    bookmarks.push(defaultBookmark);
+    localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
+}
+
+var engines={
+    google:'https://www.google.com/search?q=',
+    bing:'https://www.bing.com/search?q=',
+    duckduckgo:'https://duckduckgo.com/?q=',
+    yandex:'https://yandex.com/search/?text=',
+    startpage:'https://www.startpage.com/search?q='
+};
+var eNames={google:'Google',bing:'Bing',duckduckgo:'DuckDuckGo',yandex:'Yandex',startpage:'Startpage'};
+
+// ----- Helper: apply proxy to URL -----
+function applyProxy(url){
+    if(!proxyEnabled || !customProxy || customProxy.trim() === '') return url;
+    if(url.startsWith('whitedragon://')) return url;
+    if(url.startsWith(customProxy)) return url;
+    return customProxy.trim() + encodeURIComponent(url);
+}
+
+// ----- Helper: auto-add https -----
+function ensureHttps(url){
+    if(!httpsAuto) return url;
+    if(!url) return url;
+    url = url.trim();
+    if(url.startsWith('whitedragon://')) return url;
+    if(/^https?:\/\//.test(url)) return url;
+    if(url.includes('.') && !url.includes(' ')){
+        return 'https://' + url;
+    }
+    return url;
+}
+
+// ----- History helper -----
+function addToHistory(url, title){
+    if(!url) return;
+    var last = visits[0];
+    if(last && last.url === url) return;
+    var t = title || url.replace(/^https?:\/\//,'').substring(0,30);
+    visits.unshift({url:url, title:t, time:new Date().toLocaleString()});
+    if(visits.length > 100) visits.pop();
+    localStorage.setItem('visits', JSON.stringify(visits));
+}
+
+// ----- Bookmark helper -----
+function isBookmarked(url){
+    return bookmarks.some(function(b){ return b.url === url; });
+}
+
+function toggleBookmark(url, title){
+    if(!url || url.startsWith('whitedragon://')) return;
+    var exists = bookmarks.findIndex(function(b){ return b.url === url; });
+    if(exists > -1){
+        bookmarks.splice(exists, 1);
+        localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
+        updateStarButton(url);
+        renderBookmarksBar();
+        toast(t('bookmarkRemoved'));
+    } else {
+        var name = prompt(t('name')+':', title || url.replace(/^https?:\/\//,'').substring(0,30));
+        if(name){
+            bookmarks.push({name:name, url:url});
+            localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
+            updateStarButton(url);
+            renderBookmarksBar();
+            toast(t('bookmarkAdded'));
+        }
+    }
+}
+
+function updateStarButton(url){
+    var btn = document.getElementById('bookmarkBtn');
+    if(!url) url = getCurrentUrl();
+    if(url && isBookmarked(url)){
+        btn.textContent = '★';
+        btn.classList.add('active');
+    } else {
+        btn.textContent = '☆';
+        btn.classList.remove('active');
+    }
+}
+
+function getCurrentUrl(){
+    var t = tabs.find(function(tab){ return tab.id === activeId; });
+    if(t) return t.url;
+    return null;
+}
+
+function renderBookmarksBar(){
+    var bars = document.querySelectorAll('.bookmarks-bar');
+    bars.forEach(function(bar){
+        bar.innerHTML = '';
+        bookmarks.forEach(function(b){
+            var el = document.createElement('span');
+            el.className = 'bm-item';
+            el.textContent = b.name;
+            el.onclick = function(){ navigate(b.url); };
+            bar.appendChild(el);
+        });
+    });
+}
+
+function buildMenu(){
+    var m=document.getElementById('menuDropdown');m.innerHTML='';
+    var items=[{t:t('newTab'),a:function(){newTab()}},{div:!0},{t:t('bookmarks'),a:function(){openPage('whitedragon://bookmarks')}},{t:t('history'),a:function(){openPage('whitedragon://history')}},{t:t('converter'),a:function(){openPage('whitedragon://converter')}},{div:!0},{t:t('proxy')+': '+(proxyEnabled?t('on'):t('off')),a:function(){toggleProxy()}},{div:!0},{t:t('zoom')+': '+Math.round(zoom*100)+'%',a:function(){var z=prompt(t('zoom')+' (25-300):',Math.round(zoom*100));if(z){zoom=Math.max(25,Math.min(300,parseInt(z)||100))/100;localStorage.setItem('zoom',zoom);buildMenu()}}},{div:!0},{t:t('darkMode')+': '+(isDark?t('on'):t('off')),a:function(){toggleTheme()}},{t:t('settings'),a:function(){openPage('whitedragon://settings')}},{div:!0},{t:t('clearData'),a:function(){if(confirm(t('clearData')+'?')){localStorage.clear();location.reload()}}}];
+    items.forEach(function(i){if(i.div){var d=document.createElement('div');d.className='menu-divider';m.appendChild(d)}else{var e=document.createElement('div');e.className='menu-item';e.textContent=i.t;e.onclick=function(){i.a();closeMenu()};m.appendChild(e)}})
+}
+function toggleMenu(){document.getElementById('menuDropdown').classList.toggle('show')}
+function closeMenu(){document.getElementById('menuDropdown').classList.remove('show')}
+function toggleTheme(){isDark=!isDark;document.body.classList.toggle('dark',isDark);localStorage.setItem('darkMode',isDark);buildMenu()}
+function toggleProxy(){proxyEnabled=!proxyEnabled;localStorage.setItem('proxyEnabled',proxyEnabled);buildMenu();toast(proxyEnabled?t('proxyOn'):t('proxyOff'))}
+
+function createContainer(id){
+    var c=document.createElement('div');
+    c.id='rc_'+id;
+    c.className='render-container';
+    return c;
+}
+
+function newTab(url){
+    url=fixUrl(url||'whitedragon://home');
+    if(url.startsWith('whitedragon://')){openPage(url);return}
+    url = ensureHttps(url);
+    var fullUrl = applyProxy(getFullUrl(url));
+    var id='t'+Date.now(), c=createContainer(id);
+    document.getElementById('mainContainer').appendChild(c);
+    tabs.push({id:id, url:fullUrl, title:fullUrl.replace(/^https?:\/\//,'').substring(0,18)||t('loading'), container:c, div:null, isDawn:!1, iframe:null});
+    hist[id]=[fullUrl]; histPos[id]=0; renderTabs(); setActive(id);
+    loadUrl(id, fullUrl);
+}
+
+function getFullUrl(url){
+    if(/^https?:\/\//.test(url)) return url;
+    if(url.includes('.')) return 'https://'+url;
+    var e=document.getElementById('engineSelect').value;
+    return engines[e]+encodeURIComponent(url);
+}
+
+function loadUrl(id, url){
+    var tab=tabs.find(function(t){return t.id===id}); if(!tab) return;
+
+    var targetUrl = applyProxy(url);
+
+    var currentPos=histPos[id]||0;
+    var history=hist[id]||[];
+    if(history[currentPos] !== targetUrl){
+        history = history.slice(0, currentPos + 1);
+        history.push(targetUrl);
+        histPos[id] = history.length - 1;
+    }
+    hist[id]=history;
+
+    if(tab.div){try{tab.div.remove()}catch(e){} tab.div=null}
+    var err=document.getElementById('err_'+id); if(err) err.remove();
+    if(!tab.container){ var c=createContainer(id); document.getElementById('mainContainer').appendChild(c); tab.container=c; }
+
+    document.getElementById('statusBar').classList.add('loading');
+    tab.container.innerHTML='<div style="display:flex;justify-content:center;align-items:center;height:100%;color:var(--text)">'+t('loading')+'...</div>';
+    tab.container.style.display='block';
+    tab.container.className='render-container active';
+    document.querySelectorAll('.render-container').forEach(function(c){ if(c.id!=='rc_'+id){ c.style.display='none'; c.className='render-container'; } });
+
+    tab.url=targetUrl;
+    tab.title=targetUrl.replace(/^https?:\/\//,'').substring(0,18);
+    document.getElementById('urlInput').value=targetUrl;
+    updateNavButtons(id);
+    updateStarButton(targetUrl);
+
+    if(!targetUrl.startsWith('whitedragon://')) addToHistory(targetUrl, tab.title);
+
+    var iframe = document.createElement('iframe');
+    iframe.sandbox = 'allow-forms allow-modals allow-same-origin allow-scripts';
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+    iframe.style.border = 'none';
+    iframe.style.display = 'block';
+    iframe.src = targetUrl;
+
+    var container = tab.container;
+    container.innerHTML = '';
+    container.appendChild(iframe);
+
+    var loaded = false;
+    var timeoutId = null;
+
+    function onLoadSuccess(){
+        if(loaded) return;
+        loaded = true;
+        if(timeoutId) clearTimeout(timeoutId);
+        document.getElementById('statusBar').classList.remove('loading');
+        tab.iframe = iframe;
+        try{
+            var title = iframe.contentDocument?.title;
+            if(title && title.length>0){
+                tab.title = title.substring(0,30);
+                renderTabs();
+                if(visits[0] && visits[0].url === targetUrl){
+                    visits[0].title = title.substring(0,30);
+                    localStorage.setItem('visits', JSON.stringify(visits));
+                }
+            }
+        }catch(e){}
+        try{
+            var currentUrl = iframe.contentWindow?.location?.href;
+            if(currentUrl && currentUrl !== targetUrl){
+                tab.url = currentUrl;
+                document.getElementById('urlInput').value = currentUrl;
+                updateStarButton(currentUrl);
+            }
+        }catch(e){}
+    }
+
+    iframe.onerror = function(){
+        if(loaded) return;
+        loaded = true;
+        if(timeoutId) clearTimeout(timeoutId);
+        showError(id, targetUrl);
+    };
+
+    iframe.onload = onLoadSuccess;
+
+    timeoutId = setTimeout(function(){
+        if(!loaded){
+            loaded = true;
+            showError(id, targetUrl);
+        }
+    }, 15000);
+
+    tab._iframe = iframe;
+    tab._directMode = true;
+}
+
+function showError(id, url){
+    var tab = tabs.find(function(t){ return t.id === id; }); if(!tab || !tab.container) return;
+    tab.container.innerHTML = '<div class="error-page"><h2>'+t('errorLoading')+'</h2><p>'+t('errorMessage')+'</p><p style="font-size:11px;opacity:0.6;margin:10px 0;word-break:break-all">'+url+'</p><button class="btn" onclick="window.retryLoad(\''+id+'\',\''+url+'\')">'+t('retry')+'</button></div>';
+}
+window.retryLoad = function(id, url){ var tab=tabs.find(function(t){return t.id===id}); if(tab){ if(tab.container) tab.container.innerHTML=''; loadUrl(id, url); } };
+
+function openPage(url){
+    url=fixUrl(url); var exist=tabs.find(function(t){return t.url===url}); if(exist){ setActive(exist.id); return; }
+    var id='t'+Date.now(), type=url.split('://')[1]||'home';
+    var div=document.createElement('div'); div.className='page'; div.id='pg_'+id;
+    document.getElementById('mainContainer').appendChild(div);
+    var c=createContainer(id); c.style.display='none';
+    document.getElementById('mainContainer').appendChild(c);
+    tabs.push({id:id, url:url, title:type==='home'?t('newTab'):type, container:c, div:div, isDawn:!0, iframe:null});
+    hist[id]=[url]; histPos[id]=0; renderTabs(); setActive(id);
+    if(type==='home') renderHome(id);
+    else if(type==='bookmarks') renderBookmarks(id);
+    else if(type==='history') renderHistory(id);
+    else if(type==='settings') renderSettings(id);
+    else if(type==='converter') renderConverter(id);
+}
+
+function renderTabs(){
+    var bar=document.getElementById('tabsBar'); bar.innerHTML='';
+    tabs.forEach(function(t){ var e=document.createElement('div'); e.className='tab'+(t.id===activeId?' active':''); e.innerHTML='<span>'+(t.title||t('newTab'))+'</span><button class="close">&times;</button>'; e.querySelector('.close').onclick=function(ev){ ev.stopPropagation(); closeTab(t.id); }; e.onclick=function(){ setActive(t.id); }; bar.appendChild(e); });
+    var nb=document.createElement('button'); nb.className='newtab-btn'; nb.textContent='+'; nb.onclick=function(){ newTab(); }; bar.appendChild(nb);
+}
+
+function setActive(id){
+    document.querySelectorAll('.render-container').forEach(function(c){ c.style.display='none'; c.className='render-container'; });
+    document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); p.style.display='none'; });
+    activeId=id;
+    var t=tabs.find(function(t){ return t.id===id; });
+    if(t){
+        if(t.isDawn && t.div){
+            t.div.classList.add('active'); t.div.style.display='block';
+            if(t.container) t.container.style.display='none';
+            document.getElementById('urlInput').value=t.url;
+        } else if(t.container){
+            t.container.style.display='block'; t.container.className='render-container active';
+            document.getElementById('urlInput').value=t.url;
+        }
+        updateNavButtons(id);
+        updateStarButton(t.url);
+    }
+    renderTabs();
+}
+
+function updateNavButtons(id){
+    var h=hist[id]||[], p=histPos[id]||0;
+    document.getElementById('backBtn').disabled = (p<=0);
+    document.getElementById('forwardBtn').disabled = (p>=h.length-1);
+}
+
+function closeTab(id){
+    var idx=tabs.findIndex(function(t){ return t.id===id; }); if(idx===-1) return;
+    var t=tabs[idx]; closedTabs.push({url:t.url, title:t.title}); if(closedTabs.length>20) closedTabs.shift();
+    if(t.container) try{ t.container.remove(); }catch(e){}
+    if(t.div) try{ t.div.remove(); }catch(e){}
+    tabs.splice(idx,1); delete hist[id]; delete histPos[id];
+    if(tabs.length===0){ setTimeout(function(){ newTab(); }, 10); return; }
+    if(activeId===id) setActive(tabs[Math.max(0, idx-1)].id); else renderTabs();
+}
+
+function navigate(url){
+    if(!url) return; url=fixUrl(url.trim());
+    if(url.startsWith('whitedragon://')){ openPage(url); return; }
+    url = ensureHttps(url);
+    var fullUrl = getFullUrl(url);
+    var proxiedUrl = applyProxy(fullUrl);
+    var t=tabs.find(function(t){ return t.id===activeId; }); if(!t) return;
+    if(t.isDawn && t.div){ if(t.div) try{ t.div.remove(); }catch(e){} t.div=null; t.isDawn=false; if(!t.container){ var c=createContainer(t.id); document.getElementById('mainContainer').appendChild(c); t.container=c; } }
+    loadUrl(t.id, proxiedUrl);
+}
+
+function goBack(){
+    var id=activeId; if(!id) return;
+    var h=hist[id]||[], p=histPos[id]||0;
+    if(p>0){ p--; histPos[id]=p; var url=h[p]; var t=tabs.find(function(t){ return t.id===id; }); if(t){ if(t.isDawn){ t.isDawn=false; if(t.div){ try{ t.div.remove(); }catch(e){} t.div=null; } } loadUrl(id, url); } }
+}
+function goForward(){
+    var id=activeId; if(!id) return;
+    var h=hist[id]||[], p=histPos[id]||0;
+    if(p<h.length-1){ p++; histPos[id]=p; var url=h[p]; var t=tabs.find(function(t){ return t.id===id; }); if(t){ if(t.isDawn){ t.isDawn=false; if(t.div){ try{ t.div.remove(); }catch(e){} t.div=null; } } loadUrl(id, url); } }
+}
+function refresh(){ var t=tabs.find(function(t){ return t.id===activeId; }); if(t && !t.isDawn) loadUrl(t.id, t.url); }
+
+function renderHome(id){
+    var div=document.getElementById('pg_'+id); if(!div) return;
+    var e=document.getElementById('engineSelect').value, ph=t('search')+' '+eNames[e];
+    div.innerHTML='<div class="home-content"><div class="home-title">'+t('title')+'</div><div class="home-credit"><a href="https://github.com/whitedragon-dev" target="_blank">WhiteDragon-dev</a></div><div class="search-row"><input id="hs_'+id+'" placeholder="'+ph+'"><button id="hsbtn_'+id+'">'+t('go')+'</button></div><div class="weather-row"><div><span class="weather-temp" id="temp_'+id+'">--°</span></div><div class="weather-time" id="time_'+id+'"></div></div><div class="bookmarks-bar" id="bmbar_'+id+'"></div></div>';
+    document.getElementById('hs_'+id).onkeydown=function(e){ if(e.key==='Enter') navigate(e.target.value); };
+    document.getElementById('hsbtn_'+id).onclick=function(){ navigate(document.getElementById('hs_'+id).value); };
+    renderBookmarksBar();
+    updateTime(id); updateWeather(id);
+}
+
+function renderBookmarks(id){
+    var div=document.getElementById('pg_'+id); if(!div) return;
+    var h='<div class="panel"><h2>'+t('bookmarks')+'</h2>';
+    if(!bookmarks.length) h+='<div class="list-item">'+t('noBookmarks')+'</div>';
+    else bookmarks.forEach(function(b,i){ h+='<div class="list-item" data-url="'+b.url+'"><span style="cursor:pointer;flex:1">'+b.name+'</span><button class="btn-red" data-idx="'+i+'">'+t('delete')+'</button></div>'; });
+    h+='</div>'; div.innerHTML=h;
+    div.querySelectorAll('.list-item[data-url]').forEach(function(el){ el.onclick=function(){ navigate(el.dataset.url); }; });
+    div.querySelectorAll('.btn-red').forEach(function(btn){ btn.onclick=function(e){ e.stopPropagation(); var i=parseInt(btn.dataset.idx); bookmarks.splice(i,1); localStorage.setItem('bookmarks',JSON.stringify(bookmarks)); renderBookmarks(id); updateStarButton(getCurrentUrl()); renderBookmarksBar(); }; });
+}
+
+function renderHistory(id){
+    var div=document.getElementById('pg_'+id); if(!div) return;
+    var h='<div class="panel"><h2>'+t('history')+'</h2><button class="btn-red" id="clrHist_'+id+'">'+t('clearHistory')+'</button>';
+    if(!visits.length) h+='<div class="list-item">'+t('noHistory')+'</div>';
+    else visits.forEach(function(v){ h+='<div class="list-item" data-url="'+v.url+'"><span>'+v.title+'<small>'+v.time+'</small></span></div>'; });
+    h+='</div>'; div.innerHTML=h;
+    div.querySelectorAll('.list-item[data-url]').forEach(function(el){ el.onclick=function(){ navigate(el.dataset.url); }; });
+    var cb=document.getElementById('clrHist_'+id); if(cb) cb.onclick=function(){ if(confirm(t('clearHistory')+'?')){ visits=[]; localStorage.setItem('visits','[]'); renderHistory(id); toast(t('historyCleared')); } };
+}
+
+function renderSettings(id){
+    var div=document.getElementById('pg_'+id); if(!div) return;
+
+    function toggleHtml(label, idSuffix, checked){
+        return '<div class="settings-toggle"><span>'+label+'</span><div class="toggle-track'+(checked?' active':'')+'" id="toggle_'+idSuffix+'_'+id+'"><div class="toggle-thumb"></div></div></div>';
+    }
+
+    div.innerHTML='<div class="panel"><h2>'+t('settings')+'</h2>'+
+        toggleHtml(t('darkMode'), 'dark', isDark)+
+        toggleHtml(t('httpsAuto'), 'https', httpsAuto)+
+        toggleHtml(t('proxy'), 'proxy', proxyEnabled)+
+        '<div class="settings-item" id="setZoom_'+id+'">'+t('zoom')+'<span>'+Math.round(zoom*100)+'%</span></div>'+
+        '<div class="settings-proxy"><label>'+t('customProxy')+'</label><input id="proxyInput_'+id+'" placeholder="https://corsproxy.io/?url=" value="'+customProxy+'"><button id="saveProxy_'+id+'">'+t('save')+'</button></div>'+
+        '<div class="settings-item" id="goBookmarks_'+id+'">'+t('bookmarks')+' →</div>'+
+        '<div class="settings-item" id="goHistory_'+id+'">'+t('history')+' →</div>'+
+        '<div class="settings-item" id="goConverter_'+id+'">'+t('converter')+' →</div>'+
+        '<div class="settings-item" id="setClearHist_'+id+'">'+t('clearHistory')+'</div>'+
+        '<div class="settings-item" id="setClearData_'+id+'">'+t('clearData')+'</div>'+
+        '<div class="settings-item" id="setAbout_'+id+'">'+t('about')+'</div>'+
+        '<div id="aboutArea_'+id+'"></div></div>';
+
+    document.getElementById('toggle_dark_'+id).onclick=function(){
+        isDark=!isDark; document.body.classList.toggle('dark',isDark); localStorage.setItem('darkMode',isDark); renderSettings(id); buildMenu();
+    };
+    document.getElementById('toggle_https_'+id).onclick=function(){
+        httpsAuto=!httpsAuto; localStorage.setItem('httpsAuto', httpsAuto); renderSettings(id);
+    };
+    document.getElementById('toggle_proxy_'+id).onclick=function(){
+        toggleProxy(); renderSettings(id);
+    };
+    document.getElementById('setZoom_'+id).onclick=function(){
+        var z=prompt(t('zoom')+' (25-300):', Math.round(zoom*100));
+        if(z){ zoom=Math.max(25,Math.min(300,parseInt(z)||100))/100; localStorage.setItem('zoom',zoom); renderSettings(id); buildMenu(); }
+    };
+    document.getElementById('goBookmarks_'+id).onclick=function(){ openPage('whitedragon://bookmarks'); };
+    document.getElementById('goHistory_'+id).onclick=function(){ openPage('whitedragon://history'); };
+    document.getElementById('goConverter_'+id).onclick=function(){ openPage('whitedragon://converter'); };
+    document.getElementById('setClearHist_'+id).onclick=function(){
+        if(confirm(t('clearHistory')+'?')){ visits=[]; localStorage.setItem('visits','[]'); toast(t('historyCleared')); }
+    };
+    document.getElementById('setClearData_'+id).onclick=function(){
+        if(confirm(t('clearData')+'?')){ localStorage.clear(); location.reload(); }
+    };
+    document.getElementById('setAbout_'+id).onclick=function(){
+        document.getElementById('aboutArea_'+id).innerHTML='<div class="about-section"><h3>'+t('aboutTitle')+'</h3><p>'+t('aboutVersion')+'</p><p><a href="https://github.com/whitedragon-dev" target="_blank">'+t('aboutAuthor')+'</a></p><p>'+t('aboutProxy')+'</p></div>';
+    };
+
+    var saveBtn = document.getElementById('saveProxy_'+id);
+    var input = document.getElementById('proxyInput_'+id);
+    if(saveBtn && input){
+        saveBtn.onclick = function(){
+            var val = input.value.trim();
+            customProxy = val;
+            localStorage.setItem('customProxy', val);
+            toast('Proxy saved: ' + (val || 'empty'));
+            renderSettings(id);
+        };
+    }
+}
+
+// ===== CONVERTER PAGE =====
+function renderConverter(id){
+    var div=document.getElementById('pg_'+id); if(!div) return;
+    div.innerHTML='<div class="converter-container"><h2 style="color:var(--text);font-size:18px;margin-bottom:10px">'+t('converter')+'</h2><p style="color:var(--text);opacity:0.6;font-size:13px;margin-bottom:10px">Paste code, choose extension, download or open.</p>'+
+        '<div class="conv-row"><span style="font-size:12px;color:var(--text);font-weight:600">Extension:</span>'+
+        '<button class="ext-btn active" data-ext="js">.js</button>'+
+        '<button class="ext-btn" data-ext="html">.html</button>'+
+        '<button class="ext-btn" data-ext="css">.css</button>'+
+        '<button class="ext-btn" data-ext="py">.py</button>'+
+        '<button class="ext-btn" data-ext="json">.json</button>'+
+        '<button class="ext-btn" data-ext="txt">.txt</button>'+
+        '<button class="ext-btn" data-ext="md">.md</button>'+
+        '<button class="ext-btn" data-ext="xml">.xml</button>'+
+        '<input class="custom-ext" id="customExt_'+id+'" placeholder="other..." style="padding:4px 8px;border:1.5px solid var(--border);border-radius:4px;background:var(--btn);color:var(--text);font-size:11px;width:80px"></div>'+
+        '<div class="conv-row"><span style="font-size:12px;color:var(--text);font-weight:600">Filename:</span><input id="filenameInput_'+id+'" value="code" placeholder="Enter filename"><span style="font-size:12px;color:var(--text);opacity:0.6;font-family:monospace" id="extPreview_'+id+'">.js</span></div>'+
+        '<textarea id="codeInput_'+id+'" placeholder="Paste your code here..." style="width:100%;height:250px;padding:12px;border:1.5px solid var(--border);border-radius:8px;font-family:monospace;font-size:13px;background:var(--bg);color:var(--text);resize:vertical"></textarea>'+
+        '<div class="conv-row" style="margin-top:8px"><button class="conv-btn download" id="downloadBtn_'+id+'">Download</button><button class="conv-btn open" id="openBtn_'+id+'">Open</button><button class="conv-btn copy" id="copyBtn_'+id+'">Copy</button><button class="conv-btn clear" id="clearBtn_'+id+'">Clear</button></div>'+
+        '<div class="conv-status" id="convStatus_'+id+'"></div></div>';
+
+    // Get references
+    var codeInput = document.getElementById('codeInput_'+id);
+    var filenameInput = document.getElementById('filenameInput_'+id);
+    var extPreview = document.getElementById('extPreview_'+id);
+    var customExt = document.getElementById('customExt_'+id);
+    var extButtons = div.querySelectorAll('.ext-btn');
+    var statusEl = document.getElementById('convStatus_'+id);
+    var selectedExt = 'js';
+    var statusTimeout;
+
+    function updatePreview(){ extPreview.textContent = '.' + selectedExt; }
+    function getFilename(){ var base = filenameInput.value.trim() || 'code'; return base.replace(/\.[^./\\]*$/, '') + '.' + selectedExt; }
+    function getMimeType(ext){ var types={js:'text/javascript',html:'text/html',css:'text/css',json:'application/json',xml:'application/xml',md:'text/markdown',txt:'text/plain',py:'text/x-python'}; return types[ext]||'text/plain'; }
+    function setStatus(msg, type){ statusEl.textContent=msg; statusEl.style.color=type==='error'?'#dc3545':type==='success'?'#27ae60':'var(--text)'; clearTimeout(statusTimeout); if(type!=='info'){statusTimeout=setTimeout(function(){statusEl.textContent='';},4000);} }
+    function hasCode(){ if(!codeInput.value.trim()){setStatus('Please paste some code first.','error');return false;} return true; }
+
+    // Extension buttons
+    extButtons.forEach(function(btn){
+        btn.onclick=function(){
+            extButtons.forEach(function(b){b.classList.remove('active');});
+            this.classList.add('active');
+            selectedExt=this.dataset.ext;
+            customExt.value='';
+            updatePreview();
+        };
+    });
+
+    // Custom extension
+    customExt.oninput=function(){
+        if(this.value.trim()){
+            extButtons.forEach(function(b){b.classList.remove('active');});
+            selectedExt=this.value.trim().replace(/^\./,'');
+            updatePreview();
+        }
+    };
+
+    // Download
+    document.getElementById('downloadBtn_'+id).onclick=function(){
+        if(!hasCode()) return;
+        var filename=getFilename();
+        var blob=new Blob([codeInput.value],{type:getMimeType(selectedExt)+';charset=utf-8'});
+        var url=URL.createObjectURL(blob);
+        var a=document.createElement('a');
+        a.href=url;a.download=filename;a.style.display='none';
+        document.body.appendChild(a);
+        try{a.click();}catch(e){}
+        setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},3000);
+        setStatus('Downloading: '+filename,'success');
+    };
+
+    // Open
+    document.getElementById('openBtn_'+id).onclick=function(){
+        if(!hasCode()) return;
+        var filename=getFilename();
+        var blob=new Blob([codeInput.value],{type:getMimeType(selectedExt)+';charset=utf-8'});
+        var url=URL.createObjectURL(blob);
+        window.open(url,'_blank');
+        setTimeout(function(){URL.revokeObjectURL(url);},3000);
+        setStatus('Opened: '+filename,'info');
+    };
+
+    // Copy
+    document.getElementById('copyBtn_'+id).onclick=function(){
+        var code=codeInput.value;
+        if(!code.trim()){setStatus('Nothing to copy.','error');return;}
+        if(navigator.clipboard&&navigator.clipboard.writeText){
+            navigator.clipboard.writeText(code).then(function(){setStatus('Copied!','success');}).catch(function(){codeInput.select();document.execCommand('copy');setStatus('Copied!','success');});
+        }else{codeInput.select();document.execCommand('copy');setStatus('Copied!','success');}
+    };
+
+    // Clear
+    document.getElementById('clearBtn_'+id).onclick=function(){
+        codeInput.value='';
+        setStatus('Cleared.','info');
+    };
+
+    // Keyboard shortcut
+    codeInput.onkeydown=function(e){ if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();document.getElementById('downloadBtn_'+id).click();} };
+
+    updatePreview();
+    setTimeout(function(){codeInput.focus();},100);
+}
+
+function updateTime(id){ var e=document.getElementById('time_'+id); if(e) e.textContent=new Date().toLocaleTimeString('en-US',{hour12:false}); }
+function updateWeather(id){ var temp=document.getElementById('temp_'+id); if(!temp) return; fetch('https://api.open-meteo.com/v1/forecast?latitude=35&longitude=105&current_weather=true').then(function(r){ return r.json(); }).then(function(d){ temp.textContent=d.current_weather.temperature+'°C'; }).catch(function(){ temp.textContent='22°C'; }); }
+
+document.getElementById('bookmarkBtn').onclick = function(){
+    var url = getCurrentUrl();
+    var t = tabs.find(function(tab){ return tab.id === activeId; });
+    if(url && !url.startsWith('whitedragon://')){
+        toggleBookmark(url, t ? t.title : '');
+    } else {
+        toast('Cannot bookmark this page');
+    }
+};
+
+document.getElementById('backBtn').onclick=goBack;
+document.getElementById('forwardBtn').onclick=goForward;
+document.getElementById('refreshBtn').onclick=refresh;
+document.getElementById('homeBtn').onclick=function(){ newTab('whitedragon://home'); };
+document.getElementById('urlInput').onkeydown=function(e){ if(e.key==='Enter') navigate(e.target.value); };
+document.getElementById('engineSelect').onchange=function(){ var t=tabs.find(function(t){ return t.id===activeId; }); if(t && t.isDawn && t.url==='whitedragon://home') renderHome(t.id); };
+document.getElementById('menuBtn').onclick=function(e){ e.stopPropagation(); toggleMenu(); };
+document.addEventListener('click',function(e){ if(!e.target.closest('.right-btns')&&!e.target.closest('.menu')) closeMenu(); });
+document.addEventListener('keydown',function(e){ if(e.ctrlKey&&e.key==='t'){ e.preventDefault(); newTab(); } if(e.ctrlKey&&e.shiftKey&&e.key==='T'){ e.preventDefault(); if(closedTabs.length){ newTab(closedTabs.pop().url); } } });
+
+buildMenu(); newTab('whitedragon://home');
+setInterval(function(){ var t=tabs.find(function(t){ return t.id===activeId; }); if(t && t.isDawn && t.url==='whitedragon://home'){ updateTime(t.id); updateWeather(t.id); } }, 1000);
+})();
+</script>
+</body>
+    </html>
