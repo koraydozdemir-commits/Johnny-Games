@@ -8,7 +8,13 @@
 <meta name="apple-mobile-web-app-title" content="Games">
 <meta name="theme-color" content="#0b0b14">
 <link rel="apple-touch-icon" href="images/Wallpaper.jpg">
-<title>Examinations.ie</title>
+<title>Johnny Games | Free Unblocked Games to Play Online on iPad, Chromebook and PC</title>
+<meta name="description" content="Play free unblocked games online with no download: Minecraft-style builders, Cookie Clicker, Subway Surfers, Retro Bowl and more. Works on iPad Safari, Chromebooks and phones.">
+<meta name="keywords" content="unblocked games, free online games, browser games, school games, iPad games, no download games">
+<meta property="og:type" content="website"><meta property="og:title" content="Johnny Games - Free Unblocked Games">
+<meta property="og:description" content="Free browser games that work on iPad, Chromebook and phone. No download, no sign up.">
+<meta property="og:image" content="images/Banner.png"><meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Johnny Games","description":"Free unblocked browser games for iPad, Chromebook and PC."}</script>
 <style>
 :root{--bg:#0b0b14;--card:#161624;--line:#2a2a40;--txt:#f2f2f7;--dim:#9a9ab0;--acc:#7c5cff;--hot:#ff4d6d}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -40,16 +46,38 @@ h2{font-size:15px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em
  background:rgba(0,0,0,.55);color:#fff;font-size:22px;line-height:1;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
 .fav.on{color:var(--hot)}
 .empty{grid-column:1/-1;text-align:center;color:var(--dim);padding:48px 0}
+
+@keyframes hue{to{filter:hue-rotate(360deg)}}
+@keyframes glow{0%,100%{box-shadow:0 0 0 rgba(124,92,255,0)}50%{box-shadow:0 0 22px rgba(124,92,255,.55)}}
+.hero{position:relative}
+.hero:after{content:"";position:absolute;inset:0;background:linear-gradient(transparent 55%,var(--bg))}
+.hero h1{position:absolute;z-index:2;left:20px;bottom:14px;margin:0;font-size:clamp(26px,5vw,48px);letter-spacing:2px;
+ background:linear-gradient(90deg,#7c5cff,#22d3ee,#ff4d6d);-webkit-background-clip:text;background-clip:text;color:transparent;animation:hue 8s linear infinite}
+.card{animation:glow 5s ease-in-out infinite}
+.card:nth-child(3n){animation-delay:1.6s}.card:nth-child(3n+1){animation-delay:3.2s}
+.rnd{background:linear-gradient(90deg,#7c5cff,#22d3ee);border-color:transparent;color:#fff}
+.about{max-width:900px;margin:36px auto 90px;padding:0 20px;color:var(--dim);font-size:15px;line-height:1.6}
+.about h2{color:var(--txt);text-transform:none;letter-spacing:0;font-size:20px}
+#cbtn{position:fixed;right:calc(16px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));z-index:20;min-height:52px;padding:0 20px;border-radius:26px;border:0;background:var(--acc);color:#fff;font:700 16px inherit;font-family:inherit;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+#chat{position:fixed;right:calc(12px + env(safe-area-inset-right));bottom:calc(76px + env(safe-area-inset-bottom));z-index:20;width:min(380px,calc(100vw - 24px));height:min(480px,60vh);display:none;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+#chat.on{display:flex}
+#cmsgs{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 12px;font-size:15px}
+#cmsgs div{margin:0 0 8px;word-wrap:break-word}#cmsgs b{color:#9d86ff}
+#cform{display:flex;gap:8px;padding:8px;border-top:1px solid var(--line)}
+#cform input{flex:1;min-width:0;font-size:16px;min-height:44px;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:#0f0f1c;color:var(--txt)}
+#cform button{min-height:44px;padding:0 16px;border-radius:12px;border:0;background:var(--acc);color:#fff;font-weight:700}
+#cnote{padding:6px 12px;font-size:12px;color:var(--dim);border-bottom:1px solid var(--line)}
 </style>
 </head>
 <body>
-<div class="hero"><img src="images/Banner.png" alt="Johnny Games"></div>
+<div class="hero"><img src="images/Banner.png" alt="Johnny Games"><h1>JOHNNY GAMES</h1></div>
 <div class="bar">
  <input id="q" type="search" placeholder="Search games..." aria-label="Search games" autocomplete="off">
  <div class="tabs">
   <button class="tab on" data-t="all">All</button>
   <button class="tab" data-t="fav">&#9829; Favorites</button>
  </div>
+ <button class="tab rnd" id="rnd">&#127922; Random</button>
  <select id="sort" aria-label="Sort"><option value="az">A to Z</option><option value="za">Z to A</option></select>
  <span class="count" id="count"></span>
 </div>
@@ -58,6 +86,12 @@ h2{font-size:15px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em
  <h2 id="allTitle">All games</h2>
  <div class="grid" id="grid"><p class="empty">Loading games...</p></div>
 </main>
+<section class="about"><h2>Free unblocked games you can play anywhere</h2>
+<p>Johnny Games is a free collection of unblocked browser games. There is nothing to download and no account to make. Every game runs right in your browser, and the site is built to work well on iPad Safari, Chromebooks, phones and desktop computers.</p>
+<p>Search the list, tap the heart to save your favorite games, and jump back into the ones you played recently. Add the site to your iPad Home Screen to launch it like an app.</p></section>
+<button id="cbtn">&#128172; Chat</button>
+<div id="chat"><div id="cnote">Be kind. Messages are public. Spam and abuse get deleted.</div><div id="cmsgs"></div>
+<form id="cform"><input id="cin" maxlength="200" placeholder="Say something..." autocomplete="off"><button>Send</button></form></div>
 <script>
 (function(){
 'use strict';
@@ -124,6 +158,21 @@ document.querySelectorAll('.tab').forEach(function(b){
 window.addEventListener('pageshow',function(){S.recent=store.get('jg_recent',[]);S.favs=store.get('jg_favs',[]);if(S.games.length)render()});
 fetch('games.json').then(function(r){return r.json()}).then(function(d){S.games=d.map(norm);render()})
  .catch(function(){$('grid').innerHTML='<p class="empty">Could not load games.json.</p>'});
+document.getElementById('rnd').addEventListener('click',function(){
+ var g=S.games.filter(function(x){return!x.ext});if(g.length)location.href=g[Math.random()*g.length|0].href});
+// ---- Chat (Firebase Realtime Database REST) ----
+var DB='';// paste your URL here, e.g. https://your-project-default-rtdb.europe-west1.firebasedatabase.app
+var BAD=/\b(fuck|shit|bitch|cunt|nigg\w*|fag\w*|retard\w*|rape|slut|whore)\b/gi,last=0,timer=0;
+var cb=$('cbtn'),ch=$('chat'),cm=$('cmsgs');
+cb.onclick=function(){ch.classList.toggle('on');if(ch.classList.contains('on')){if(!DB){cm.innerHTML='<div>Chat is not set up yet. The site owner needs to add a database URL.</div>';return}poll();timer=setInterval(poll,3000);$('cin').focus()}else clearInterval(timer)};
+function poll(){fetch(DB+'/chat.json?orderBy="$key"&limitToLast=50').then(function(r){return r.json()}).then(function(d){
+ if(!d)return;var a=Object.keys(d).sort().map(function(k){return d[k]}),stick=cm.scrollTop+cm.clientHeight>=cm.scrollHeight-40;
+ cm.innerHTML='';a.forEach(function(m){if(!m||!m.n||!m.m)return;var e=document.createElement('div'),b=document.createElement('b');b.textContent=String(m.n).slice(0,12)+': ';e.appendChild(b);e.appendChild(document.createTextNode(String(m.m).slice(0,200).replace(BAD,'***')));cm.appendChild(e)});
+ if(stick)cm.scrollTop=cm.scrollHeight}).catch(function(){})}
+$('cform').addEventListener('submit',function(e){e.preventDefault();var t=$('cin').value.trim();if(!t||!DB||Date.now()-last<2500)return;
+ var n=store.get('jg_name','');if(!n){n=(prompt('Pick a chat name (max 12 letters)')||'').trim().slice(0,12).replace(BAD,'***');if(!n)return;store.set('jg_name',n)}
+ last=Date.now();$('cin').value='';
+ fetch(DB+'/chat.json',{method:'POST',body:JSON.stringify({n:n,m:t.slice(0,200)})}).then(poll).catch(function(){})});
 })();
 </script>
 </body>
