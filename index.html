@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Games">
 <meta name="theme-color" content="#0b0b14">
 <link rel="apple-touch-icon" href="images/Wallpaper.jpg">
-<title>Johnny Games | Free Unblocked Games to Play Online on iPad, Chromebook and PC</title>
+<title>Examinations.ie</title>
 <meta name="description" content="Play free unblocked games online with no download: Minecraft-style builders, Cookie Clicker, Subway Surfers, Retro Bowl and more. Works on iPad Safari, Chromebooks and phones.">
 <meta name="keywords" content="unblocked games, free online games, browser games, school games, iPad games, no download games">
 <meta property="og:type" content="website"><meta property="og:title" content="Johnny Games - Free Unblocked Games">
@@ -158,7 +158,7 @@ fetch('games.json').then(function(r){return r.json()}).then(function(d){S.games=
 document.getElementById('rnd').addEventListener('click',function(){
  var g=S.games.filter(function(x){return!x.ext});if(g.length)location.href=g[Math.random()*g.length|0].href});
 // ---- Chat (Firebase Realtime Database REST) ----
-var DB = 'https://johnny-chat-aabd6-default-rtdb.europe-west1.firebasedatabase.app/;
+var DB = 'https://johnny-chat-aabd6-default-rtdb.europe-west1.firebasedatabase.app/';
 
 var BAD=/\b(fuck|shit|bitch|cunt|nigg\w*|fag\w*|retard\w*|rape|slut|whore)\b/gi,last=0,timer=0;
 var cb=$('cbtn'),ch=$('chat'),cm=$('cmsgs');
