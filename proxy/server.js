@@ -33,18 +33,18 @@ async function assertSafeTarget(u){
   const records=await dns.lookup(u.hostname,{all:true});
   if(!records.length||records.some(r=>isPrivateIp(r.address)))throw new Error("Private network addresses are not allowed");
 }
-function proxied(u){return "/proxy?url="+encodeURIComponent(u.href)}
-function rewriteUrl(value,base){
+function proxied(u,origin){return origin+"/proxy?url="+encodeURIComponent(u.href)}
+function rewriteUrl(value,base,origin){
   if(!value||/^(#|data:|blob:|javascript:|mailto:|tel:)/i.test(value))return value;
-  try{return proxied(new URL(value,base))}catch{return value}
+  try{return proxied(new URL(value,base),origin)}catch{return value}
 }
-function rewriteHtml(html,base){
+function rewriteHtml(html,base,origin){
   return html
     .replace(/<base[^>]*>/gi,"")
-    .replace(/(\b(?:src|href|action|poster)\s*=\s*)(["'])([^"']+)\2/gi,(_,a,q,v)=>a+q+rewriteUrl(v,base)+q)
-    .replace(/url\((['"]?)([^)'"]+)\1\)/gi,(_,q,v)=>"url("+q+rewriteUrl(v,base)+q+")");
+    .replace(/(\b(?:src|href|action|poster)\s*=\s*)(["'])([^"']+)\2/gi,(_,a,q,v)=>a+q+rewriteUrl(v,base,origin)+q)
+    .replace(/url\((['"]?)([^)'"]+)\1\)/gi,(_,q,v)=>"url("+q+rewriteUrl(v,base,origin)+q+")");
 }
-function rewriteCss(css,base){
+function rewriteCss(css,base,origin){
   return css.replace(/url\((['"]?)([^)'"]+)\1\)/gi,(_,q,v)=>"url("+q+rewriteUrl(v,base)+q+")");
 }
 
@@ -67,7 +67,7 @@ app.all("/proxy",async(req,res)=>{
       try{next=new URL(location,u)}catch{next=null}
       if(next){
         try{await assertSafeTarget(next)}catch(e){return res.status(400).send(e.message||"Unsafe redirect")}
-        return res.redirect(302,proxied(next));
+        return res.redirect(302,proxied(next,`${req.protocol}://${req.get("host")}`));
       }
     }
     const type=upstream.headers.get("content-type")||"application/octet-stream";
@@ -75,13 +75,13 @@ app.all("/proxy",async(req,res)=>{
     res.set("cache-control","no-store");
     if(type.includes("text/html")){
       let body=await upstream.text();
-      body=rewriteHtml(body,u);
+      body=rewriteHtml(body,u,`${req.protocol}://${req.get("host")}`);
       res.type("html").send(body);
       return;
     }
     if(type.includes("text/css")){
       let body=await upstream.text();
-      body=rewriteCss(body,u);
+      body=rewriteCss(body,u,`${req.protocol}://${req.get("host")}`);
       res.type("css").send(body);
       return;
     }
