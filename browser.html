@@ -39,7 +39,7 @@ body{font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   </form>
   <button class="settings" id="settings" title="Proxy settings" aria-label="Proxy settings">⚙</button>
 </header>
-<main id="view" class="view"></main>
+<main id="view" class="view"><iframe id="site" title="Website" style="width:100%;height:100%;border:0;background:#fff"></iframe></main>
 <div id="status" class="status">Proxy not connected</div>
 
 <div class="overlay" id="setup">
@@ -58,7 +58,7 @@ body{font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   const $=id=>document.getElementById(id);
   const HOME='https://example.com/';
   let proxyOrigin=localStorage.getItem('johnnyGamesProxyOrigin')||'';
-  let history=[],pos=-1,current='';
+  let current='';
   function setStatus(text,good=false){$('status').textContent=text;$('dot').classList.toggle('good',good);$('connection').textContent=good?'Connected':'Not connected'}
   function cleanProxyOrigin(value){
     value=value.trim().replace(/\/$/,'');
@@ -67,49 +67,21 @@ body{font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     if(u.pathname!=='/'||u.search||u.hash) throw new Error('Enter only the Render service URL, without a path.');
     return u.origin;
   }
-  function proxyReady(){return !!proxyOrigin}
-  function proxy(u){if(!proxyReady())throw new Error('Connect the Render proxy first.');return proxyOrigin+'/proxy?url='+encodeURIComponent(u)}
-  function targetFromLink(a,base){try{return new URL(a.getAttribute('href')||'',base).href}catch{return null}}
+  function proxy(u){if(!proxyOrigin)throw new Error('Connect the Render proxy first.');return proxyOrigin+'/proxy?url='+encodeURIComponent(u)}
   function normalize(v){
     v=v.trim();if(!v)return HOME;
     if(/^[a-z][a-z0-9+.-]*:\/\//i.test(v))return v;
     if(/^[^\s]+\.[^\s]+$/.test(v))return'https://'+v;
     return'https://www.google.com/search?q='+encodeURIComponent(v)
   }
-  function rewrite(el,attr,base){
-    const v=el.getAttribute(attr);
-    if(!v||v.startsWith('#')||/^(data|blob|javascript|mailto|tel):/i.test(v))return;
-    try{el.setAttribute(attr,proxy(new URL(v,base).href))}catch{}
-  }
-  function rewriteLink(el,base){const v=el.getAttribute('href');if(!v||v.startsWith('#')||/^(data|blob|javascript|mailto|tel):/i.test(v))return;try{const link=new URL(v,base);if(proxyOrigin&&link.origin===proxyOrigin&&link.pathname==='/proxy'){const target=link.searchParams.get('url');if(target){el.dataset.proxyTarget=target;return}}el.dataset.proxyTarget=link.href}catch{}}
-  function updateNav(){$('back').disabled=pos<=0;$('forward').disabled=pos<0||pos>=history.length-1}
-  async function load(u,push=true){
-    current=u;$('url').value=u;$('status').textContent='Loading…';
+  function load(u){
     try{
-      let r; try { r=await fetch(proxy(u),{redirect:'follow',cache:'no-store'}); } catch(err) { throw new Error('The Render proxy could not be reached. Check the proxy URL in ⚙ settings and make sure Render is Live.'); }
-      if(!r.ok){let detail='HTTP '+r.status;try{const data=await r.clone().json();if(data?.error)detail+=' — '+data.error}catch{}throw new Error(detail)}
-      const type=r.headers.get('content-type')||'';
-      if(!type.includes('text/html'))throw new Error('This response is not a web page.');
-      const html=await r.text();
-      const doc=new DOMParser().parseFromString(html,'text/html');
-      doc.querySelectorAll('[href]').forEach(e=>rewriteLink(e,u));
-      doc.querySelectorAll('[src]').forEach(e=>rewrite(e,'src',u));
-      doc.querySelectorAll('form[action]').forEach(e=>{const v=e.getAttribute('action');if(v){try{e.dataset.proxyTarget=new URL(v,u).href}catch{}}});
-      $('view').replaceChildren(...Array.from(doc.body?.childNodes||[]));
-      $('view').querySelectorAll('a').forEach(a=>a.onclick=e=>{
-        if(e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;
-        e.preventDefault();load(a.dataset.proxyTarget||a.href,true);
-      });
-      $('view').querySelectorAll('form').forEach(form=>form.onsubmit=e=>{
-        e.preventDefault();
-        const target=form.dataset.proxyTarget||form.getAttribute('action')||u;
-        load(new URL(target,u).href,true);
-      });
-      if(push){history.splice(pos+1);history.push(u);pos=history.length-1}
-      $('status').textContent='Proxy: '+new URL(u).hostname;updateNav();
+      u=new URL(u).href;
+      current=u;$('url').value=u;$('status').textContent='Loading…';
+      $('site').src=proxy(u);
     }catch(e){
-      $('view').innerHTML='<div style="padding:40px;font:16px system-ui;color:#222"><h2>Unable to load this site</h2><p>'+String(e.message).replace(/[<>]/g,'')+'</p><p>Some modern sites need browser features that a simple HTTP proxy cannot provide.</p></div>';
-      $('status').textContent='Request failed';updateNav();
+      $('view').innerHTML='<div style="padding:40px;font:16px system-ui;color:#222"><h2>Unable to load this site</h2><p>'+String(e.message).replace(/[<>]/g,'')+'</p></div>';
+      $('status').textContent='Request failed';
     }
   }
   async function testProxy(origin){
@@ -129,11 +101,11 @@ body{font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   };
   $('settings').onclick=()=>{$('proxyOrigin').value=proxyOrigin;$('setup').style.display='grid'};
   $('form').onsubmit=e=>{e.preventDefault();load(normalize($('url').value))};
-  $('back').onclick=()=>{if(pos>0){pos--;load(history[pos],false)}};
-  $('forward').onclick=()=>{if(pos<history.length-1){pos++;load(history[pos],false)}};
-  $('reload').onclick=()=>current&&load(current,false);
+  $('back').onclick=()=>{try{$('site').contentWindow.history.back()}catch{}};
+  $('forward').onclick=()=>{try{$('site').contentWindow.history.forward()}catch{}};
+  $('reload').onclick=()=>current&&load(current);
   $('url').addEventListener('focus',e=>e.target.select());
-  updateNav();
+  $('site').addEventListener('load',()=>{$('status').textContent='Proxy: '+(current?new URL(current).hostname:'Connected')});
   if(proxyOrigin){$('proxyOrigin').value=proxyOrigin;testProxy(proxyOrigin).then(()=>{$('setup').style.display='none';load(HOME)}).catch(()=>{$('setup').style.display='grid'})}
 })();
 </script>
