@@ -1,0 +1,12 @@
+services:
+  browser:
+    build: .
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      PORT: "3000"
+      POC_ACCESS_TOKEN: ${POC_ACCESS_TOKEN:?Set POC_ACCESS_TOKEN in .env}
+      BROWSER_START_URL: "https://example.com/"
+    shm_size: "1gb"
+    init: true
+    restart: unless-stopped

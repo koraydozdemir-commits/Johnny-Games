@@ -1,0 +1,27 @@
+name: Remote browser prototype image
+
+on:
+  pull_request:
+    paths:
+      - "remote-browser-poc/**"
+      - ".github/workflows/remote-browser-poc.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "remote-browser-poc/**"
+      - ".github/workflows/remote-browser-poc.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./remote-browser-poc
+          push: false

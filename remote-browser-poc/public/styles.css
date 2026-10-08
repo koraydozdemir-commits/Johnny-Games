@@ -1,0 +1,70 @@
+:root {
+  color-scheme: dark;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f7f7ff;
+  background: #070711;
+  font-synthesis: none;
+}
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body { display: flex; flex-direction: column; }
+.topbar {
+  height: 58px;
+  flex: 0 0 58px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 16px;
+  border-bottom: 1px solid #30304d;
+  background: #080811;
+}
+.brand { font-size: 13px; font-weight: 900; letter-spacing: .5px; }
+.brand span { display: block; margin-top: 2px; color: #a7a7c4; font-size: 9px; letter-spacing: 1.2px; }
+.state { flex: 1; color: #a7a7c4; font-size: 12px; }
+button, input {
+  min-height: 40px;
+  border: 1px solid #393956;
+  border-radius: 9px;
+  padding: 0 12px;
+  color: #f7f7ff;
+  background: #111122;
+  font: inherit;
+}
+button { cursor: pointer; font-weight: 700; }
+button:disabled { cursor: wait; opacity: .65; }
+button.primary, #connect { background: #7656ff; border-color: #7656ff; }
+main { position: relative; flex: 1; min-height: 0; background: #181820; }
+#screen { width: 100%; height: 100%; }
+#screen canvas { width: 100% !important; height: 100% !important; object-fit: contain; }
+.gate {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #070711eF;
+}
+.gate[hidden] { display: none; }
+.card {
+  width: min(460px, 100%);
+  padding: 26px;
+  border: 1px solid #30304d;
+  border-radius: 16px;
+  background: #101021;
+  box-shadow: 0 20px 70px #0009;
+}
+.eyebrow { color: #a7a7c4; font-size: 11px; letter-spacing: 1.6px; }
+h1 { margin: 8px 0; font-size: 25px; }
+.card p { color: #b6b6cc; line-height: 1.5; }
+.card label { display: block; margin: 20px 0 7px; font-size: 13px; }
+.card input { width: 100%; margin-bottom: 10px; }
+.card button { width: 100%; }
+.card .hint { margin-bottom: 0; font-size: 12px; }
+@media (max-width: 540px) {
+  .topbar { padding: 0 9px; gap: 7px; }
+  .brand { font-size: 11px; }
+  .brand span { font-size: 7px; }
+  .state { font-size: 10px; }
+  button { min-height: 36px; padding: 0 9px; font-size: 12px; }
+}
