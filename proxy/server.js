@@ -10,7 +10,8 @@ const MAX_BODY_BYTES=25*1024*1024;
 const USER_AGENT="JohnnyGamesProxy/2.0";
 
 app.disable("x-powered-by");
-app.use(cors({origin:true,methods:["GET","HEAD","OPTIONS"],allowedHeaders:["Content-Type","Accept","X-Requested-With"]}));
+app.use(cors({origin:"*",methods:["GET","HEAD","OPTIONS"],allowedHeaders:["Content-Type","Accept","X-Requested-With"],exposedHeaders:["Content-Type","Content-Disposition"]}));
+app.options("/proxy",cors());
 app.use(express.raw({type:"*/*",limit:MAX_BODY_BYTES}));
 
 app.get("/health",(_,res)=>res.json({ok:true,service:"johnny-games-proxy"}));
@@ -73,6 +74,7 @@ app.all("/proxy",async(req,res)=>{
     const type=upstream.headers.get("content-type")||"application/octet-stream";
     res.status(upstream.status);
     res.set("cache-control","no-store");
+    res.set("access-control-allow-origin","*");
     if(type.includes("text/html")){
       let body=await upstream.text();
       body=rewriteHtml(body,u,`${req.protocol}://${req.get("host")}`);
@@ -92,7 +94,8 @@ app.all("/proxy",async(req,res)=>{
     res.send(Buffer.from(await upstream.arrayBuffer()));
   }catch(e){
     console.error("Proxy error:",e.message);
-    res.status(502).send("Upstream request failed");
+    const message=e?.name==="TimeoutError"?"Upstream request timed out":(e?.message||"Upstream request failed");
+    res.status(502).set("access-control-allow-origin","*").json({ok:false,error:message});
   }
 });
 
