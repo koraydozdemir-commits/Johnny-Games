@@ -158,7 +158,8 @@ fetch('games.json').then(function(r){return r.json()}).then(function(d){S.games=
 document.getElementById('rnd').addEventListener('click',function(){
  var g=S.games.filter(function(x){return!x.ext});if(g.length)location.href=g[Math.random()*g.length|0].href});
 // ---- Chat (Firebase Realtime Database REST) ----
-var DB='';// paste your URL here, e.g. https://your-project-default-rtdb.europe-west1.firebasedatabase.app
+var DB = 'https://johnny-chat-aabd6-default-rtdb.europe-west1.firebasedatabase.app/;
+
 var BAD=/\b(fuck|shit|bitch|cunt|nigg\w*|fag\w*|retard\w*|rape|slut|whore)\b/gi,last=0,timer=0;
 var cb=$('cbtn'),ch=$('chat'),cm=$('cmsgs');
 cb.onclick=function(){ch.classList.toggle('on');if(ch.classList.contains('on')){if(!DB){cm.innerHTML='<div>Chat is not set up yet. The site owner needs to add a database URL.</div>';return}poll();timer=setInterval(poll,3000);$('cin').focus()}else clearInterval(timer)};
