@@ -32,6 +32,10 @@ body{font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
 .tab{min-height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--dim);font:600 15px inherit;font-family:inherit}
 .tab.on{background:var(--acc);border-color:var(--acc);color:#fff}
 .count{color:var(--dim);font-size:14px}
+.browser-panel{display:none;min-height:calc(100vh - 120px);margin:0 -0px}
+.browser-panel.on{display:block}
+.browser-frame{display:block;width:100%;height:calc(100vh - 120px);min-height:650px;border:0;background:#0b0b14}
+.browser-note{padding:10px 14px;background:var(--card);border:1px solid var(--line);border-radius:12px;color:var(--dim);font-size:13px;margin-bottom:12px}
 main{max-width:1400px;margin:0 auto;padding:16px}
 h2{font-size:15px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin:18px 4px 10px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:16px}
@@ -73,12 +77,18 @@ h2{font-size:15px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em
  <div class="tabs">
   <button class="tab on" data-t="all">All</button>
   <button class="tab" data-t="fav">&#9829; Favorites</button>
+  <button class="tab" data-t="browser">&#127760; Browser</button>
  </div>
  <button class="tab rnd" id="rnd">&#127922; Random</button>
  <select id="sort" aria-label="Sort"><option value="az">A to Z</option><option value="za">Z to A</option></select>
  <span class="count" id="count"></span>
 </div>
 <main>
+ <section id="browserPanel" class="browser-panel">
+  <div class="browser-note"><strong>Johnny Games Browser</strong> — this is the browser interface. Sites that block framing can still be opened normally from the browser controls.</div>
+  <iframe class="browser-frame" src="games/Browser.html" title="Johnny Games Browser" loading="lazy"></iframe>
+ </section>
+ <section id="gamesPanel">
  <div id="recentWrap" hidden><h2>Recently played</h2><div class="grid" id="recent"></div></div>
  <h2 id="allTitle">All games</h2>
  <div class="grid" id="grid"><p class="empty">Loading games...</p></div>
@@ -86,6 +96,7 @@ h2{font-size:15px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em
 <section class="about"><h2>Free unblocked games you can play anywhere</h2>
 <p>Johnny Games is a free collection of unblocked browser games. There is nothing to download and no account to make. Every game runs right in your browser, and the site is built to work well on iPad Safari, Chromebooks, phones and desktop computers.</p>
 <p>Search the list, tap the heart to save your favorite games, and jump back into the ones you played recently. Add the site to your iPad Home Screen to launch it like an app.</p></section>
+</section>
 <button id="cbtn">&#128172; Chat</button>
 <div id="chat"><div id="cnote">Be kind. Messages are public. Spam and abuse get deleted.</div><div id="cmsgs"></div>
 <form id="cform"><input id="cin" maxlength="200" placeholder="Say something..." autocomplete="off"><button>Send</button></form></div>
@@ -149,7 +160,15 @@ document.querySelectorAll('.tab').forEach(function(b){
  b.addEventListener('click',function(){
   S.tab=b.dataset.t;
   document.querySelectorAll('.tab').forEach(function(x){x.classList.toggle('on',x===b)});
-  render();
+  var browser=S.tab==='browser';
+  $('browserPanel').classList.toggle('on',browser);
+  $('gamesPanel').style.display=browser?'none':'block';
+  $('q').style.display=browser?'none':'';
+  $('sort').style.display=browser?'none':'';
+  $('count').style.display=browser?'none':'';
+  document.getElementById('rnd').style.display=browser?'none':'';
+  document.getElementById('cbtn').style.display=browser?'none':'';
+  if(!browser)render();
  });
 });
 window.addEventListener('pageshow',function(){S.recent=store.get('jg_recent',[]);S.favs=store.get('jg_favs',[]);if(S.games.length)render()});
