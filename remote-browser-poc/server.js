@@ -17,6 +17,18 @@ const ticketLifetimeMs = 60_000;
 const tickets = new Map();
 const children = [];
 let stopping = false;
+const allowedParentOrigins = String(process.env.ALLOWED_PARENT_ORIGINS || "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean)
+  .map((value) => {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.origin !== value) {
+      throw new Error("ALLOWED_PARENT_ORIGINS must be a comma-separated list of HTTPS origins without paths.");
+    }
+    return url.origin;
+  });
+const frameAncestors = ["'self'", ...allowedParentOrigins].join(" ");
 
 if (accessToken.length < 32) {
   throw new Error("POC_ACCESS_TOKEN must contain at least 32 characters.");
@@ -96,7 +108,7 @@ app.use((_, res, next) => {
   res.setHeader("Referrer-Policy", "no-referrer");
   res.setHeader(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'"
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'none'; frame-ancestors ${frameAncestors}"
   );
   next();
 });
