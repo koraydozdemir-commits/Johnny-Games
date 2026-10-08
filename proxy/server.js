@@ -45,7 +45,7 @@ function rewriteHtml(html,base,origin){
     .replace(/url\((['"]?)([^)'"]+)\1\)/gi,(_,q,v)=>"url("+q+rewriteUrl(v,base,origin)+q+")");
 }
 function rewriteCss(css,base,origin){
-  return css.replace(/url\((['"]?)([^)'"]+)\1\)/gi,(_,q,v)=>"url("+q+rewriteUrl(v,base)+q+")");
+  return css.replace(/url\((['"]?)([^)'"]+)\1\)/gi,(_,q,v)=>"url("+q+rewriteUrl(v,base,origin)+q+")");
 }
 
 app.all("/proxy",async(req,res)=>{
