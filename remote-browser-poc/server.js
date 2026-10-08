@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import express from "express";
-import { WebSocketServer } from "ws";
+import WebSocket, { WebSocketServer } from "ws";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 3000);
@@ -171,14 +171,14 @@ server.on("upgrade", (req, socket, head) => {
     });
 
     vnc.on("data", (data) => {
-      if (websocket.readyState === websocketServer.OPEN) {
+      if (websocket.readyState === WebSocket.OPEN) {
         websocket.send(data, { binary: true });
       }
     });
 
     vnc.on("error", () => websocket.close(1011, "Browser stream disconnected"));
     vnc.on("close", () => {
-      if (websocket.readyState === websocketServer.OPEN) websocket.close();
+      if (websocket.readyState === WebSocket.OPEN) websocket.close();
     });
     websocket.on("close", () => vnc.destroy());
     websocket.on("error", () => vnc.destroy());
