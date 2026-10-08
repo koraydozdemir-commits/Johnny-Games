@@ -69,6 +69,7 @@ body{font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   }
   function proxyReady(){return !!proxyOrigin}
   function proxy(u){if(!proxyReady())throw new Error('Connect the Render proxy first.');return proxyOrigin+'/proxy?url='+encodeURIComponent(u)}
+  function targetFromLink(a,base){try{return new URL(a.getAttribute('href')||'',base).href}catch{return null}}
   function normalize(v){
     v=v.trim();if(!v)return HOME;
     if(/^[a-z][a-z0-9+.-]*:\/\//i.test(v))return v;
@@ -80,6 +81,7 @@ body{font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     if(!v||v.startsWith('#')||/^(data|blob|javascript|mailto|tel):/i.test(v))return;
     try{el.setAttribute(attr,proxy(new URL(v,base).href))}catch{}
   }
+  function rewriteLink(el,base){const v=el.getAttribute('href');if(!v||v.startsWith('#')||/^(data|blob|javascript|mailto|tel):/i.test(v))return;try{el.dataset.proxyTarget=new URL(v,base).href}catch{}}
   function updateNav(){$('back').disabled=pos<=0;$('forward').disabled=pos<0||pos>=history.length-1}
   async function load(u,push=true){
     current=u;$('url').value=u;$('status').textContent='Loading…';
@@ -90,9 +92,9 @@ body{font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
       if(!type.includes('text/html'))throw new Error('This response is not a web page.');
       const html=await r.text();
       const doc=new DOMParser().parseFromString(html,'text/html');
-      doc.querySelectorAll('[href]').forEach(e=>rewrite(e,'href',u));
+      doc.querySelectorAll('[href]').forEach(e=>rewriteLink(e,u));
       doc.querySelectorAll('[src]').forEach(e=>rewrite(e,'src',u));
-      doc.querySelectorAll('form[action]').forEach(e=>rewrite(e,'action',u));
+      doc.querySelectorAll('form[action]').forEach(e=>{const v=e.getAttribute('action');if(v){try{e.dataset.proxyTarget=new URL(v,u).href}catch{}}});
       $('view').replaceChildren(...Array.from(doc.body?.childNodes||[]));
       $('view').querySelectorAll('a').forEach(a=>a.onclick=e=>{
         if(e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;
@@ -100,7 +102,7 @@ body{font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
       });
       $('view').querySelectorAll('form').forEach(form=>form.onsubmit=e=>{
         e.preventDefault();
-        const target=form.getAttribute('action')||u;
+        const target=form.dataset.proxyTarget||form.getAttribute('action')||u;
         load(new URL(target,u).href,true);
       });
       if(push){history.splice(pos+1);history.push(u);pos=history.length-1}
