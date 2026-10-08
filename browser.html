@@ -81,7 +81,7 @@ body{font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     if(!v||v.startsWith('#')||/^(data|blob|javascript|mailto|tel):/i.test(v))return;
     try{el.setAttribute(attr,proxy(new URL(v,base).href))}catch{}
   }
-  function rewriteLink(el,base){const v=el.getAttribute('href');if(!v||v.startsWith('#')||/^(data|blob|javascript|mailto|tel):/i.test(v))return;try{el.dataset.proxyTarget=new URL(v,base).href}catch{}}
+  function rewriteLink(el,base){const v=el.getAttribute('href');if(!v||v.startsWith('#')||/^(data|blob|javascript|mailto|tel):/i.test(v))return;try{const link=new URL(v,base);if(proxyOrigin&&link.origin===proxyOrigin&&link.pathname==='/proxy'){const target=link.searchParams.get('url');if(target){el.dataset.proxyTarget=target;return}}el.dataset.proxyTarget=link.href}catch{}}
   function updateNav(){$('back').disabled=pos<=0;$('forward').disabled=pos<0||pos>=history.length-1}
   async function load(u,push=true){
     current=u;$('url').value=u;$('status').textContent='Loading…';
