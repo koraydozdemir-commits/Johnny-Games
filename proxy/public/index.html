@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b14">
+  <title>Johnny Games Browser</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/frog/uv.bundle.js" defer></script>
+  <script src="/frog/uv.config.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="toolbar">
+    <a class="brand" href="https://www.johnnystudy.online/" aria-label="Back to Johnny Games">JG</a>
+    <div class="history">
+      <button id="back" type="button" title="Back" aria-label="Back">‹</button>
+      <button id="forward" type="button" title="Forward" aria-label="Forward">›</button>
+      <button id="reload" type="button" title="Reload" aria-label="Reload">↻</button>
+    </div>
+    <form id="addressForm" class="address-form">
+      <input id="address" type="search" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Enter a website or search">
+      <button class="go" type="submit">Go</button>
+    </form>
+    <a class="home" href="https://www.johnnystudy.online/">Games</a>
+  </header>
+  <main>
+    <iframe id="site" title="Website" allow="autoplay; fullscreen; gamepad; clipboard-read; clipboard-write" allowfullscreen></iframe>
+    <p id="status" role="status">Enter a website to start browsing.</p>
+  </main>
+</body>
+</html>
