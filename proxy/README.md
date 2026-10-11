@@ -1,17 +1,27 @@
-# Johnny Games proxy
+# Johnny Games Browser proxy
 
-The GitHub Pages site is static, so the browser UI lives in the repository while this Node service runs separately.
+This Node service replaces the former URL-rewriting proxy with Ultraviolet and
+the Bare protocol. The static Johnny Games site opens this browser in the same
+tab; the proxy UI keeps navigation controls around a same-origin frame.
 
 ## Deploy
 
-Deploy the `proxy` directory to any Node hosting service that supports Node 20+.
+The Render service `johnny-games-proxy` already points to this `proxy/`
+directory, runs `npm install` and `npm start`, and receives its listening port
+from `PORT`. Merging this change into `main` will trigger its existing automatic
+deployment.
 
-Set:
-- `PORT` (usually supplied by the host)
-- optional `ALLOWED_HOSTS` as a comma-separated allowlist, e.g. `example.com,www.example.com`
+The service is public and lets visitors request ordinary public HTTP and HTTPS
+websites. Bare's default `blockLocal` protection rejects private and
+non-routable IP addresses, including private DNS resolutions. Keep this
+protection enabled. The proxy is not an access-control or anonymity service.
 
-After deployment, the browser page can be configured with:
+## Components and license
 
-`const PROXY_BASE='https://YOUR-PROXY-HOST/proxy?url=';`
+- Ultraviolet 2.0.0, MIT licensed, by Titanium Network.
+- Bare Server Node 2.0.0-beta, GPL-3.0, by TOMP Development.
+- The service application follows the supplied Frogies Arcade v3 AGPL-3.0
+  license; the complete source is included here.
 
-This backend is intentionally simple and does not log requested URLs or credentials.
+The provided Frogies Arcade homepage, ads, tracking scripts, and branded assets
+are not served by this Johnny Games integration.
