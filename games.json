@@ -1,122 +1,42 @@
 [
-  {
-    "name": "A Small World Cup"
-  },
-  {
-    "name": "Minecraft"
-  },
-  {
-    "name": "Zombie Rush"
-  },
-  {
-    "name": "Football Manager"
-  },
-  {
-    "name": "Cut The Rope"
-  },
-  {
-    "name": "Age of War"
-  },
-  {
-    "name": "Penalty Shooters"
-  },
-  {
-    "name": "Angry Birds"
-  },
-  {
-    "name": "Bad Piggies"
-  },
-  {
-    "name": "Bloons Tower Defense"
-  },
-  {
-    "name": "Burrito Bison"
-  },
-  {
-    "name": "Cover Orange"
-  },
-  {
-    "name": "Drift Boss"
-  },
-  {
-    "name": "Drive Mad"
-  },
-  {
-    "name": "Five Nights At Johnny's"
-  },
-  {
-    "name": "Fruit Ninja"
-  },
-  {
-    "name": "Geometry Dash"
-  },
-  {
-    "name": "Getting Over It"
-  },
-  {
-    "name": "Among Us"
-  },
-  {
-    "name": "Johnny Obby"
-  },
-  {
-    "name": "Monkey Mart"
-  },
-  {
-    "name": "Plants vs Zombies"
-  },
-  {
-    "name": "Retro Bowl"
-  },
-  {
-    "name": "Rocket League"
-  },
-  {
-    "name": "Steal a Brainrot"
-  },
-  {
-    "name": "Stickman Hook"
-  },
-  {
-    "name": "Subway Surfers"
-  },
-  {
-    "name": "Cookie Clicker"
-  },
-  {
-    "name": "Grow A Garden"
-  },
-  {
-    "name": "Hill Climb Racing"
-  },
-  {
-    "name": "2048"
-  },
-  {
-    "name": "Snake"
-  },
-  {
-    "name": "Minesweeper"
-  },
-  {
-    "name": "Memory Match"
-  },
-  {
-    "name": "Breakout"
-  },
-  {
-    "name": "Bubble Shooter"
-  },
-  {
-    "name": "Cross Road"
-  },
-  {
-    "name": "Stack Tower"
-  },
-  {
-    "name": "Sudoku"
-  },
-  {
-    "name": "Tic Tac Toe"
-  }
+  { "name": "A Small World Cup" },
+  { "name": "Minecraft" },
+  { "name": "Zombie Rush" },
+  { "name": "Football Manager" },
+  { "name": "Cut The Rope" },
+  { "name": "Age of War" },
+  { "name": "Penalty Shooters" },
+  { "name": "Angry Birds" },
+  { "name": "Bad Piggies" },
+  { "name": "Bloons Tower Defense" },
+  { "name": "Burrito Bison" },
+  { "name": "Cover Orange" },
+  { "name": "Drift Boss" },
+  { "name": "Drive Mad" },
+  { "name": "Five Nights At Johnny's" },
+  { "name": "Fruit Ninja" },
+  { "name": "Geometry Dash" },
+  { "name": "Getting Over It" },
+  { "name": "Among Us" },
+  { "name": "Johnny Obby" },
+  { "name": "Monkey Mart" },
+  { "name": "Plants vs Zombies" },
+  { "name": "Retro Bowl" },
+  { "name": "Rocket League" },
+  { "name": "Steal a Brainrot" },
+  { "name": "Stickman Hook" },
+  { "name": "Subway Surfers" },
+  { "name": "Cookie Clicker" },
+  { "name": "Grow A Garden" },
+  { "name": "Hill Climb Racing" },
+  { "name": "2048" },
+  { "name": "Snake" },
+  { "name": "Minesweeper" },
+  { "name": "Memory Match" },
+  { "name": "Breakout" },
+  { "name": "Bubble Shooter" },
+  { "name": "Cross Road" },
+  { "name": "Stack Tower" },
+  { "name": "Sudoku" },
+  { "name": "Tic Tac Toe" }
 ]
