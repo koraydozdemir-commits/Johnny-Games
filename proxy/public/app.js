@@ -3,7 +3,38 @@ const frame = document.getElementById("site");
 const status = document.getElementById("status");
 const uvConfig = window["__uv$config"];
 if (!uvConfig) {
-  throw new Error("Ultraviolet configuration did not load.");
+  status.textContent = "Proxy files did not load. Reload this page and try again.";
+  address.disabled = true;
+  document.querySelector(".go").disabled = true;
+} else {
+  document.getElementById("addressForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    void navigate(address.value);
+  });
+
+  document.getElementById("back").addEventListener("click", () => {
+    try { frame.contentWindow.history.back(); } catch { /* No page is loaded yet. */ }
+  });
+
+  document.getElementById("forward").addEventListener("click", () => {
+    try { frame.contentWindow.history.forward(); } catch { /* No page is loaded yet. */ }
+  });
+
+  document.getElementById("reload").addEventListener("click", () => {
+    try { frame.contentWindow.location.reload(); } catch { /* No page is loaded yet. */ }
+  });
+
+  frame.addEventListener("load", () => {
+    try {
+      const current = new URL(frame.contentWindow.location.href);
+      if (current.pathname.startsWith(uvConfig.prefix)) {
+        address.value = uvConfig.decodeUrl(current.pathname.slice(uvConfig.prefix.length));
+        status.textContent = "Ready";
+      }
+    } catch {
+      status.textContent = "Page loaded. Some sites may restrict proxy access.";
+    }
+  });
 }
 
 function normalizeAddress(value) {
@@ -33,32 +64,3 @@ async function navigate(value) {
     status.textContent = error.message || "This address could not be opened.";
   }
 }
-
-document.getElementById("addressForm").addEventListener("submit", (event) => {
-  event.preventDefault();
-  void navigate(address.value);
-});
-
-document.getElementById("back").addEventListener("click", () => {
-  try { frame.contentWindow.history.back(); } catch { /* No page is loaded yet. */ }
-});
-
-document.getElementById("forward").addEventListener("click", () => {
-  try { frame.contentWindow.history.forward(); } catch { /* No page is loaded yet. */ }
-});
-
-document.getElementById("reload").addEventListener("click", () => {
-  try { frame.contentWindow.location.reload(); } catch { /* No page is loaded yet. */ }
-});
-
-frame.addEventListener("load", () => {
-  try {
-    const current = new URL(frame.contentWindow.location.href);
-    if (current.pathname.startsWith(uvConfig.prefix)) {
-      address.value = uvConfig.decodeUrl(current.pathname.slice(uvConfig.prefix.length));
-      status.textContent = "Ready";
-    }
-  } catch {
-    status.textContent = "Page loaded. Some sites may restrict proxy access.";
-  }
-});
