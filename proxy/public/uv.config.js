@@ -1,5 +1,5 @@
 /*global Ultraviolet*/
-self.__uv$config = {
+window["__uv$config"] = {
   prefix: "/frog/ixl/",
   bare: "/bare/",
   encodeUrl: Ultraviolet.codec.xor.encode,

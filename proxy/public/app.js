@@ -1,6 +1,10 @@
 const address = document.getElementById("address");
 const frame = document.getElementById("site");
 const status = document.getElementById("status");
+const uvConfig = window["__uv$config"];
+if (!uvConfig) {
+  throw new Error("Ultraviolet configuration did not load.");
+}
 
 function normalizeAddress(value) {
   const input = value.trim();
@@ -19,12 +23,12 @@ async function navigate(value) {
       throw new Error("Only web addresses can be opened.");
     }
     await navigator.serviceWorker.register("/frog/sw.js", {
-      scope: __uv$config.prefix,
+      scope: uvConfig.prefix,
     });
     await navigator.serviceWorker.ready;
     status.textContent = "Loading " + url.hostname + "…";
     address.value = url.href;
-    frame.src = __uv$config.prefix + __uv$config.encodeUrl(url.href);
+    frame.src = uvConfig.prefix + uvConfig.encodeUrl(url.href);
   } catch (error) {
     status.textContent = error.message || "This address could not be opened.";
   }
@@ -50,8 +54,8 @@ document.getElementById("reload").addEventListener("click", () => {
 frame.addEventListener("load", () => {
   try {
     const current = new URL(frame.contentWindow.location.href);
-    if (current.pathname.startsWith(__uv$config.prefix)) {
-      address.value = __uv$config.decodeUrl(current.pathname.slice(__uv$config.prefix.length));
+    if (current.pathname.startsWith(uvConfig.prefix)) {
+      address.value = uvConfig.decodeUrl(current.pathname.slice(uvConfig.prefix.length));
       status.textContent = "Ready";
     }
   } catch {
