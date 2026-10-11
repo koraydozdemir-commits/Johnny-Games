@@ -23,17 +23,16 @@ app.use((_, response, next) => {
 
 app.get("/health", (_, response) => {
   response.setHeader("Cache-Control", "no-store");
-  response.json({ ok: true, service: "johnny-games-ultraviolet" });
+  response.json({ ok: true, service: "johnny-games-frogies-proxy" });
 });
 
 app.get("/frog/uv.config.js", (_, response) => {
   response.sendFile(join(publicDirectory, "uv.config.js"));
 });
-
 app.use("/frog", express.static(uvPath, { fallthrough: false, immutable: true, maxAge: "1h" }));
 app.use(express.static(publicDirectory, { index: "index.html", maxAge: "5m" }));
 
-const server = createServer(app);
+const server = createServer();
 
 server.on("request", (request, response) => {
   if (bare.shouldRoute(request)) {
@@ -52,7 +51,7 @@ server.on("upgrade", (request, socket, head) => {
 });
 
 server.listen(port, "0.0.0.0", () => {
-  console.log(`Johnny Games Ultraviolet listening on port ${port}`);
+  console.log(`Johnny Games Frogies proxy listening on port ${port}`);
 });
 
 function shutdown() {
