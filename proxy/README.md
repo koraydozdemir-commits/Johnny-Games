@@ -1,27 +1,30 @@
 # Johnny Games Browser proxy
 
-This Node service replaces the former URL-rewriting proxy with Ultraviolet and
-the Bare protocol. The static Johnny Games site opens this browser in the same
-tab; the proxy UI keeps navigation controls around a same-origin frame.
+This service uses the proxy setup from the supplied Frogies Arcade v3 source:
+Ultraviolet 1.0.11, the Bare Server Node routing, Base64 URL encoding, and the
+`/frog/ixl/` service-worker scope. It serves the Ultraviolet runtime under
+`/frog/` and the Johnny Games browser screen at `/`.
+
+Only the proxy server and its required Ultraviolet files are included. Frogies
+Arcade's home page, game catalog, logins, analytics, ads, and other site assets
+are not served here.
 
 ## Deploy
 
-The Render service `johnny-games-proxy` already points to this `proxy/`
-directory, runs `npm install` and `npm start`, and receives its listening port
-from `PORT`. Merging this change into `main` will trigger its existing automatic
-deployment.
+The Render service `johnny-games-proxy` uses this `proxy/` directory, runs
+`npm install` and `npm start`, and deploys automatically from `main`. The
+service is public and accepts requests for public HTTP and HTTPS websites.
+Bare Server Node's default local-network blocking must remain enabled.
 
-The service is public and lets visitors request ordinary public HTTP and HTTPS
-websites. Bare's default `blockLocal` protection rejects private and
-non-routable IP addresses, including private DNS resolutions. Keep this
-protection enabled. The proxy is not an access-control or anonymity service.
+## Credits and licenses
 
-## Components and license
+- Frogies Arcade v3 source, licensed under AGPL-3.0; its license is in
+  [`LICENSE`](LICENSE).
+- 55gms, credited by Frogies Arcade v3 for part of its proxy.
+- Titanium Network's Ultraviolet runtime, MIT licensed; see
+  [`THIRD_PARTY_LICENSES/ultraviolet-MIT.txt`](THIRD_PARTY_LICENSES/ultraviolet-MIT.txt).
+- TOMP Development's Bare Server Node and the Express server dependency.
 
-- Ultraviolet 2.0.0, MIT licensed, by Titanium Network.
-- Bare Server Node 2.0.0-beta, GPL-3.0, by TOMP Development.
-- The service application follows the supplied Frogies Arcade v3 AGPL-3.0
-  license; the complete source is included here.
-
-The provided Frogies Arcade homepage, ads, tracking scripts, and branded assets
-are not served by this Johnny Games integration.
+The Johnny Games browser screen is a separate wrapper. Its service and
+Ultraviolet assets are served from this Render service so the browser and proxy
+share the same origin.
