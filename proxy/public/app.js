@@ -53,14 +53,52 @@ async function navigate(value) {
     if (!new Set(["http:", "https:"]).has(url.protocol)) {
       throw new Error("Only web addresses can be opened.");
     }
-    await navigator.serviceWorker.register("/frog/sw.js", {
+    if (!("serviceWorker" in navigator)) {
+      throw new Error("This browser does not support the service worker required by the proxy.");
+    }
+
+    status.textContent = "Starting secure browser…";
+    address.value = url.href;
+    const registration = await navigator.serviceWorker.register("/frog/sw.js", {
       scope: uvConfig.prefix,
     });
-    await navigator.serviceWorker.ready;
+    await waitForActiveWorker(registration);
     status.textContent = "Loading " + url.hostname + "…";
-    address.value = url.href;
     frame.src = uvConfig.prefix + uvConfig.encodeUrl(url.href);
   } catch (error) {
     status.textContent = error.message || "This address could not be opened.";
   }
 }
+
+function waitForActiveWorker(registration, timeoutMs = 15000) {
+  const worker = registration.active || registration.installing || registration.waiting;
+  if (!worker) {
+    return Promise.reject(new Error("The proxy service worker did not start."));
+  }
+  if (worker.state === "activated") return Promise.resolve(worker);
+
+  return new Promise((resolve, reject) => {
+    let timeout;
+    const cleanup = () => {
+      clearTimeout(timeout);
+      worker.removeEventListener("statechange", onStateChange);
+    };
+    const onStateChange = () => {
+      if (worker.state === "activated") {
+        cleanup();
+        resolve(worker);
+      } else if (worker.state === "redundant") {
+        cleanup();
+        reject(new Error("The proxy service worker failed to activate."));
+      }
+    };
+
+    timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error("The proxy service worker took too long to start. Please reload and try again."));
+    }, timeoutMs);
+    worker.addEventListener("statechange", onStateChange);
+    onStateChange();
+  });
+}
+
