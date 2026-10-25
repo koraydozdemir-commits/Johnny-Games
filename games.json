@@ -92,5 +92,37 @@
   {
     "name": "Online Mini Golf",
     "thumb": "thumbnails/Online Mini Golf.svg"
+  },
+  {
+    "name": "Learn to Fly 2",
+    "thumb": "thumbnails/Learn to Fly 2.svg"
+  },
+  {
+    "name": "Toss the Turtle",
+    "thumb": "thumbnails/Toss the Turtle.svg"
+  },
+  {
+    "name": "Hedgehog Launch",
+    "thumb": "thumbnails/Hedgehog Launch.svg"
+  },
+  {
+    "name": "Jetpack Joyride",
+    "thumb": "thumbnails/Jetpack Joyride.svg"
+  },
+  {
+    "name": "Idle Breakout",
+    "thumb": "thumbnails/Idle Breakout.svg"
+  },
+  {
+    "name": "Adventure Capitalist",
+    "thumb": "thumbnails/Adventure Capitalist.svg"
+  },
+  {
+    "name": "Rodeo Stampede",
+    "thumb": "thumbnails/Rodeo Stampede.svg"
+  },
+  {
+    "name": "Burrito Bison Revenge",
+    "thumb": "thumbnails/Burrito Bison Revenge.svg"
   }
 ]
