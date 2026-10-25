@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 174 52" role="img" aria-label="Spore">
-<defs><linearGradient id="metal" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fff"/><stop offset=".45" stop-color="#d4d8de"/><stop offset="1" stop-color="#858b99"/></linearGradient><filter id="shadow" x="-20%" y="-30%" width="140%" height="160%"><feGaussianBlur stdDeviation="1.2"/></filter></defs>
-<text x="1" y="38" font-family="Arial Black,Arial,sans-serif" font-size="32" font-weight="900" letter-spacing="-1.6" fill="#000" opacity=".8" filter="url(#shadow)">SP</text>
-<text x="1" y="37" font-family="Arial Black,Arial,sans-serif" font-size="32" font-weight="900" letter-spacing="-1.6" fill="url(#metal)" stroke="#1b2433" stroke-width=".9">SP</text>
-<g transform="translate(85 25)" fill="none" stroke-linecap="round"><circle r="15" stroke="#101b2c" stroke-width="5"/><path d="M 10 -5 A 11 11 0 1 0 10 5 A 6.8 6.8 0 1 1 2 -7 A 3.2 3.2 0 1 0 2 0" stroke="url(#metal)" stroke-width="3.8"/><circle r="1.8" fill="#fff" stroke="none"/></g>
-<text x="103" y="37" font-family="Arial Black,Arial,sans-serif" font-size="32" font-weight="900" letter-spacing="-1.6" fill="url(#metal)" stroke="#1b2433" stroke-width=".9">RE</text>
-</svg>
