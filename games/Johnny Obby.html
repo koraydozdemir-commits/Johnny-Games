@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en-us"><head>
+<base href="https://cdn.jsdelivr.net/gh/Pok12d/ta@main/tungobby/">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="TemplateData/style.css"><link rel="shortcut icon" href="TemplateData/favicon.ico">
+</head><body>
+<div id="unity-container"><canvas id="unity-canvas"></canvas><div id="unity-preview"><img src="TemplateData/preview.png" alt="Preview"></div>
+<div id="unity-game-title"><div class="line-1">Tung Tung Sahur</div><div class="line-2">Obby Challenge</div></div>
+<div id="unity-loading-bar"><div id="unity-progress-bar-empty"><div id="unity-progress-bar-full"></div></div></div>
+<div id="unity-loading-text">Loading</div><div id="unity-warning"></div><div id="unity-footer"></div></div>
+<div id="orientation-warning" style="display:none"><img src="TemplateData/rotate-device.png" alt="Rotate Device" style="width:150px;margin-bottom:20px">Please rotate your device to <strong>landscape mode</strong> and reload the game.</div>
+<script>
+const container=document.getElementById("unity-container"),canvas=document.getElementById("unity-canvas"),loadingBar=document.getElementById("unity-loading-bar"),progressBarFull=document.getElementById("unity-progress-bar-full"),loadingText=document.getElementById("unity-loading-text"),warningBanner=document.getElementById("unity-warning"),gameTitle=document.getElementById("unity-game-title"),unityPreview=document.getElementById("unity-preview"),orientationWarning=document.getElementById("orientation-warning");
+function updateLoadingText(p){loadingText.innerText="Loading "+Math.round(p*100)+"%"}
+function unityShowBanner(msg,type){const d=document.createElement("div");d.innerHTML=msg;if(type==="error")d.style="background:red;padding:10px";else d.style="background:yellow;padding:10px";warningBanner.appendChild(d);if(type!=="error")setTimeout(()=>d.remove(),5000)}
+const buildUrl="Build",loaderUrl=buildUrl+"/TungTungSahur-ObbyChallenge-v.1.1.loader.js",config={dataUrl:buildUrl+"/TungTungSahur-ObbyChallenge-v.1.1.data.unityweb",frameworkUrl:buildUrl+"/TungTungSahur-ObbyChallenge-v.1.1.framework.js.unityweb",codeUrl:buildUrl+"/TungTungSahur-ObbyChallenge-v.1.1.wasm.unityweb",streamingAssetsUrl:"StreamingAssets",companyName:"Nexus",productName:"Tung Tung Sahur: Obby Challenge",productVersion:"0.1",showBanner:unityShowBanner};
+function checkOrientation(){const portrait=innerHeight>innerWidth,mobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);orientationWarning.style.display=mobile&&portrait?"flex":"none";container.style.display=mobile&&portrait?"none":"block"}
+addEventListener("orientationchange",()=>setTimeout(()=>{checkOrientation();location.reload()},300));addEventListener("resize",checkOrientation);addEventListener("load",checkOrientation);
+const script=document.createElement("script");script.src=loaderUrl;script.onload=()=>createUnityInstance(canvas,config,p=>{progressBarFull.style.width=100*p+"%";updateLoadingText(p)}).then(()=>{loadingBar.style.display="none";unityPreview.style.display="none";loadingText.style.display="none";gameTitle.style.display="none"}).catch(message=>alert(message));document.body.appendChild(script);
+</script></body></html>
