@@ -110,10 +110,6 @@
     "thumb": "thumbnails/Jetpack Joyride.svg"
   },
   {
-    "name": "Idle Breakout",
-    "thumb": "thumbnails/Idle Breakout.svg"
-  },
-  {
     "name": "Adventure Capitalist",
     "thumb": "thumbnails/Adventure Capitalist.svg"
   },
@@ -124,5 +120,53 @@
   {
     "name": "Sort the Court",
     "thumb": "thumbnails/Sort the Court.svg"
+  },
+  {
+    "name": "Pou",
+    "thumb": "thumbnails/Pou.svg"
+  },
+  {
+    "name": "Johnny Reflex",
+    "thumb": "thumbnails/Johnny Reflex.svg"
+  },
+  {
+    "name": "Color Clash",
+    "thumb": "thumbnails/Color Clash.svg"
+  },
+  {
+    "name": "Tap Rush",
+    "thumb": "thumbnails/Tap Rush.svg"
+  },
+  {
+    "name": "Meteor Dodge",
+    "thumb": "thumbnails/Meteor Dodge.svg"
+  },
+  {
+    "name": "Coin Catcher",
+    "thumb": "thumbnails/Coin Catcher.svg"
+  },
+  {
+    "name": "Neon Pong",
+    "thumb": "thumbnails/Neon Pong.svg"
+  },
+  {
+    "name": "Space Defender",
+    "thumb": "thumbnails/Space Defender.svg"
+  },
+  {
+    "name": "Memory Match",
+    "thumb": "thumbnails/Memory Match.svg"
+  },
+  {
+    "name": "Block Breaker",
+    "thumb": "thumbnails/Block Breaker.svg"
+  },
+  {
+    "name": "Maze Runner",
+    "thumb": "thumbnails/Maze Runner.svg"
+  },
+  {
+    "name": "Color Switch",
+    "thumb": "thumbnails/Color Switch.svg"
   }
 ]
