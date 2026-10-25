@@ -14,7 +14,7 @@ const art={logo:load('spore-assets/logo.svg'),bg:load('spore-assets/underwater.j
 let W=900,H=600,dpr=1,run=false,paused=false,dead=false,last=0,frame=0,stageNo=1,dna=0,mass=0,target=12,burst=0,cool=0,inv=0,toast=0,keys={},pointer=null,foods=[],foes=[],parts=[],bubbles=[];
 const p={x:0,y:0,vx:0,vy:0,r:18,a:0,hp:3,max:3};
 const rnd=(a,b)=>a+Math.random()*(b-a),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-function resize(){let r=stage.getBoundingClientRect();W=Math.max(300,r.width);H=Math.max(260,r.height);dpr=Math.min(2,devicePixelRatio||1);canvas.width=W*dpr;canvas.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);if(!p.x){p.x=W/2;p.y=H/2}draw()}
+function resize(){let r=stage.getBoundingClientRect();W=Math.max(300,r.width);H=Math.max(260,r.height);dpr=Math.min(2,devicePixelRatio||1);canvas.width=W*dpr;canvas.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);if(!p.x){p.x=W/2;p.y=H/2}else{p.x=clamp(p.x,p.r*1.3,W-p.r*1.3);p.y=clamp(p.y,p.r*1.3,H-p.r*1.3)}draw()}
 addEventListener('resize',resize);
 function hud(){$('stageN').textContent=String(stageNo).padStart(2,'0');$('dna').textContent=dna;$('mass').textContent=mass;$('massbar').style.width=Math.min(100,mass/target*100)+'%';$('hp').textContent='♥ '.repeat(p.hp)+'♡ '.repeat(p.max-p.hp);$('objective').textContent='OBJECTIVE · GROW '+mass+'/'+target+' · '+(p.hp?'SURVIVE':'EVOLUTION INTERRUPTED')}
 function reset(){stageNo=1;dna=0;mass=0;target=12;p.r=18;p.hp=p.max=3;p.x=W/2;p.y=H*.55;p.vx=p.vy=0;foods=[];foes=[];parts=[];bubbles=[];for(let i=0;i<100;i++)bubbles.push({x:rnd(0,W),y:rnd(0,H),r:rnd(.7,2.4),v:rnd(.15,.65),a:rnd(.08,.35)});for(let i=0;i<24;i++)food();for(let i=0;i<3;i++)enemy();hud()}
