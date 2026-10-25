@@ -1,66 +1,43 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#071817">
 <title>Online Mini Golf</title>
 <style>
-:root{color-scheme:dark;--ink:#f7f8f3;--muted:#aab8b0;--lime:#c8f36a;--panel:#132b2a}
-*{box-sizing:border-box}body{margin:0;background:#071817;color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif;min-height:100vh;display:grid;place-items:center;padding:18px}
-.app{width:min(1120px,100%)}header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}.brand{display:flex;align-items:center;gap:12px}.logo{width:48px;height:48px;border-radius:15px;background:var(--lime);color:#13201b;display:grid;place-items:center;font-size:26px;font-weight:1000;box-shadow:0 7px 28px #c8f36a25}h1{font-size:clamp(20px,4vw,32px);letter-spacing:-1.2px;margin:0} .sub{color:var(--muted);font-size:12px;margin-top:3px}.pill{border:1px solid #31504b;border-radius:999px;padding:9px 13px;color:#c5d7ce;font-size:12px;white-space:nowrap}
-.layout{display:grid;grid-template-columns:minmax(0,1fr) 245px;gap:14px}.course-wrap{background:#102725;border:1px solid #274541;border-radius:22px;padding:10px;box-shadow:0 20px 80px #0004;min-width:0}.canvasbox{position:relative;overflow:hidden;border-radius:15px;background:#244d3c}canvas{display:block;width:100%;height:auto;aspect-ratio:800/520;touch-action:none;cursor:crosshair}.hint{font-size:12px;color:#b8cbc0;padding:10px 7px 3px;display:flex;justify-content:space-between;gap:10px}.side{display:flex;flex-direction:column;gap:12px}.panel{border:1px solid #274541;background:var(--panel);border-radius:18px;padding:16px}.eyebrow{font-size:10px;letter-spacing:1.6px;color:#91b4a5;font-weight:800;text-transform:uppercase}.score{font-size:34px;font-weight:850;letter-spacing:-1.5px;margin:5px 0}.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:13px}.stat{background:#0b201f;border-radius:12px;padding:10px}.stat small{display:block;color:#8da99c;font-size:10px;text-transform:uppercase;letter-spacing:1px}.stat strong{font-size:19px;display:block;margin-top:4px}.powerbar{height:9px;border-radius:99px;background:#28433b;overflow:hidden;margin:12px 0 6px}.powerfill{height:100%;width:0;background:linear-gradient(90deg,#9bdc4d,#e7ff9b);border-radius:99px;transition:width .08s}.btn{width:100%;border:0;border-radius:12px;background:var(--lime);color:#172219;font-weight:850;font-size:13px;padding:13px 12px;cursor:pointer;margin-top:8px}.btn.secondary{background:#213e39;color:#e0eee5;border:1px solid #34564e}.holes{display:flex;gap:7px;margin-top:12px}.hole{flex:1;background:#0b201f;border:1px solid #284741;border-radius:10px;padding:9px 4px;text-align:center;font-size:12px;color:#aac1b5}.hole.active{border-color:var(--lime);color:var(--lime);background:#253c28}.notice{font-size:12px;line-height:1.5;color:#b5c9bd;margin:0}.overlay{position:absolute;inset:0;display:none;place-items:center;background:#071817bd;backdrop-filter:blur(5px);text-align:center;padding:20px}.overlay.show{display:grid}.modal{max-width:300px}.modal h2{font-size:30px;margin:0 0 8px;letter-spacing:-1px}.modal p{color:#c1d0c7;font-size:13px;line-height:1.5}.mobilehint{display:none}
-@media(max-width:760px){body{padding:10px}.layout{grid-template-columns:1fr}.side{display:grid;grid-template-columns:1fr 1fr}.panel:first-child{grid-column:1/-1}.course-wrap{padding:6px}.hint{font-size:10px}.pill{display:none}.panel{padding:13px}.mobilehint{display:inline}}
+:root{color-scheme:dark;--lime:#c8f36a;--panel:#132b2a;--muted:#b4c9bf}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#071817;color:#f7f8f3;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+body{display:flex;flex-direction:column;min-height:100%;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+header{display:flex;align-items:center;gap:12px;padding:12px 16px;background:#0b201f;border-bottom:1px solid #284741;flex-wrap:wrap}
+.logo{width:42px;height:42px;display:grid;place-items:center;background:var(--lime);color:#172219;border-radius:13px;font-size:24px}
+.brand{flex:1;min-width:180px}h1{font-size:clamp(20px,4vw,28px);margin:0;letter-spacing:-.8px}.sub{font-size:12px;color:var(--muted);margin-top:2px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+a.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;font-size:13px;font-weight:800;padding:11px 14px;border-radius:11px;background:var(--lime);color:#172219}
+a.btn.secondary{background:#203d38;color:#eff8f0;border:1px solid #36564d}
+main{flex:1;min-height:0;display:flex;flex-direction:column;padding:12px;gap:10px}
+.note{background:#132b2a;border:1px solid #284741;border-radius:14px;padding:11px 14px;font-size:13px;line-height:1.45;color:#d2e2d8}
+.note strong{color:var(--lime)}.framewrap{position:relative;flex:1;min-height:320px;border:1px solid #284741;border-radius:16px;overflow:hidden;background:#102725}
+iframe{width:100%;height:100%;min-height:320px;border:0;background:#102725}
+footer{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:0 12px 12px}
+@media(max-width:520px){header{padding:10px}.actions{width:100%}.actions .btn{flex:1}main{padding:8px}.note{font-size:12px}.framewrap,iframe{min-height:360px}}
 </style>
 </head>
-<body><main class="app">
-<header><div class="brand"><div class="logo">⛳</div><div><h1>MINI GOLF <span style="color:var(--lime)">CLUB</span></h1><div class="sub">A tiny course. A big putting problem.</div></div></div><div class="pill">SOLO ROUND · 3 HOLES</div></header>
-<div class="layout"><section class="course-wrap"><div class="canvasbox"><canvas id="game" width="800" height="520" aria-label="Mini golf course"></canvas><div class="overlay show" id="overlay"><div class="modal"><h2 id="ovTitle">Ready to putt?</h2><p id="ovText">Drag back from the ball to aim and set power. Release to putt. Get the ball into the cup in as few shots as possible.</p><button class="btn" id="ovBtn">TEE OFF</button></div></div></div><div class="hint"><span>↗ Drag back from ball to aim · release to shoot</span><span><span class="mobilehint">Touch ready</span> <b style="color:#d9f7a0">PAR 3</b></span></div></section>
-<aside class="side"><div class="panel"><div class="eyebrow">Current hole</div><div class="score" id="holeName">01 <span style="font-size:15px;color:#a5bcb0">/ 03</span></div><div class="stats"><div class="stat"><small>Strokes</small><strong id="strokes">0</strong></div><div class="stat"><small>Total</small><strong id="total">0</strong></div></div><div class="holes" id="holes"><div class="hole active">HOLE 1</div><div class="hole">HOLE 2</div><div class="hole">HOLE 3</div></div></div>
-<div class="panel"><div class="eyebrow">Shot power</div><div class="score" style="font-size:24px" id="powerText">0%</div><div class="powerbar"><div class="powerfill" id="powerFill"></div></div><p class="notice" id="status">Pull back from the ball to line up your shot.</p><button class="btn secondary" id="reset">RESET HOLE ↺</button><button class="btn secondary" id="next" style="display:none">NEXT HOLE →</button></div>
-<div class="panel"><div class="eyebrow">The rules</div><p class="notice">Avoid the rough. Bounce off bumpers. Sink the ball to move on. Lowest score wins — even if it's just you.</p></div></aside></div></main>
-<script>
-(()=>{
-const c=document.getElementById('game'),ctx=c.getContext('2d'),W=800,H=520;
-const holes=[
-{start:{x:105,y:260},cup:{x:700,y:260},walls:[{x:45,y:90,w:710,h:340}],obstacles:[{x:360,y:145,w:25,h:110},{x:455,y:265,w:25,h:110}],bumpers:[{x:250,y:205,r:18},{x:565,y:315,r:20}]},
-{start:{x:100,y:410},cup:{x:700,y:105},walls:[{x:45,y:55,w:710,h:410}],obstacles:[{x:190,y:55,w:26,h:250},{x:340,y:215,w:26,h:250},{x:490,y:55,w:26,h:250},{x:640,y:215,w:26,h:250}],bumpers:[{x:270,y:370,r:17},{x:570,y:150,r:18}]},
-{start:{x:105,y:260},cup:{x:700,y:260},walls:[{x:45,y:75,w:710,h:370}],obstacles:[{x:235,y:75,w:28,h:220},{x:385,y:225,w:28,h:220},{x:535,y:75,w:28,h:220}],bumpers:[{x:320,y:170,r:22},{x:480,y:350,r:22},{x:640,y:190,r:17}]}
-];
-let hi=0,ball,strokes=0,total=0,done=false,allDone=false,aim=null,pointer=null,particles=[],last=0;
-function initHole(){const h=holes[hi];ball={x:h.start.x,y:h.start.y,vx:0,vy:0,r:10};strokes=0;done=false;aim=null;document.getElementById('next').style.display='none';document.getElementById('strokes').textContent=0;document.getElementById('holeName').innerHTML=String(hi+1).padStart(2,'0')+' <span style="font-size:15px;color:#a5bcb0">/ 03</span>';document.getElementById('status').textContent='Pull back from the ball to line up your shot.';document.getElementById('holes').innerHTML=holes.map((_,i)=>'<div class="hole '+(i===hi?'active':'')+'">HOLE '+(i+1)+'</div>').join('');hideOverlay();draw()}
-function showOverlay(title,text,button){document.getElementById('ovTitle').textContent=title;document.getElementById('ovText').textContent=text;document.getElementById('ovBtn').textContent=button;document.getElementById('overlay').classList.add('show')}
-function hideOverlay(){document.getElementById('overlay').classList.remove('show')}
-function roundRect(x,y,w,h,r,fill){ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fillStyle=fill;ctx.fill()}
-function draw(){ctx.clearRect(0,0,W,H);const h=holes[hi];ctx.fillStyle='#183c2e';ctx.fillRect(0,0,W,H);
-ctx.save();ctx.shadowColor='#071b13';ctx.shadowBlur=20;roundRect(45,55,710,410,20,'#72a95c');ctx.restore();
-roundRect(53,63,694,394,15,'#8bc66d');
-for(let y=70;y<450;y+=26){ctx.fillStyle=(Math.floor(y/26)%2)?'#ffffff08':'#173d1e08';ctx.fillRect(55,y,690,13)}
-// course border
-ctx.strokeStyle='#d6efb2';ctx.lineWidth=5;ctx.beginPath();ctx.roundRect(45,55,710,410,20);ctx.stroke();
-// bunkers and water
-if(hi===1){roundRect(555,300,140,115,35,'#4bafbd');ctx.strokeStyle='#8ee3e7';ctx.lineWidth=3;ctx.stroke();ctx.fillStyle='#ffffff2a';for(let i=0;i<5;i++){ctx.beginPath();ctx.ellipse(580+i*22,325+(i%2)*26,12,4,.2,0,Math.PI*2);ctx.fill()}}
-if(hi===2){ctx.fillStyle='#d5bd81';ctx.beginPath();ctx.ellipse(150,130,50,30,-.4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#e7d39d';for(let i=0;i<18;i++){ctx.beginPath();ctx.arc(130+(i*17)%42,120+(i*13)%24,1.8,0,7);ctx.fill()}}
-for(const o of h.obstacles){roundRect(o.x,o.y,o.w,o.h,8,'#285c3b');roundRect(o.x+3,o.y+3,o.w-6,o.h-6,6,'#397b4b');ctx.strokeStyle='#a8d58a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(o.x+6,o.y+10);ctx.lineTo(o.x+6,o.y+o.h-10);ctx.stroke()}
-for(const b of h.bumpers){ctx.beginPath();ctx.arc(b.x,b.y,b.r+3,0,7);ctx.fillStyle='#244b38';ctx.fill();ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,7);ctx.fillStyle='#e4f49d';ctx.fill();ctx.beginPath();ctx.arc(b.x-5,b.y-6,b.r*.35,0,7);ctx.fillStyle='#ffffff99';ctx.fill()}
-const cup=h.cup;ctx.beginPath();ctx.ellipse(cup.x+3,cup.y+4,17,12,0,0,7);ctx.fillStyle='#224b32';ctx.fill();ctx.beginPath();ctx.arc(cup.x,cup.y,13,0,7);ctx.fillStyle='#143324';ctx.fill();ctx.beginPath();ctx.arc(cup.x,cup.y,9,0,7);ctx.fillStyle='#06130d';ctx.fill();ctx.strokeStyle='#b8d6a0';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(cup.x,cup.y-3);ctx.lineTo(cup.x,cup.y-55);ctx.stroke();ctx.beginPath();ctx.moveTo(cup.x+1,cup.y-54);ctx.lineTo(cup.x+30,cup.y-45);ctx.lineTo(cup.x+1,cup.y-36);ctx.closePath();ctx.fillStyle='#e7f7c2';ctx.fill();
-ctx.fillStyle='#f1f5e7';ctx.font='bold 12px system-ui';ctx.fillText('START',h.start.x-21,h.start.y+32);
-// aim trajectory
-if(aim&&!moving()&&!done){const dx=ball.x-aim.x,dy=ball.y-aim.y,mag=Math.hypot(dx,dy),power=Math.min(mag,130);if(mag>3){const ux=dx/mag,uy=dy/mag;ctx.setLineDash([5,8]);ctx.strokeStyle='#f4ffd1aa';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(ball.x,ball.y);ctx.lineTo(ball.x+ux*power*2.1,ball.y+uy*power*2.1);ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.arc(ball.x+ux*power*2.1,ball.y+uy*power*2.1,5,0,7);ctx.strokeStyle='#f4ffd1';ctx.stroke();document.getElementById('powerText').textContent=Math.round(power/130*100)+'%';document.getElementById('powerFill').style.width=(power/130*100)+'%'}}
-ctx.beginPath();ctx.ellipse(ball.x+2,ball.y+5,ball.r+2,ball.r*.75,0,0,7);ctx.fillStyle='#24482c77';ctx.fill();ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,7);ctx.fillStyle='#fffef0';ctx.fill();ctx.strokeStyle='#c8d5b7';ctx.lineWidth=1.5;ctx.stroke();ctx.beginPath();ctx.arc(ball.x-3,ball.y-4,3,0,7);ctx.fillStyle='#fff';ctx.fill();
-for(const p of particles){ctx.globalAlpha=Math.max(0,p.life/30);ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fill();ctx.globalAlpha=1}
-}
-function moving(){return Math.hypot(ball.vx,ball.vy)>.12}
-function collide(){const h=holes[hi];let bx=ball.x,by=ball.y;for(const o of h.obstacles){if(bx+ball.r>o.x&&bx-ball.r<o.x+o.w&&by+ball.r>o.y&&by-ball.r<o.y+o.h){const left=Math.abs((bx+ball.r)-o.x),right=Math.abs(o.x+o.w-(bx-ball.r)),top=Math.abs((by+ball.r)-o.y),bottom=Math.abs(o.y+o.h-(by-ball.r)),m=Math.min(left,right,top,bottom);if(m===left){ball.x=o.x-ball.r;ball.vx=-Math.abs(ball.vx)*.72}else if(m===right){ball.x=o.x+o.w+ball.r;ball.vx=Math.abs(ball.vx)*.72}else if(m===top){ball.y=o.y-ball.r;ball.vy=-Math.abs(ball.vy)*.72}else{ball.y=o.y+o.h+ball.r;ball.vy=Math.abs(ball.vy)*.72}}}
-for(const b of h.bumpers){let dx=ball.x-b.x,dy=ball.y-b.y,d=Math.hypot(dx,dy),min=ball.r+b.r;if(d<min){if(d===0)d=.01;dx/=d;dy/=d;ball.x=b.x+dx*min;ball.y=b.y+dy*min;const dot=ball.vx*dx+ball.vy*dy;ball.vx=(ball.vx-2*dot*dx)*.9;ball.vy=(ball.vy-2*dot*dy)*.9}}
-if(ball.x<56+ball.r){ball.x=56+ball.r;ball.vx=Math.abs(ball.vx)*.75}if(ball.x>744-ball.r){ball.x=744-ball.r;ball.vx=-Math.abs(ball.vx)*.75}if(ball.y<66+ball.r){ball.y=66+ball.r;ball.vy=Math.abs(ball.vy)*.75}if(ball.y>454-ball.r){ball.y=454-ball.r;ball.vy=-Math.abs(ball.vy)*.75}}
-function frame(t){const dt=Math.min((t-last)/16.67||1,2);last=t;if(moving()&&!done){ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;collide();const f=Math.pow(.985,dt);ball.vx*=f;ball.vy*=f;if(Math.hypot(ball.vx,ball.vy)<.12){ball.vx=ball.vy=0}const cup=holes[hi].cup;if(Math.hypot(ball.x-cup.x,ball.y-cup.y)<14&&Math.hypot(ball.vx,ball.vy)<3){ball.x=cup.x;ball.y=cup.y;ball.vx=ball.vy=0;done=true;total+=strokes;document.getElementById('total').textContent=total;document.getElementById('status').textContent='Nice putt! Hole cleared.';document.getElementById('next').style.display='block';document.getElementById('next').textContent=hi===2?'SEE FINAL SCORE →':'NEXT HOLE →';for(let i=0;i<35;i++)particles.push({x:cup.x,y:cup.y,vx:(Math.random()-.5)*7,vy:(Math.random()-.5)*7,r:2+Math.random()*3,life:30,color:['#efffc2','#d7ef9b','#fff'][i%3]})}}
-for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.life--}particles=particles.filter(p=>p.life>0);draw();requestAnimationFrame(frame)}
-function pos(e){const r=c.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}}
-c.addEventListener('pointerdown',e=>{if(done||moving()||allDone)return;const p=pos(e);if(Math.hypot(p.x-ball.x,p.y-ball.y)<45){aim=p;c.setPointerCapture(e.pointerId)}});
-c.addEventListener('pointermove',e=>{if(aim){aim=pos(e);draw()}});
-c.addEventListener('pointerup',e=>{if(!aim)return;const p=pos(e),dx=ball.x-p.x,dy=ball.y-p.y,mag=Math.hypot(dx,dy);aim=null;if(mag>5){const power=Math.min(mag,130);ball.vx=dx/mag*power*.16;ball.vy=dy/mag*power*.16;strokes++;document.getElementById('strokes').textContent=strokes;document.getElementById('status').textContent='Ball rolling… line up your next shot when it stops.'}draw()});
-document.getElementById('reset').onclick=()=>{if(allDone){total=0;hi=0;allDone=false;document.getElementById('total').textContent='0'}initHole()};
-document.getElementById('next').onclick=()=>{if(hi<2){hi++;initHole()}else{allDone=true;showOverlay('Round complete!', 'You finished 3 holes in '+total+' strokes. '+(total<=9?'Tour-level putting!':total<=15?'Solid round. One more?':'The course got you this time. Go again?'),'PLAY AGAIN');document.getElementById('next').style.display='none'}};
-document.getElementById('ovBtn').onclick=()=>{if(allDone){hi=0;total=0;document.getElementById('total').textContent='0';allDone=false}initHole()};
-initHole();showOverlay('Ready to putt?','Drag back from the ball to aim and set power. Release to putt. Get the ball into the cup in as few shots as possible.','TEE OFF');requestAnimationFrame(frame);
-})();
-</script></body></html>
+<body>
+<header>
+ <div class="logo">⛳</div>
+ <div class="brand"><h1>ONLINE MINI GOLF</h1><div class="sub">Play with friends · no download needed</div></div>
+ <div class="actions">
+  <a class="btn" href="https://foony.com/games/mini-golf" target="_blank" rel="noopener">PLAY WITH FRIENDS ↗</a>
+  <a class="btn secondary" href="Mini%20Golf%20Classic.html">Solo Classic</a>
+ </div>
+</header>
+<main>
+ <div class="note"><strong>Multiplayer:</strong> Foony lets you create a room and share its link with friends; guests can join without an account. If the game doesn't load below, use <b>PLAY WITH FRIENDS ↗</b> to open it directly, then share the room link from there.</div>
+ <section class="framewrap" aria-label="Multiplayer mini golf game">
+  <iframe id="game" title="Foony Penguin Mini Golf" src="https://foony.com/games/mini-golf" allow="fullscreen; autoplay; gamepad; clipboard-read; clipboard-write" allowfullscreen loading="eager" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+ </section>
+</main>
+<footer><a class="btn secondary" href="https://foony.com/games/mini-golf" target="_blank" rel="noopener">Open game in new tab</a><a class="btn secondary" href="https://foony.com" target="_blank" rel="noopener">More Foony games</a></footer>
+</body>
+</html>
