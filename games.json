@@ -42,6 +42,9 @@
     "name": "Drive Mad"
   },
   {
+    "name": "Five Nights At Johnny's"
+  },
+  {
     "name": "Fruit Ninja"
   },
   {
@@ -52,6 +55,9 @@
   },
   {
     "name": "Among Us"
+  },
+  {
+    "name": "Johnny Obby"
   },
   {
     "name": "Monkey Mart"
@@ -114,5 +120,9 @@
   {
     "name": "Pou",
     "thumb": "thumbnails/Pou.svg"
+  },
+  {
+    "name": "Sort the Court",
+    "thumb": "thumbnails/Sort the Court.svg"
   }
 ]
