@@ -42,9 +42,6 @@
     "name": "Drive Mad"
   },
   {
-    "name": "Five Nights At Johnny's"
-  },
-  {
     "name": "Fruit Ninja"
   },
   {
@@ -55,9 +52,6 @@
   },
   {
     "name": "Among Us"
-  },
-  {
-    "name": "Johnny Obby"
   },
   {
     "name": "Monkey Mart"
@@ -118,55 +112,7 @@
     "thumb": "thumbnails/Burrito Bison Revenge.svg"
   },
   {
-    "name": "Sort the Court",
-    "thumb": "thumbnails/Sort the Court.svg"
-  },
-  {
     "name": "Pou",
     "thumb": "thumbnails/Pou.svg"
-  },
-  {
-    "name": "Johnny Reflex",
-    "thumb": "thumbnails/Johnny Reflex.svg"
-  },
-  {
-    "name": "Color Clash",
-    "thumb": "thumbnails/Color Clash.svg"
-  },
-  {
-    "name": "Tap Rush",
-    "thumb": "thumbnails/Tap Rush.svg"
-  },
-  {
-    "name": "Meteor Dodge",
-    "thumb": "thumbnails/Meteor Dodge.svg"
-  },
-  {
-    "name": "Coin Catcher",
-    "thumb": "thumbnails/Coin Catcher.svg"
-  },
-  {
-    "name": "Orb Hunter",
-    "thumb": "thumbnails/Orb Hunter.svg"
-  },
-  {
-    "name": "Space Tapper",
-    "thumb": "thumbnails/Space Tapper.svg"
-  },
-  {
-    "name": "Quick Click",
-    "thumb": "thumbnails/Quick Click.svg"
-  },
-  {
-    "name": "Neon Dash",
-    "thumb": "thumbnails/Neon Dash.svg"
-  },
-  {
-    "name": "Star Catcher",
-    "thumb": "thumbnails/Star Catcher.svg"
-  },
-  {
-    "name": "Color Pop",
-    "thumb": "thumbnails/Color Pop.svg"
   }
 ]
