@@ -53,6 +53,8 @@ if(!name||/[\/\\]|\.\./.test(name)){
 document.title=name;
 $('title').textContent=name;
 var src='games/'+encodeURIComponent(name)+'.html';
+// Cache-bust the multiplayer mini-golf launcher so browsers don't keep showing the old solo game.
+if(name==='Online Mini Golf') src+='?v=multiplayer-20261025';
 
 function load(){
  var w=$('wrap');w.innerHTML='';
