@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101522">
+<base href="https://cdn.jsdelivr.net/gh/bubbls/UGS-Assets@main/sort-court/">
+<title>Sort the Court — Johnny Games</title>
+<link rel="stylesheet" href="TemplateData/style.css">
+<style>
+html,body{margin:0;width:100%;height:100%;min-height:100%;background:#101522;overflow:auto}
+body{display:flex;flex-direction:column;align-items:center;color:#fff}
+.template{width:100%;max-width:1100px;margin:0 auto}
+.header{display:none!important}
+.template-wrap{width:100%!important;max-width:960px!important;margin:0 auto!important;padding:0!important}
+#canvas{width:100%!important;height:auto!important;aspect-ratio:16/9;max-height:calc(100dvh - 24px);display:block;background:#000}
+.footer{display:none!important}
+.fullscreen img{cursor:pointer}
+</style>
+<script src="TemplateData/UnityProgress.js"></script>
+</head>
+<body class="template">
+<div class="template-wrap clear">
+<canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" width="960" height="540"></canvas>
+<div class="logo"></div>
+<div class="fullscreen"><img src="TemplateData/fullscreen.png" width="38" height="38" alt="Fullscreen" title="Fullscreen" onclick="SetFullscreen(1);"></div>
+<div class="title">Sort the Court!</div>
+</div>
+<script>
+var Module={
+ TOTAL_MEMORY:268435456,
+ errorhandler:function(message,url,line){console.error("Sort the Court error:",message,url,line);return false;},
+ compatibilitycheck:null,
+ dataUrl:"Release/WebGL.data",
+ codeUrl:"Release/WebGL.js",
+ memUrl:"Release/WebGL.mem"
+};
+</script>
+<script src="Release/UnityLoader.js"></script>
+</body>
+</html>
