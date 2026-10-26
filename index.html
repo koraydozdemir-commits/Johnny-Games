@@ -213,7 +213,7 @@ function removeMessage(key){return fetch(DB+'/chat/'+encodeURIComponent(key)+'.j
 function keyTime(k){var chars='-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz',t=0;if(!k||k.length<8)return 0;for(var i=0;i<8;i++){var n=chars.indexOf(k.charAt(i));if(n<0)return 0;t=t*64+n}return t}
 function poll(){
  if(pollBusy)return;pollBusy=true;
- fetch(DB+'/chat.json?orderBy="$key"&limitToLast=100').then(function(r){if(!r.ok)throw new Error('Chat unavailable');return r.json()}).then(function(d){
+ fetch(DB+'/chat.json').then(function(r){if(!r.ok)throw new Error('Chat unavailable');return r.json()}).then(function(d){
   if(!d){cm.innerHTML='';setStatus('No messages yet — start the conversation!');return}
   var keys=Object.keys(d).sort(),now=Date.now(),a=[],expired=[];
   keys.forEach(function(k){var m=d[k];if(!m||!m.n||!m.m)return;var ts=Number(m.t)||keyTime(k);
