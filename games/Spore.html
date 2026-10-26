@@ -337,6 +337,17 @@ body.cellEditorMode #gameReticle{display:none!important}
 #worldWaypoint[data-kind="food"]{border-color:#9de4b4}
 @media(max-width:850px){#worldWaypoint{max-width:150px;padding:4px 8px 4px 5px;gap:6px}.waypointArrow{width:25px;height:25px;font-size:15px}.waypointText b{font-size:8px}.waypointText small{font-size:7px}}
 body.cellEditorMode #worldWaypoint{display:none!important}
+
+#intro .options #eggPlant,#intro .options #eggCarn,#intro .options #eggOmni{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:103px;min-width:116px;padding:10px 12px 12px;font:700 11px/1.2 Georgia,serif;letter-spacing:.025em;border-radius:16px}
+#intro .options #eggPlant:before,#intro .options #eggCarn:before,#intro .options #eggOmni:before{content:"";display:block;width:31px;height:42px;border-radius:51% 49% 44% 44%;border:2px solid #ffffff74;box-shadow:inset -4px -5px 7px #06152c77,inset 5px 4px 7px #fff8,0 4px 7px #0006}
+#intro .options #eggPlant:before{background:radial-gradient(ellipse at 34% 25%,#e1ffd9 0,#7edaa2 29%,#287b62 72%,#143b39 100%)}
+#intro .options #eggCarn:before{background:radial-gradient(ellipse at 34% 25%,#ffe2cf 0,#e98b89 30%,#943c5c 72%,#3b213b 100%)}
+#intro .options #eggOmni:before{background:radial-gradient(ellipse at 34% 25%,#e7f1ff 0,#9eaee7 30%,#565cb0 72%,#252b62 100%)}
+#intro .options #eggPlant:after,#intro .options #eggCarn:after,#intro .options #eggOmni:after{content:"";position:absolute;width:8px;height:17px;border-radius:50%;background:#ffffff77;filter:blur(2px);transform:translate(-5px,-11px);pointer-events:none}
+#intro .options #eggPlant,#intro .options #eggCarn,#intro .options #eggOmni{position:relative}
+#intro .options #eggPlant.selectedEgg:before,#intro .options #eggCarn.selectedEgg:before,#intro .options #eggOmni.selectedEgg:before{box-shadow:inset -4px -5px 7px #06152c77,inset 5px 4px 7px #fff8,0 0 0 3px #fff0bd,0 0 23px #e3f2c9aa,0 4px 7px #0006;transform:translateY(-2px)}
+#intro .options #eggPlant.selectedEgg,#intro .options #eggCarn.selectedEgg,#intro .options #eggOmni.selectedEgg{transform:translateY(-2px);border-color:#fff0bd}
+@media(max-width:850px){#intro .options #eggPlant,#intro .options #eggCarn,#intro .options #eggOmni{min-width:0;min-height:92px;padding:8px 4px;font-size:9px}#intro .options #eggPlant:before,#intro .options #eggCarn:before,#intro .options #eggOmni:before{width:26px;height:34px}}
 </style>
 </head>
 <body>
