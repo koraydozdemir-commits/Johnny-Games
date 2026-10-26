@@ -55,6 +55,16 @@ h2{font-size:15px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em
 .rnd{background:linear-gradient(90deg,#7c5cff,#22d3ee);border-color:transparent;color:#fff}
 .about{max-width:900px;margin:36px auto 90px;padding:0 20px;color:var(--dim);font-size:15px;line-height:1.6}
 .about h2{color:var(--txt);text-transform:none;letter-spacing:0;font-size:20px}
+.feedback{max-width:900px;margin:0 auto 100px;padding:0 20px}
+.feedback-inner{display:flex;align-items:center;gap:16px;padding:22px;background:linear-gradient(135deg,rgba(124,92,255,.18),rgba(34,211,238,.08));border:1px solid var(--line);border-radius:18px}
+.feedback-icon{flex:0 0 48px;width:48px;height:48px;display:grid;place-items:center;border-radius:14px;background:var(--acc);color:#fff;font-size:25px}
+.feedback-copy{flex:1;min-width:0}
+.feedback-copy h2{margin:0 0 5px;color:var(--txt);text-transform:none;letter-spacing:0;font-size:20px}
+.feedback-copy p{margin:0;color:var(--dim);font-size:14px}
+.feedback-link{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border-radius:12px;background:var(--acc);color:#fff;text-decoration:none;font-weight:700;white-space:nowrap}
+.feedback-link:hover{filter:brightness(1.12)}
+@media(max-width:560px){.feedback-inner{align-items:flex-start;flex-wrap:wrap}.feedback-copy{flex:1 1 calc(100% - 70px)}.feedback-link{width:100%}}
+
 #cbtn{position:fixed;right:calc(16px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));z-index:20;min-height:52px;padding:0 20px;border-radius:26px;border:0;background:var(--acc);color:#fff;font:700 16px inherit;font-family:inherit;box-shadow:0 6px 20px rgba(0,0,0,.5)}
 #chat{position:fixed;right:calc(12px + env(safe-area-inset-right));bottom:calc(76px + env(safe-area-inset-bottom));z-index:20;width:min(380px,calc(100vw - 24px));height:min(480px,60vh);display:none;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden}
 #chat.on{display:flex}
@@ -89,6 +99,16 @@ h2{font-size:15px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em
 <section class="about"><h2>Free unblocked games you can play anywhere</h2>
 <p>Johnny Games is a free collection of unblocked browser games. There is nothing to download and no account to make. Every game runs right in your browser, and the site is built to work well on iPad Safari, Chromebooks, phones and desktop computers.</p>
 <p>Search the list, tap the heart to save your favorite games, and jump back into the ones you played recently. Add the site to your iPad Home Screen to launch it like an app.</p></section>
+<section class="feedback" aria-labelledby="feedbackTitle">
+ <div class="feedback-inner">
+  <div class="feedback-icon" aria-hidden="true">&#9993;</div>
+  <div class="feedback-copy">
+   <h2 id="feedbackTitle">Help improve Johnny Games</h2>
+   <p>Got a suggestion, found a broken game, or have an idea for the site? Send your feedback!</p>
+  </div>
+  <a class="feedback-link" href="https://forms.gle/5QXE8RFMUHAxRxx16" target="_blank" rel="noopener noreferrer">Send Feedback &#8599;</a>
+ </div>
+</section>
 <button id="cbtn">&#128172; Chat</button>
 <div id="chat"><div id="cnote">Be kind. Messages are public. Spam and abuse get deleted.</div><div id="cmsgs"></div>
 <form id="cform"><input id="cin" maxlength="200" placeholder="Say something..." autocomplete="off"><button>Send</button></form></div>
