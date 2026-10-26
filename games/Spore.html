@@ -598,7 +598,7 @@ function updateAI(dt,time){
   const u=e.userData;if(!u.alive)return;if(u.tailGroups)u.tailGroups.forEach((tail,i)=>{tail.rotation.z=Math.sin(time*(u.alpha?6:8)+u.phase+i*1.7)*.13});if(u.mate)return;
   if(u.epic){e.position.x+=u.velocity.x*dt;e.position.y+=u.velocity.y*dt;if(e.position.x>player.position.x+cameraZoom*1.2){e.position.x=player.position.x-cameraZoom*1.2;e.position.y=player.position.y+(Math.random()-.5)*cameraZoom}if(distance2D(e.position,player.position)<u.size+state.scale)hurt(70,'The macro-predator struck!');return}
   if(u.stunned>0){u.stunned-=dt;e.rotation.z+=Math.sin(time*20)*dt*.25;return}
-  e.scale.set(u.size*(1+Math.sin(time*3+u.phase)*.012),u.size*(1+Math.sin(time*4.2+u.phase)*.024),u.size);const playerDist=distance2D(e.position,player.position),isSmall=u.size<playerSize*.88,isBig=u.size>playerSize*1.18;
+  e.scale.set(u.size*(1+Math.sin(time*3+u.phase)*.012),u.size*(1+Math.sin(time*4.2+u.phase)*.024),u.size);const playerDist=distance2D(e.position,player.position),isSmall=u.size<playerSize*.88,isBig=u.size>playerSize*1.18||u.alpha,playerBigger=playerSize>u.size*1.18;
   let target=null,targetFood=null,prey=null;
   if(u.diet==='meat'){
    let nearest=Infinity;
@@ -606,7 +606,7 @@ function updateAI(dt,time){
    if(prey){target=prey.position;u.state='hunt'}
    else if(playerDist<9&&isBig){target=player.position;u.state='hunt'}
   }
-  if(!target&&isSmall&&(playerThreat||isBig)&&playerDist<8&&u.diet!=='meat'){
+  if(!target&&isSmall&&(playerThreat||playerBigger)&&playerDist<8&&u.diet!=='meat'){
    u.state='flee';const away=new THREE.Vector2(e.position.x-player.position.x,e.position.y-player.position.y);if(away.length()<.01)away.set(Math.random()-.5,Math.random()-.5);away.normalize();u.velocity.x+=away.x*dt*7.5;u.velocity.y+=away.y*dt*7.5;
   }else if(!target){
    u.state='forage';let best=null,bestFood=null,bd=Infinity;food.forEach(f=>{if(!f.userData.alive)return;const canEat=u.diet==='plant'?f.userData.type==='plant':f.userData.type==='meat';if(!canEat)return;const d=f.position.distanceTo(e.position);if(d<bd){bd=d;best=f.position;bestFood=f}});
