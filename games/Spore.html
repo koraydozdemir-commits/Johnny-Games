@@ -442,7 +442,36 @@ function updateAI(dt,time){
 }
 function updateVisibility(){const sight=8+stats().sight*1.9;food.forEach(f=>{f.visible=!!f.userData.alive&&f.position.distanceTo(player.position)<sight});enemies.forEach(e=>{e.visible=!!e.userData.alive&&(e.position.distanceTo(player.position)<sight+2||e.userData.mate)});meteors.forEach(m=>{m.visible=!!m.userData.alive&&m.position.distanceTo(player.position)<sight+4});hazards.forEach(h=>{h.visible=h.position.distanceTo(player.position)<sight+3})}
 
-function updateFood(dt,time){food.forEach(f=>{if(!f.userData.alive)return;f.rotation.y+=dt*.5;f.position.x+=Math.sin(time+f.userData.phase)*dt*.09;f.position.y+=Math.cos(time*.8+f.userData.phase)*dt*.07;currents.forEach(c=>{if(f.position.distanceTo(c.position)<3){f.position.x+=c.userData.force.x*dt*.4;f.position.y+=c.userData.force.y*dt*.4}});const d=f.position.distanceTo(player.position),s=stats(),mouthReach=parts.some(p=>p.id==='proboscis')?1.38:parts.some(p=>p.id==='filter')?1.02:.72;if(d<mouthReach*state.scale&&compatible(f.userData.type))eat(f);else if(d<(mouthReach+.48)*state.scale&&compatible(f.userData.type)){f.position.lerp(new THREE.Vector3(player.position.x,player.position.y,.2),dt*(parts.some(p=>p.id==='proboscis')?1.3:.8))}});meteors.forEach(m=>{m.rotation.y+=dt*.8;m.userData.life-=dt;if(m.position.distanceTo(player.position)<.85*state.scale){spawnBurst(m.position.x,m.position.y,0xffdd80,20);playSfx('meteor');state.dna+=2;state.discoveries++;const unlockedPart=meteorUnlock();m.userData.alive=false;meteorGroup.remove(m);updateHUD();toast('Meteor fragment collected · +2 DNA'+(unlockedPart?' · '+unlockedPart+' discovered':''))}else if(m.userData.life<=0){m.userData.alive=false;meteorGroup.remove(m)}});meteors=meteors.filter(m=>m.userData.alive)}
+function updateFood(dt,time){
+ const s=stats(),mouths=parts.filter(p=>p.def.cat==='Mouths');
+ const mouthWorld=p=>new THREE.Vector2(p.x,p.y).multiplyScalar(state.scale).rotateAround(new THREE.Vector2(0,0),player.rotation.z).add(new THREE.Vector2(player.position.x,player.position.y));
+ food.forEach(f=>{
+  if(!f.userData.alive)return;
+  f.rotation.y+=dt*.5;
+  f.position.x+=Math.sin(time+f.userData.phase)*dt*.09;
+  f.position.y+=Math.cos(time*.8+f.userData.phase)*dt*.07;
+  currents.forEach(cur=>{if(f.position.distanceTo(cur.position)<3){f.position.x+=cur.userData.force.x*dt*.4;f.position.y+=cur.userData.force.y*dt*.4}});
+  if(!mouths.length||!compatible(f.userData.type))return;
+  const fp=new THREE.Vector2(f.position.x,f.position.y);
+  let nearest=Infinity,target=null,reach=.52;
+  mouths.forEach(m=>{
+   const wp=mouthWorld(m),d=wp.distanceTo(fp);
+   const r=m.id==='proboscis'?1.12:m.id==='filter'?.68:m.id==='jaw'?.5:.58;
+   if(d<nearest){nearest=d;target=wp;reach=r}
+  });
+  if(nearest<reach*state.scale)eat(f);
+  else if(nearest<(reach+.7)*state.scale&&target){const pull=target.clone().sub(fp);const strength=(.6+Math.max(0,1-nearest/((reach+.7)*state.scale)))*dt*(parts.some(p=>p.id==='proboscis')?1.5:1);f.position.x+=pull.x*strength;f.position.y+=pull.y*strength}
+ });
+ meteors.forEach(m=>{
+  m.rotation.y+=dt*.8;m.userData.life-=dt;
+  if(m.position.distanceTo(player.position)<.85*state.scale){
+   spawnBurst(m.position.x,m.position.y,0xffdd80,20);playSfx('meteor');state.dna+=2;state.discoveries++;
+   const unlockedPart=meteorUnlock();m.userData.alive=false;disposeTree(m);updateHUD();
+   toast('Meteor fragment collected · +2 DNA'+(unlockedPart?' · '+unlockedPart+' discovered':''));
+  }else if(m.userData.life<=0){m.userData.alive=false;disposeTree(m)}
+ });
+ meteors=meteors.filter(m=>m.userData.alive)
+}
 function updateHazards(dt,time){hazards.forEach(h=>{h.scale.set(1.5+Math.sin(time+h.userData.phase)*.1,1+Math.cos(time*.8+h.userData.phase)*.1,.3);if(h.position.distanceTo(player.position)<1.1)hurt(3,'Toxic cloud!');enemies.forEach(e=>{if(e.userData.alive&&e.position.distanceTo(h.position)<1)damageNPC(e,.3*dt,false)})});vents.forEach(v=>{v.timer-=dt;v.mesh.scale.multiplyScalar(1+dt*.05);if(v.timer<=0){v.mesh.scale.setScalar(.3);v.timer=2.6;v.active=true;toast('A volcanic vent bursts! Current shockwave!')}if(v.timer>1.9&&v.active){const d=player.position.distanceTo(v.mesh.position);if(d<3){const n=new THREE.Vector2(player.position.x-v.mesh.position.x,player.position.y-v.mesh.position.y).normalize();velocity.add(n.multiplyScalar(dt*8))}enemies.forEach(e=>{if(e.userData.alive&&e.position.distanceTo(v.mesh.position)<3){e.userData.velocity.add(new THREE.Vector2(e.position.x-v.mesh.position.x,e.position.y-v.mesh.position.y).normalize().multiplyScalar(dt*5));}}) }});
 currents.forEach(c=>{c.rotation.z=Math.sin(time*.25+c.userData.phase)*.2;if(player.position.distanceTo(c.position)<4.5){velocity.x+=c.userData.force.x*dt*.75;velocity.y+=c.userData.force.y*dt*.75}enemies.forEach(e=>{if(e.userData.alive&&e.position.distanceTo(c.position)<4){e.position.x+=c.userData.force.x*dt*.5;e.position.y+=c.userData.force.y*dt*.5}})})}
 function createVent(){const g=new THREE.Group();const ring=new THREE.Mesh(new THREE.TorusGeometry(.45,.045,8,28),new THREE.MeshBasicMaterial({color:0x89ecfa,transparent:true,opacity:.8}));g.add(ring);for(let i=0;i<8;i++){const bubble=new THREE.Mesh(new THREE.SphereGeometry(.055+Math.random()*.08,8,6),new THREE.MeshBasicMaterial({color:0xb6f8ff,transparent:true,opacity:.7}));bubble.position.set(Math.cos(i/8*Math.PI*2)*.3,Math.sin(i/8*Math.PI*2)*.3,.05);g.add(bubble)}g.position.set(player.position.x+(Math.random()-.5)*18,player.position.y+(Math.random()-.5)*12,-.1);g.userData={timer:4,active:false};hazardGroup.add(g);vents.push({mesh:g,timer:4,active:false})}
