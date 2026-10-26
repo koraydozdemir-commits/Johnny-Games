@@ -603,7 +603,31 @@ function updateAI(dt,time){
  });
  if(state.mateSignal&&state.mate&&state.mate.userData.alive){const m=state.mate,d=distance2D(m.position,player.position);m.position.x+=Math.sin(time*1.2)*dt*.4;m.position.y+=Math.cos(time*.9)*dt*.4;if(d<1.25*state.scale){finishMate();return}state.mateTimer-=dt;if(state.mateTimer<=0){state.mateSignal=false;m.userData.alive=false;disposeTree(m);enemies=enemies.filter(e=>e!==m);state.mate=null;toast('Mating signal faded. Fill your growth bar and try again.');updateHUD()}}
 }
-function updateWaypoint(){const el=$('#worldWaypoint');if(state.editor||state.paused||$('#intro').style.display!=='none'||$('#hatchCinematic').style.display==='flex'||$('#dialogOverlay').style.display==='flex'){el.style.display='none';return}const candidates=[];if(state.mateSignal&&state.mate&&state.mate.userData.alive)candidates.push({obj:state.mate,kind:'mate',title:'MATE',sub:'FOLLOW HEART',priority:0});enemies.forEach(e=>{if(e.userData.alive&&(e.userData.epic||e.userData.alpha))candidates.push({obj:e,kind:'danger',title:'DANGER',sub:e.userData.epic?'MACRO PREDATOR':'ELITE CELL',priority:e.userData.epic?1:2})});meteors.forEach(m=>{if(m.userData.alive)candidates.push({obj:m,kind:'meteor',title:'METEOR',sub:'+2 DNA · PART DISCOVERY',priority:3})});food.forEach(f=>{if(f.userData.alive&&compatible(f.userData.type))candidates.push({obj:f,kind:'food',title:'FOOD',sub:f.userData.type==='plant'?'PLANT PARTICLE':'MEAT CHUNK',priority:4})});candidates.sort((a,b)=>a.priority-b.priority||distance2D(a.obj.position,player.position)-distance2D(b.obj.position,player.position));let chosen=null,projected=null;for(const q of candidates){if(distance2D(q.obj.position,player.position)>Math.max(20,cameraZoom*1.8))continue;const p=new THREE.Vector3(q.obj.position.x,q.obj.position.y,0).project(camera);if(Math.abs(p.x)>.78||Math.abs(p.y)>.78){chosen=q;projected=p;break}}if(!chosen){el.style.display='none';return}el.style.display='flex';el.dataset.kind=chosen.kind;el.style.left=THREE.MathUtils.clamp((projected.x+1)*50,7,93)+'%';el.style.top=THREE.MathUtils.clamp((1-projected.y)*50,12,88)+'%';el.querySelector('.waypointArrow').style.transform='rotate('+Math.atan2(-projected.y,projected.x)*180/Math.PI+'deg)';$('#waypointTitle').textContent=chosen.title;$('#waypointSubtitle').textContent=chosen.sub}
+function updateWaypoint(){
+ const el=$('#worldWaypoint');
+ if(state.editor||state.paused||$('#intro').style.display!=='none'||$('#hatchCinematic').style.display==='flex'||$('#dialogOverlay').style.display==='flex'||(state.food>=state.foodGoal&&!state.mateSignal)){el.style.display='none';return}
+ const candidates=[];
+ if(state.mateSignal&&state.mate&&state.mate.userData.alive){
+  candidates.push({obj:state.mate,kind:'mate',title:'MATE',sub:'FOLLOW HEART',priority:0});
+ }else{
+  enemies.forEach(e=>{if(e.userData.alive&&(e.userData.epic||e.userData.alpha))candidates.push({obj:e,kind:'danger',title:'DANGER',sub:e.userData.epic?'MACRO PREDATOR':'ELITE CELL',priority:e.userData.epic?0:1})});
+  meteors.forEach(m=>{if(m.userData.alive)candidates.push({obj:m,kind:'meteor',title:'METEOR',sub:'+2 DNA · PART DISCOVERY',priority:2})});
+  food.forEach(f=>{if(f.userData.alive&&compatible(f.userData.type))candidates.push({obj:f,kind:'food',title:'FOOD',sub:f.userData.type==='plant'?'PLANT PARTICLE':'MEAT CHUNK',priority:3})});
+ }
+ candidates.sort((a,b)=>a.priority-b.priority||distance2D(a.obj.position,player.position)-distance2D(b.obj.position,player.position));
+ let chosen=null,projected=null;
+ for(const q of candidates){
+  if(distance2D(q.obj.position,player.position)>Math.max(20,cameraZoom*1.8))continue;
+  const p=new THREE.Vector3(q.obj.position.x,q.obj.position.y,0).project(camera);
+  if(Math.abs(p.x)>.78||Math.abs(p.y)>.78){chosen=q;projected=p;break}
+ }
+ if(!chosen){el.style.display='none';return}
+ el.style.display='flex';el.dataset.kind=chosen.kind;
+ el.style.left=THREE.MathUtils.clamp((projected.x+1)*50,7,93)+'%';
+ el.style.top=THREE.MathUtils.clamp((1-projected.y)*50,12,88)+'%';
+ el.querySelector('.waypointArrow').style.transform='rotate('+(Math.atan2(-projected.y,projected.x)*180/Math.PI)+'deg)';
+ $('#waypointTitle').textContent=chosen.title;$('#waypointSubtitle').textContent=chosen.sub;
+}
 function updateVisibility(){const sight=8+stats().sight*1.9;food.forEach(f=>{f.visible=!!f.userData.alive&&distance2D(f.position,player.position)<sight});enemies.forEach(e=>{e.visible=!!e.userData.alive&&(distance2D(e.position,player.position)<sight+2||e.userData.mate)});meteors.forEach(m=>{m.visible=!!m.userData.alive&&distance2D(m.position,player.position)<sight+4});hazards.forEach(h=>{h.visible=distance2D(h.position,player.position)<sight+3})}
 
 function updateFood(dt,time){
