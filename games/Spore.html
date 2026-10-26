@@ -267,6 +267,12 @@ input,select,textarea{user-select:text;-webkit-user-select:text}
  .stickKnob{width:38px;height:38px}
  #gameButtons button{min-height:36px}
 }
+
+.editorTool span{display:block;transform:none}
+.editorTool svg{display:block;width:74%;height:74%;filter:drop-shadow(0 2px 2px #0009)}
+.editorTool.genomeTool svg{width:80%;height:80%}
+.editorDNA span{display:flex;align-items:center;justify-content:center}
+.editorDNA svg{width:17px;height:24px;display:block;filter:drop-shadow(0 0 3px #e2c77977)}
 </style>
 </head>
 <body>
@@ -275,9 +281,9 @@ input,select,textarea{user-select:text;-webkit-user-select:text}
 <div id="sporeEditorTop" aria-label="Cell editor tools">
  <div class="editorTopRail"></div>
  <div class="editorToolDock">
-  <button id="buildTool" class="editorTool buildTool active" aria-label="Build mode" title="Build mode"><span>⚒</span></button>
-  <button id="genomeTool" class="editorTool genomeTool" aria-label="Genome options" title="Genome options"><span>·</span></button>
-  <button id="paintTool" class="editorTool paintTool" aria-label="Paint mode" title="Paint mode"><span>🖌</span></button>
+  <button id="buildTool" class="editorTool buildTool active" aria-label="Build mode" title="Build mode"><span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M17 31 33 15l4 4-16 16z" fill="#684c23" stroke="#3d371d" stroke-width="1.8"/><path d="m8 10 8-5 12 11-8 8z" fill="#fff1a5" stroke="#69552a" stroke-width="2" stroke-linejoin="round"/><path d="m23 7 9 1 10 10-8 8-10-10z" fill="#dec44a" stroke="#69552a" stroke-width="2" stroke-linejoin="round"/><path d="m13 36 3-3 5 5-3 3z" fill="#f9e9ab" stroke="#69552a" stroke-width="1.5"/></svg></span></button>
+  <button id="genomeTool" class="editorTool genomeTool" aria-label="Genome options" title="Genome options"><span><svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="16" fill="#0a1b30" stroke="#758ca1" stroke-width="2"/><path d="M15 13c18 6 0 16 18 22M33 13c-18 6 0 16-18 22M17 17h14M16 24h16M17 31h14" fill="none" stroke="#91dff0" stroke-width="2.4" stroke-linecap="round"/><circle cx="24" cy="24" r="3" fill="#d8f2f5"/></svg></span></button>
+  <button id="paintTool" class="editorTool paintTool" aria-label="Paint mode" title="Paint mode"><span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="m28 7 13 13-17 17-13-13z" fill="#9feaff" stroke="#155477" stroke-width="2" stroke-linejoin="round"/><path d="m24 11 13 13M20 15l13 13" stroke="#e5fcff" stroke-width="2" opacity=".9"/><path d="M10 25c-1 7-7 8-6 15 6 1 11-3 13-8z" fill="#f4d76d" stroke="#9b6d30" stroke-width="2"/><path d="m6 39 7-6" stroke="#fff8c4" stroke-width="2" stroke-linecap="round"/></svg></span></button>
  </div>
  <div class="editorStatus">
   <div class="editorStageTrack" aria-label="Cell stage progression"><i class="lit"></i><i class="lit"></i><i class="lit"></i><i id="editorTierSegment4"></i><i></i><i></i><i></i><i></i></div>
@@ -289,7 +295,7 @@ input,select,textarea{user-select:text;-webkit-user-select:text}
  <div class="editorBottomLeft">
   <button class="bottomOrb oceanOrb" id="editorSoupButton" aria-label="Back to soup">◉</button>
   <button class="bottomOrb gridOrb" id="editorGridButton" aria-label="Toggle grid">▦</button>
-  <div class="editorDNA"><span>♧</span><b id="editorDNABalance">25</b></div>
+  <div class="editorDNA"><span><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M5 2c16 5-2 10 14 15S3 26 19 30M19 2C3 7 21 12 5 17S21 27 5 30M6 6h12M7 12h10M7 20h10M6 26h12" fill="none" stroke="#f2d98c" stroke-width="2" stroke-linecap="round"/></svg></span><b id="editorDNABalance">25</b></div>
   <button class="bottomOrb complexityOrb" id="editorComplexityButton" aria-label="Complexity meter">↔</button>
  </div>
  <label class="editorName"><span>ORGANISM</span><input id="cellName" maxlength="22" value="Karlets" aria-label="Cell name"></label>
