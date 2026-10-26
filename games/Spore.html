@@ -402,6 +402,14 @@ body.inGameMode .zoomControls{top:252px}
 @media(max-width:850px){.zoomControls{top:158px;right:7px;gap:4px}.zoomControls button{width:27px;height:27px;min-height:27px;font-size:18px}}
 @media(pointer:coarse) and (min-width:851px){.zoomControls{top:205px;right:10px}}
 @media(pointer:coarse) and (orientation:landscape) and (max-height:500px){.zoomControls{top:118px;right:8px}.zoomControls button{width:25px;height:25px;min-height:25px}}
+
+/* Keep the first-run hint clear of the thumb controls */
+@media(max-width:560px) and (orientation:portrait){
+ .controlHint{bottom:calc(228px + env(safe-area-inset-bottom));left:50%;max-width:86vw;width:max-content;z-index:9}
+}
+@media(pointer:coarse) and (orientation:landscape) and (max-height:500px){
+ .controlHint{bottom:calc(156px + env(safe-area-inset-bottom));max-width:62vw;font-size:9px}
+}
 </style>
 </head>
 <body>
