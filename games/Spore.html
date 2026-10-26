@@ -280,6 +280,52 @@ input,select,textarea{user-select:text;-webkit-user-select:text}
 #gameReticle:after{width:1px;height:38px;left:13px;top:-6px}
 #gameReticle i{position:absolute;inset:8px;border:1px solid #f5df9a;border-radius:50%;background:#f6f4df22}
 body.cellEditorMode #gameReticle{display:none!important}
+
+@media(pointer:coarse){
+ body.cellEditorMode #sporeEditorTop{height:66px}
+ .editorTopRail{height:58px;width:31%;border-radius:0 0 28px 0}
+ .editorToolDock{left:31%;gap:9px}
+ .editorTool{width:54px;height:54px;min-height:54px;border-width:3px;font-size:24px}
+ .editorTool.genomeTool{width:45px;height:45px;min-height:45px;margin-top:4px;font-size:12px}
+ .editorStatus{top:5px;right:5px;width:135px}.editorStageTrack{height:17px;padding:2px 6px;gap:3px}
+ .editorDietBadge{font-size:10px;min-width:116px;padding:3px 6px;margin-top:4px;gap:4px}.editorDietBadge #editorDietIcon{width:19px;height:19px}.dietMark{width:24px;height:24px;font-size:16px}
+ .editorMiniTools{gap:4px;margin-top:3px}.editorMiniTools button{width:25px;height:25px;min-height:25px;font-size:13px;border-width:2px}
+ body.cellEditorMode #partsPanel{display:none!important;left:5px;top:68px;bottom:calc(74px + env(safe-area-inset-bottom));width:min(300px,78vw);max-height:none}
+ body.cellEditorMode.show-parts #partsPanel{display:flex!important}
+ body.cellEditorMode #editorPanel{display:none!important;right:5px;top:68px;bottom:calc(74px + env(safe-area-inset-bottom));width:min(320px,86vw)}
+ body.cellEditorMode.show-genome #editorPanel{display:flex!important}
+ body.cellEditorMode #sporeEditorBottom{height:auto;min-height:66px;gap:5px;padding:5px 6px calc(5px + env(safe-area-inset-bottom))}
+ .bottomOrb{width:33px;height:33px;min-height:33px;font-size:17px;border-width:2px}
+ .editorDNA{min-width:66px;padding:5px 7px;font-size:16px;gap:4px}
+ .editorName{min-width:68px;max-width:190px;padding:3px 6px}.editorName input{font-size:16px}
+ .historyOrb{width:29px;height:29px;min-height:29px;font-size:16px;border-width:2px}
+ .acceptOrb{width:37px;height:37px;min-height:37px;font-size:22px;border-width:3px}
+ .editorBottomLeft,.editorBottomRight{gap:3px}
+}
+@media(pointer:coarse) and (max-width:700px){
+ body.cellEditorMode #sporeEditorTop{height:57px}
+ .editorTopRail{height:47px;width:25%}
+ .editorToolDock{left:25%;gap:5px}
+ .editorTool{width:43px;height:43px;min-height:43px;font-size:19px;border-width:2px}
+ .editorTool.genomeTool{width:36px;height:36px;min-height:36px;margin-top:4px;font-size:10px}
+ .editorStatus{top:4px;right:4px;width:112px}.editorStageTrack{height:13px;padding:1px 4px}
+ .editorDietBadge{min-width:94px;font-size:8px;gap:3px;padding:2px 4px}
+ .editorDietBadge #editorDietIcon{width:15px;height:15px;border-width:1px}.dietMark{width:20px;height:20px;font-size:13px;border-width:2px}
+ .editorMiniTools button{width:21px;height:21px;min-height:21px;font-size:11px}
+ body.cellEditorMode #sporeEditorBottom{min-height:58px;padding:4px 3px calc(4px + env(safe-area-inset-bottom));gap:2px}
+ .bottomOrb{width:27px;height:27px;min-height:27px;font-size:13px;border-width:1px}
+ .editorDNA{min-width:46px;padding:4px 4px;font-size:13px;gap:2px}.editorDNA span{font-size:11px}
+ .editorName{min-width:48px;max-width:none;flex:1;padding:2px 4px}.editorName span{font-size:6px}.editorName input{font-size:13px;min-height:19px}
+ .historyOrb{width:23px;height:23px;min-height:23px;font-size:13px;border-width:1px}
+ .acceptOrb{width:29px;height:29px;min-height:29px;font-size:18px;border-width:2px}
+}
+@media(pointer:coarse) and (orientation:landscape) and (max-height:500px){
+ body.cellEditorMode #sporeEditorTop{height:51px}.editorTopRail{height:46px}
+ .editorTool{width:43px;height:43px;min-height:43px}.editorTool.genomeTool{width:34px;height:34px;min-height:34px}
+ .editorStatus{width:126px}.editorStageTrack{height:14px}.editorDietBadge{margin-top:1px}
+ body.cellEditorMode #partsPanel,body.cellEditorMode #editorPanel{top:54px;bottom:58px}
+ body.cellEditorMode #sporeEditorBottom{min-height:51px}.bottomOrb{width:27px;height:27px;min-height:27px}.acceptOrb{width:31px;height:31px;min-height:31px}
+}
 </style>
 </head>
 <body>
