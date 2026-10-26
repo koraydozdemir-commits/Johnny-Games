@@ -44,17 +44,151 @@ header{height:62px;background:linear-gradient(#172e40f5,#334d5be8 65%,#132e43bb)
  .mateCue{bottom:calc(110px + env(safe-area-inset-bottom))}
 }
 @media(max-height:500px) and (orientation:landscape){.panel{height:calc(100dvh - 110px);bottom:58px;top:52px}.hud{top:55px}.radarWrap{top:55px}.mobileControls{bottom:65px}.bottom,.editButtons{bottom:3px}.progressTop{top:5px}}
+
+/* Dedicated Spore-style cell creator chrome */
+#sporeEditorTop,#sporeEditorBottom{display:none}
+body.cellEditorMode header{display:none}
+body.cellEditorMode #growthHUD,body.cellEditorMode #gameHUD,body.cellEditorMode #radarWrap,body.cellEditorMode #mateCue,body.cellEditorMode #gameButtons,body.cellEditorMode #editorButtons{display:none!important}
+body.cellEditorMode #sporeEditorTop{position:absolute;z-index:18;inset:0 0 auto;height:100px;display:block;pointer-events:none}
+.editorTopRail{position:absolute;left:0;top:0;height:84px;width:43%;border:2px solid #71818b;border-left:0;border-radius:0 0 38px 0;background:linear-gradient(180deg,#4d626f 0%,#293f4e 44%,#172d3d 100%);box-shadow:inset 0 3px #ffffff42,inset 0 -8px 10px #0007,0 4px 9px #0006}
+.editorToolDock{position:absolute;left:42%;top:1px;transform:translateX(-1%);display:flex;gap:26px;align-items:flex-start;pointer-events:auto}
+.editorTool{width:80px;height:80px;min-height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:5px solid #7b969f;font-size:35px;color:#fffbe9;box-shadow:inset 0 3px 5px #ffffff94,inset 0 -7px 8px #0008,0 5px 8px #0008;padding:0;text-shadow:0 2px 2px #0008}
+.editorTool span{display:block;transform:rotate(-8deg)}
+.editorTool.buildTool{background:radial-gradient(circle at 35% 25%,#fff7b2 0,#ecd44c 28%,#a68e1c 68%,#534e28 100%);color:#3b3a26}
+.editorTool.paintTool{background:radial-gradient(circle at 35% 25%,#b6f7ff 0,#43c8e5 35%,#176b9a 72%,#153a58 100%)}
+.editorTool.genomeTool{width:56px;height:56px;min-height:56px;font-size:23px;border-width:4px;background:radial-gradient(circle at 35% 25%,#9ce0a8,#357758 65%,#183c37);margin-top:10px}
+.editorTool.active{filter:brightness(1.12);border-color:#e9dca5;box-shadow:inset 0 3px 6px #ffffffa3,inset 0 -7px 8px #0008,0 0 0 3px #e7d29a4d,0 5px 8px #0008}
+.editorStatus{position:absolute;right:15px;top:12px;width:196px;pointer-events:auto;text-align:right}
+.editorStageTrack{height:24px;width:100%;padding:4px 12px;border:2px solid #728991;border-radius:20px;background:linear-gradient(#455b64,#172e40);display:flex;gap:5px;box-shadow:inset 0 2px #ffffff26}
+.editorStageTrack i{flex:1;border-radius:6px;background:#101e29;box-shadow:inset 0 1px 2px #000}
+.editorStageTrack i.lit{background:radial-gradient(circle,#c3ffb2,#2c965a 50%,#15442e);box-shadow:0 0 5px #83ffaa}
+.editorDietBadge{display:inline-flex;align-items:center;gap:8px;margin-top:8px;padding:5px 10px 5px 14px;border-radius:20px;background:linear-gradient(#355364,#182f41);border:1px solid #7996a1;min-width:174px;justify-content:space-between;box-shadow:inset 0 1px #ffffff27;font-family:Georgia,serif;font-size:16px;letter-spacing:.04em}
+.editorDietBadge #editorDietIcon{width:25px;height:25px;display:grid;place-items:center;border-radius:50%;border:2px solid #e2a3a1;background:#122c3e;color:#b8f0d6}
+.dietMark{display:inline-grid;place-items:center;width:34px;height:34px;border:3px solid #849ba4;border-radius:50%;font-size:23px;background:radial-gradient(circle,#6d8990,#243f50)}
+.editorMiniTools{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+.editorMiniTools button{width:35px;height:35px;min-height:35px;padding:0;border-radius:50%;font-size:18px;border:3px solid #788e9b;background:radial-gradient(circle at 35% 25%,#9ac9da,#244963 65%,#102b41)}
+body.cellEditorMode #partsPanel{position:absolute;z-index:14;left:22px;top:126px;bottom:100px;width:min(28vw,370px);display:flex!important;border:3px solid #718d98;border-radius:16px;background:linear-gradient(135deg,rgba(33,57,69,.96),rgba(11,29,43,.95));box-shadow:inset 0 1px #ffffff26,0 12px 26px #0007}
+body.cellEditorMode #partsPanel .panelHeader{height:0;overflow:hidden;padding:0;border:0}
+body.cellEditorMode #partsPanel .controls:first-of-type{background:#142d3e;padding:8px 12px}
+body.cellEditorMode #partsPanel .tabs{grid-template-columns:repeat(3,minmax(0,1fr));padding:8px;gap:5px}
+body.cellEditorMode #partsPanel .tabs button{min-height:30px;border-radius:14px;font-size:10px;padding:4px 2px}
+body.cellEditorMode #partsPanel .catalog{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;padding:7px 9px 10px;flex:1;align-content:start}
+body.cellEditorMode #partsPanel .partCard{min-height:78px;border-radius:10px;background:linear-gradient(145deg,#233f50,#112a3b);border:1px solid #6f8a95;box-shadow:inset 0 1px #ffffff1c}
+body.cellEditorMode #partsPanel .partCard .ico{font-size:26px;line-height:1.1}
+body.cellEditorMode #partsPanel .partCard b{font-family:Georgia,serif;font-weight:normal;font-size:10px}
+body.cellEditorMode #partsPanel .partCard small{font-size:9px}
+body.cellEditorMode #partsPanel .partCard.selected{outline:2px solid #f5d77f;background:linear-gradient(#607977,#314e5e)}
+body.cellEditorMode #partsPanel .description{min-height:56px;border-top:2px solid #58717d;background:#102839;font-size:10px}
+body.cellEditorMode #partsPanel .notice{font-size:9px;background:#0a2030}
+body.cellEditorMode #editorPanel{display:none!important;position:absolute;z-index:16;top:104px;right:20px;bottom:94px;width:min(310px,32vw);max-height:none}
+body.cellEditorMode.show-genome #editorPanel{display:flex!important}
+body.cellEditorMode #editorPanel .panelHeader{font-family:Georgia,serif;font-size:12px}
+body.cellEditorMode #editorPanel .directSculptHelp{background:linear-gradient(135deg,#2a4956,#142d40);padding:14px}
+body.cellEditorMode #editorPanel .directSculptHelp p{font-size:12px;line-height:1.6;color:#dae5e2;margin:10px 0}
+.sculptLegend{display:flex;flex-direction:column;gap:7px;font-size:10px;color:#c6d7d6}
+.legend-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#f5ce63;margin-right:7px;box-shadow:0 0 8px #e9cc71}
+.legend-ring{display:inline-block;width:14px;height:14px;border:2px solid #80e3e8;border-radius:50%;vertical-align:middle;margin-right:5px}
+.selectedVertebra{border-top:1px solid #77949a55;padding-top:10px;margin-top:10px;font-size:11px;color:#c9dedb;display:flex;justify-content:space-between}
+.spineMenuControls{display:none!important}
+body.cellEditorMode #sporeEditorBottom{position:absolute;z-index:18;left:0;right:0;bottom:0;height:82px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 14px calc(7px + env(safe-area-inset-bottom));border-top:3px solid #738d96;background:linear-gradient(180deg,#294555 0%,#142e41 40%,#0d2234 100%);box-shadow:inset 0 3px #ffffff26,0 -4px 14px #0005;pointer-events:auto}
+.editorBottomLeft,.editorBottomRight{display:flex;align-items:center;gap:7px;min-width:0}
+.bottomOrb,.historyOrb,.acceptOrb{flex:none;display:grid;place-items:center;padding:0;min-height:42px;width:42px;height:42px;border-radius:50%;border:3px solid #8199a4;box-shadow:inset 0 2px #ffffff47,inset 0 -4px #0005,0 2px 4px #0006;font-size:21px}
+.oceanOrb{background:radial-gradient(circle at 35% 25%,#a1dafa,#337fac 58%,#163751);font-size:26px}.gridOrb{background:radial-gradient(circle at 35% 25%,#a5dbe1,#3b7183 55%,#173949)}.complexityOrb{background:radial-gradient(circle at 35% 25%,#f9e5a1,#b68d44 55%,#4d4029);color:#322c21}
+.editorDNA{display:flex;align-items:center;gap:7px;padding:7px 13px;min-width:112px;border:2px solid #738994;border-radius:21px;background:linear-gradient(#101b23,#080f17);box-shadow:inset 0 2px 4px #000; font-family:Georgia,serif;font-size:23px;color:#f8edce}
+.editorDNA span{color:#e4d4a5}.editorDNA b{font-weight:bold;color:#fff}
+.editorName{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;flex:1;min-width:100px;max-width:330px;padding:3px 16px;border:2px solid #738894;border-radius:24px;background:linear-gradient(#405c69,#172d3e 70%);box-shadow:inset 0 2px #ffffff24,0 2px 5px #0007}
+.editorName span{font-size:8px;color:#e2d4a4;letter-spacing:.2em}
+.editorName input{width:100%;border:0;outline:0;background:transparent;color:#fff9e7;text-align:center;font:20px Georgia,serif;min-height:24px;padding:0}
+.editorName input:focus{box-shadow:0 1px #f6d77a}
+.historyOrb{width:37px;height:37px;min-height:37px;font-size:20px;background:radial-gradient(circle at 35% 25%,#8dc5ec,#2c577c 60%,#162e43)}
+.acceptOrb{width:52px;height:52px;min-height:52px;font-size:30px;border-width:4px}
+.cancelOrb{background:radial-gradient(circle at 35% 25%,#ffb0ad,#c13342 58%,#621b2b);color:#fff4eb;border-color:#8d9ca3}
+.acceptOrb:not(.cancelOrb){background:radial-gradient(circle at 35% 25%,#ccffd0,#55d27e 55%,#167841);color:#14422b;border-color:#84b99c}
+body.cellEditorMode .mobileControls{display:none!important}
+@media(max-width:900px){
+ body.cellEditorMode #sporeEditorTop{height:66px}
+ .editorTopRail{height:58px;width:31%;border-radius:0 0 28px 0}
+ .editorToolDock{left:31%;gap:9px}
+ .editorTool{width:54px;height:54px;min-height:54px;border-width:3px;font-size:24px}
+ .editorTool.genomeTool{width:42px;height:42px;min-height:42px;margin-top:6px;font-size:18px}
+ .editorStatus{top:5px;right:5px;width:135px}.editorStageTrack{height:17px;padding:2px 6px;gap:3px}
+ .editorDietBadge{font-size:10px;min-width:116px;padding:3px 6px;margin-top:4px;gap:4px}.editorDietBadge #editorDietIcon{width:19px;height:19px}.dietMark{width:24px;height:24px;font-size:16px}
+ .editorMiniTools{gap:4px;margin-top:3px}.editorMiniTools button{width:25px;height:25px;min-height:25px;font-size:13px;border-width:2px}
+ body.cellEditorMode #partsPanel{display:none!important;left:5px;top:68px;bottom:calc(74px + env(safe-area-inset-bottom));width:min(300px,78vw);max-height:none}
+ body.cellEditorMode.show-parts #partsPanel{display:flex!important}
+ body.cellEditorMode #editorPanel{display:none!important;right:5px;top:68px;bottom:calc(74px + env(safe-area-inset-bottom));width:min(320px,86vw)}
+ body.cellEditorMode.show-genome #editorPanel{display:flex!important}
+ body.cellEditorMode #sporeEditorBottom{height:auto;min-height:66px;gap:5px;padding:5px 6px calc(5px + env(safe-area-inset-bottom))}
+ .bottomOrb{width:33px;height:33px;min-height:33px;font-size:17px;border-width:2px}
+ .editorDNA{min-width:66px;padding:5px 7px;font-size:16px;gap:4px}
+ .editorName{min-width:68px;max-width:190px;padding:3px 6px}.editorName input{font-size:16px}
+ .historyOrb{width:29px;height:29px;min-height:29px;font-size:16px;border-width:2px}
+ .acceptOrb{width:37px;height:37px;min-height:37px;font-size:22px;border-width:3px}
+ .editorBottomLeft,.editorBottomRight{gap:3px}
+}
+@media(max-width:560px){
+ body.cellEditorMode #sporeEditorTop{height:57px}
+ .editorTopRail{height:47px;width:25%}
+ .editorToolDock{left:25%;gap:5px}
+ .editorTool{width:43px;height:43px;min-height:43px;font-size:19px;border-width:2px}
+ .editorTool.genomeTool{width:34px;height:34px;min-height:34px;margin-top:5px;font-size:15px}
+ .editorStatus{top:4px;right:4px;width:112px}.editorStageTrack{height:13px;padding:1px 4px}
+ .editorDietBadge{min-width:94px;font-size:8px;gap:3px;padding:2px 4px}
+ .editorDietBadge #editorDietIcon{width:15px;height:15px;border-width:1px}.dietMark{width:20px;height:20px;font-size:13px;border-width:2px}
+ .editorMiniTools button{width:21px;height:21px;min-height:21px;font-size:11px}
+ body.cellEditorMode #sporeEditorBottom{min-height:58px;padding:4px 3px calc(4px + env(safe-area-inset-bottom));gap:2px}
+ .bottomOrb{width:27px;height:27px;min-height:27px;font-size:13px;border-width:1px}
+ .editorDNA{min-width:46px;padding:4px 4px;font-size:13px;gap:2px}.editorDNA span{font-size:11px}
+ .editorName{min-width:48px;max-width:none;flex:1;padding:2px 4px}.editorName span{font-size:6px}.editorName input{font-size:13px;min-height:19px}
+ .historyOrb{width:23px;height:23px;min-height:23px;font-size:13px;border-width:1px}
+ .acceptOrb{width:29px;height:29px;min-height:29px;font-size:18px;border-width:2px}
+}
+@media(max-height:500px) and (orientation:landscape){
+ body.cellEditorMode #sporeEditorTop{height:51px}.editorTopRail{height:46px}
+ .editorTool{width:43px;height:43px;min-height:43px}.editorTool.genomeTool{width:34px;height:34px;min-height:34px}
+ .editorStatus{width:126px}.editorStageTrack{height:14px}.editorDietBadge{margin-top:1px}
+ body.cellEditorMode #partsPanel,body.cellEditorMode #editorPanel{top:54px;bottom:58px}
+ body.cellEditorMode #sporeEditorBottom{min-height:51px}.bottomOrb{width:27px;height:27px;min-height:27px}.acceptOrb{width:31px;height:31px;min-height:31px}
+}
 </style>
 </head>
 <body>
 <canvas id="scene"></canvas><div class="vignette"></div>
 <header><a class="back" href="../index.html" aria-label="Back to games">‹</a><div class="brand">SPORE<small>PRIMORDIAL SOUP · CELL STAGE</small></div><div class="grow"></div><div class="pill">🧬 DNA <strong id="dnaCount">25</strong></div><div class="pill" id="tierLabel">SCALE TIER 1 / 4</div></header>
+<div id="sporeEditorTop" aria-label="Cell editor tools">
+ <div class="editorTopRail"></div>
+ <div class="editorToolDock">
+  <button id="buildTool" class="editorTool buildTool active" aria-label="Build mode" title="Build mode"><span>⚒</span></button>
+  <button id="paintTool" class="editorTool paintTool" aria-label="Paint mode" title="Paint mode"><span>▰</span></button>
+  <button id="genomeTool" class="editorTool genomeTool" aria-label="Genome options" title="Genome options"><span>☷</span></button>
+ </div>
+ <div class="editorStatus">
+  <div class="editorStageTrack" aria-label="Cell stage progression"><i class="lit"></i><i class="lit"></i><i class="lit"></i><i id="editorTierSegment4"></i><i></i><i></i><i></i><i></i></div>
+  <div class="editorDietBadge"><span id="editorDietIcon">◉</span><b id="editorDietName">HERBIVORE</b><span class="dietMark">◌</span></div>
+  <div class="editorMiniTools"><button id="editorSymmetryTop" aria-label="Toggle symmetry">↔</button><button id="editorStatsTop" aria-label="Cell details">✣</button></div>
+ </div>
+</div>
+<div id="sporeEditorBottom">
+ <div class="editorBottomLeft">
+  <button class="bottomOrb oceanOrb" id="editorSoupButton" aria-label="Back to soup">◉</button>
+  <button class="bottomOrb gridOrb" id="editorGridButton" aria-label="Toggle grid">▦</button>
+  <div class="editorDNA"><span>♧</span><b id="editorDNABalance">25</b></div>
+  <button class="bottomOrb complexityOrb" id="editorComplexityButton" aria-label="Complexity meter">↔</button>
+ </div>
+ <label class="editorName"><span>ORGANISM</span><input id="cellName" maxlength="22" value="Karlets" aria-label="Cell name"></label>
+ <div class="editorBottomRight">
+  <button class="historyOrb" id="editorUndo" aria-label="Undo edit">↶</button>
+  <button class="historyOrb" id="editorRedo" aria-label="Redo edit">↷</button>
+  <button class="acceptOrb cancelOrb" id="editorCancel" aria-label="Cancel editor">×</button>
+  <button class="acceptOrb" id="editorAccept" aria-label="Accept cell">✓</button>
+ </div>
+</div>
 <div class="progressTop" id="growthHUD"><div class="row"><b>EVOLUTION PROGRESS</b><span id="growthPercent">0%</span></div><div class="bar" id="growthBar"><i id="growthFill"></i></div></div>
 <div class="hud" id="gameHUD"><div class="glass hudbox"><div class="row"><b style="font-size:10px;letter-spacing:.1em">CELL INTEGRITY</b><strong id="healthValue">100%</strong></div><div class="bar health"><i id="healthFill" style="width:100%"></i></div><div class="metric"><div class="row"><span>Jet stamina</span><b id="staminaValue">100%</b></div><div class="bar"><i id="staminaFill" style="width:100%"></i></div></div><div class="metric"><div class="row"><span>Food collected</span><b id="foodValue">0 / 8</b></div><div class="bar"><i id="foodFill"></i></div></div><div class="hudchips"><span class="pill">🌿 <b id="plantCount">0</b></span><span class="pill">🥩 <b id="meatCount">0</b></span><span class="pill">Diet: <b id="dietLabel">Herbivore</b></span></div></div><div class="glass hudbox"><div class="row"><b style="font-size:10px">OBJECTIVE</b><span id="objectiveStep" class="tiny">FORAGE</span></div><div id="objectiveText" class="tiny" style="margin-top:5px">Eat 8 food particles to attract a mate.</div><div class="row" style="margin-top:8px"><span class="tiny">Nearby meteor parts</span><b id="discoveryCount">0</b></div></div></div>
 <div class="radarWrap" id="radarWrap"><div class="radartitle">BROTH RADAR</div><div class="radar" id="radar"><i class="radarDot player"></i></div><div class="radarKey"><span style="--c:#65ef9b">Plant</span><span style="--c:#f2ba85">Meat</span><span style="--c:#ff647a">Predator</span></div></div>
 <div class="mateCue" id="mateCue"><b id="mateCueTitle">MATE READY</b><div id="mateCueText" style="font-size:10px;margin-top:3px">Press M to send a mating signal.</div></div>
 <div class="panel left" id="partsPanel"><div class="panelHeader">Cell parts drawer</div><div class="controls"><label>COMPLEXITY <b id="complexityValue">35 / 100%</b></label><div class="bar"><i id="complexityFill" style="width:35%"></i></div><label style="margin-top:7px">DNA balance <b id="dnaVsCost">25 DNA</b></label></div><div class="tabs" id="categoryTabs"><button class="active" data-cat="Mouths">Mouths</button><button data-cat="Locomotion">Locomotion</button><button data-cat="Weapons">Weapons</button><button data-cat="Senses">Senses</button><button data-cat="Body">Body</button><button data-cat="All">All parts</button></div><div class="catalog" id="catalog"></div><div class="description" id="partDescription">Select a part to see its cost and biological function.</div><div class="notice">Click a part, then click the membrane to attach it.</div></div>
-<div class="panel right" id="editorPanel"><div class="panelHeader">Genome &amp; manipulation</div><div class="scrollContent"><div class="controls"><div class="row"><b style="font-size:10px;color:var(--gold)">SPINE VERTEBRAE</b><span id="nodeCount" class="tiny">5 nodes</span></div><div class="row" style="margin-top:7px"><button id="addNode">＋ Add node</button><button id="removeNode">− Remove</button></div><div class="hint" style="padding:6px 0 0">Drag the gold vertebra handles in the workspace. Scroll over a selected node to change its radius.</div></div><div class="controls"><label>Selected node radius <b id="radiusValue">0.72</b></label><input id="radiusSlider" type="range" min=".25" max="1.15" step=".05" value=".72"><label style="margin-top:8px">Spine length <b id="lengthValue">100%</b></label><input id="lengthSlider" type="range" min="65" max="150" step="5" value="100"><label style="margin-top:8px">Body size <b id="sizeValue">1.0×</b></label><input id="sizeSlider" type="range" min=".7" max="1.6" step=".05" value="1"></div><div class="controls"><div class="row"><b style="font-size:10px;color:var(--gold)">PART TRANSFORM</b><span class="tiny" id="selectedPartLabel">None selected</span></div><label style="margin-top:7px">Scale <b id="partScaleValue">1.0×</b></label><input id="partScaleSlider" type="range" min=".45" max="2" step=".05" value="1"><label style="margin-top:8px">Rotation <b id="partRotationValue">0°</b></label><input id="partRotationSlider" type="range" min="-180" max="180" step="5" value="0"><div class="row" style="margin-top:7px"><button id="stackToggle">Stack parts: OFF</button><button id="mirrorToggle" class="active">↔ Symmetry ON</button></div></div><div class="controls"><b style="font-size:10px;color:var(--gold)">PAINT · THREE LAYERS</b><label style="margin-top:8px">Base membrane</label><div id="baseSwatches" class="swatches"></div><label style="margin-top:9px">Pattern / coat</label><select id="patternSelect" style="width:100%;padding:7px;background:#102e4e;color:white;border:1px solid var(--edge);border-radius:7px"><option value="speckle">Microscopic speckles</option><option value="stripes">Fluid stripes</option><option value="spots">Leopard spots</option><option value="gradient">Pearlescent gradient</option><option value="glow">Bioluminescence</option></select><label style="margin-top:8px">Pattern colour</label><div id="patternSwatches" class="swatches"></div><label style="margin-top:9px">Accent details</label><div id="accentSwatches" class="swatches"></div></div><div class="controls"><b style="font-size:10px;color:var(--gold)">CELL ATTRIBUTES</b><div id="statRows"></div><div class="tiny">Removing parts refunds their full placement cost. Maximum complexity: 100%.</div></div></div></div>
+<div class="panel right" id="editorPanel"><div class="panelHeader">Genome &amp; manipulation</div><div class="scrollContent"><div class="controls directSculptHelp"><div class="row"><b style="font-size:10px;color:var(--gold)">DIRECT SPINE SCULPT</b><span id="nodeCount" class="tiny">5 vertebrae</span></div><p>Drag the gold spine points to bend the body. Pull a terminal point outward to grow a new section. Drag a blue ring to expand or narrow that section.</p><div class="sculptLegend"><span><i class="legend-dot gold"></i> Bend / extend</span><span><i class="legend-ring"></i> Body radius</span></div><div class="selectedVertebra">Selected vertebra <b id="radiusValue">0.72</b></div><div class="spineMenuControls" aria-hidden="true"><button id="addNode">＋ Add node</button><button id="removeNode">− Remove</button><input id="lengthSlider" type="range" min="65" max="150" step="5" value="100"><input id="radiusSlider" type="range" min=".25" max="1.15" step=".05" value=".72"><input id="sizeSlider" type="range" min=".7" max="1.6" step=".05" value="1"><span id="lengthValue">100%</span><span id="sizeValue">1.0×</span></div></div><div class="controls"><div class="row"><b style="font-size:10px;color:var(--gold)">PART TRANSFORM</b><span class="tiny" id="selectedPartLabel">None selected</span></div><label style="margin-top:7px">Scale <b id="partScaleValue">1.0×</b></label><input id="partScaleSlider" type="range" min=".45" max="2" step=".05" value="1"><label style="margin-top:8px">Rotation <b id="partRotationValue">0°</b></label><input id="partRotationSlider" type="range" min="-180" max="180" step="5" value="0"><div class="row" style="margin-top:7px"><button id="stackToggle">Stack parts: OFF</button><button id="mirrorToggle" class="active">↔ Symmetry ON</button></div></div><div class="controls"><b style="font-size:10px;color:var(--gold)">PAINT · THREE LAYERS</b><label style="margin-top:8px">Base membrane</label><div id="baseSwatches" class="swatches"></div><label style="margin-top:9px">Pattern / coat</label><select id="patternSelect" style="width:100%;padding:7px;background:#102e4e;color:white;border:1px solid var(--edge);border-radius:7px"><option value="speckle">Microscopic speckles</option><option value="stripes">Fluid stripes</option><option value="spots">Leopard spots</option><option value="gradient">Pearlescent gradient</option><option value="glow">Bioluminescence</option></select><label style="margin-top:8px">Pattern colour</label><div id="patternSwatches" class="swatches"></div><label style="margin-top:9px">Accent details</label><div id="accentSwatches" class="swatches"></div></div><div class="controls"><b style="font-size:10px;color:var(--gold)">CELL ATTRIBUTES</b><div id="statRows"></div><div class="tiny">Removing parts refunds their full placement cost. Maximum complexity: 100%.</div></div></div></div>
 <div class="bottom" id="gameButtons"><button id="mobilePartsToggle" class="mobileOnly">☷ Parts</button><button id="mobileGenomeToggle" class="mobileOnly">◉ Cell</button><button id="pauseBtn">Ⅱ Pause</button><button id="callMateBtn">♡ Call mate [M]</button><button id="openEditorBtn" class="primary">🧬 Cell editor</button><button id="saveBtn">Save</button><button id="resetBtn">↺ Reset</button></div>
 <div class="editButtons" id="editorButtons"><button id="mobilePartsToggleEdit" class="mobileOnly">☷ Parts</button><button id="mobileGenomeToggleEdit" class="mobileOnly">◉ Cell</button><button id="cancelEditor">← Soup</button><button id="paintBtn">🎨 Paint mode</button><button id="deletePartBtn">− Remove part</button><button id="undoBtn">↶ Undo</button><button id="resetEditorBtn">↺ Reset</button><button id="finishEditor" class="primary">✓ Finish / Accept</button></div>
 <div class="mobileControls" id="mobileControls"><div class="col"><button data-key="ArrowUp">▲</button><button data-key="ArrowDown">▼</button></div><div class="col"><button data-key="ArrowLeft">◀</button><button data-key="ArrowRight">▶</button></div></div>
