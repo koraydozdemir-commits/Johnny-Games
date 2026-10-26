@@ -596,7 +596,7 @@ function updateAI(dt,time){
  const s=stats(),playerThreat=s.damage>0||s.diet!=='plant',playerSize=state.scale*(1+parts.length*.03);
  enemies.forEach(e=>{
   const u=e.userData;if(!u.alive)return;if(u.tailGroups)u.tailGroups.forEach((tail,i)=>{tail.rotation.z=Math.sin(time*(u.alpha?6:8)+u.phase+i*1.7)*.13});if(u.mate)return;
-  if(u.epic){e.position.x+=u.velocity.x*dt;e.position.y+=u.velocity.y*dt;if(e.position.x>player.position.x+cameraZoom*1.2){e.position.x=player.position.x-cameraZoom*1.2;e.position.y=player.position.y+(Math.random()-.5)*cameraZoom}if(distance2D(e.position,player.position)<u.size+state.scale)hurt(70,'The macro-predator struck!');return}
+  if(u.epic){e.position.x+=u.velocity.x*dt;e.position.y+=u.velocity.y*dt;if(e.position.x>player.position.x+cameraZoom*1.2){e.position.x=player.position.x-cameraZoom*1.2;e.position.y=player.position.y+(Math.random()-.5)*cameraZoom;u.hitCooldown=0}u.hitCooldown=Math.max(0,(u.hitCooldown||0)-dt);const impactDistance=distance2D(e.position,player.position);if(impactDistance<u.size+state.scale&&u.hitCooldown<=0){hurt(70,'The macro-predator struck!');spawnBurst(player.position.x,player.position.y,0xff6f86,18);const shove=new THREE.Vector2(player.position.x-e.position.x,player.position.y-e.position.y);if(shove.length()<.01)shove.set(1,0);shove.normalize();velocity.addScaledVector(shove,3.2);u.hitCooldown=3}return}
   if(u.stunned>0){u.stunned-=dt;e.rotation.z+=Math.sin(time*20)*dt*.25;return}
   e.scale.set(u.size*(1+Math.sin(time*3+u.phase)*.012),u.size*(1+Math.sin(time*4.2+u.phase)*.024),u.size);const playerDist=distance2D(e.position,player.position),isSmall=u.size<playerSize*.88,isBig=u.size>playerSize*1.18||u.alpha,playerBigger=playerSize>u.size*1.18;
   let target=null,targetFood=null,prey=null;
