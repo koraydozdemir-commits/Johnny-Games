@@ -210,12 +210,13 @@ function setStatus(t){status.textContent=t}
 function digestHex(s){return crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)).then(function(buf){return Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,'0')}).join('')})}
 function timeLabel(t){var now=Date.now(),diff=Math.max(0,now-t);if(diff<60000)return 'just now';if(diff<3600000)return Math.floor(diff/60000)+'m ago';if(diff<86400000)return Math.floor(diff/3600000)+'h ago';return new Date(t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}
 function removeMessage(key){return fetch(DB+'/chat/'+encodeURIComponent(key)+'.json',{method:'DELETE'}).then(function(r){if(!r.ok)throw new Error('delete denied')})}
+function keyTime(k){var chars='-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz',t=0;if(!k||k.length<8)return 0;for(var i=0;i<8;i++){var n=chars.indexOf(k.charAt(i));if(n<0)return 0;t=t*64+n}return t}
 function poll(){
  if(pollBusy)return;pollBusy=true;
  fetch(DB+'/chat.json?orderBy="$key"&limitToLast=100').then(function(r){if(!r.ok)throw new Error('Chat unavailable');return r.json()}).then(function(d){
   if(!d){cm.innerHTML='';setStatus('No messages yet — start the conversation!');return}
   var keys=Object.keys(d).sort(),now=Date.now(),a=[],expired=[];
-  keys.forEach(function(k){var m=d[k];if(!m||!m.n||!m.m)return;var ts=Number(m.t)||0;
+  keys.forEach(function(k){var m=d[k];if(!m||!m.n||!m.m)return;var ts=Number(m.t)||keyTime(k);
    if(ts&&now-ts>SIX_HOURS){expired.push(k);return}a.push({key:k,m:m,ts:ts});
   });
   cm.innerHTML='';
