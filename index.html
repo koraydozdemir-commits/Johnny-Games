@@ -50,8 +50,9 @@ h2{font-size:15px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em
 @keyframes glow{0%,100%{box-shadow:0 0 0 rgba(124,92,255,0)}50%{box-shadow:0 0 22px rgba(124,92,255,.55)}}
 .hero{position:relative}
 .hero:after{content:"";position:absolute;inset:0;background:linear-gradient(transparent 55%,var(--bg))}
-.card{animation:glow 5s ease-in-out infinite}
-.card:nth-child(3n){animation-delay:1.6s}.card:nth-child(3n+1){animation-delay:3.2s}
+.card{animation:none;box-shadow:0 8px 28px rgba(0,0,0,.18)}
+@media(hover:hover){.card:hover{box-shadow:0 12px 32px rgba(124,92,255,.2)}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 .rnd{background:linear-gradient(90deg,#7c5cff,#22d3ee);border-color:transparent;color:#fff}
 .about{max-width:900px;margin:36px auto 90px;padding:0 20px;color:var(--dim);font-size:15px;line-height:1.6}
 .about h2{color:var(--txt);text-transform:none;letter-spacing:0;font-size:20px}
@@ -65,15 +66,28 @@ h2{font-size:15px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em
 .feedback-link:hover{filter:brightness(1.12)}
 @media(max-width:560px){.feedback-inner{align-items:flex-start;flex-wrap:wrap}.feedback-copy{flex:1 1 calc(100% - 70px)}.feedback-link{width:100%}}
 
-#cbtn{position:fixed;right:calc(16px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));z-index:20;min-height:52px;padding:0 20px;border-radius:26px;border:0;background:var(--acc);color:#fff;font:700 16px inherit;font-family:inherit;box-shadow:0 6px 20px rgba(0,0,0,.5)}
-#chat{position:fixed;right:calc(12px + env(safe-area-inset-right));bottom:calc(76px + env(safe-area-inset-bottom));z-index:20;width:min(380px,calc(100vw - 24px));height:min(480px,60vh);display:none;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+#cbtn{position:fixed;right:calc(16px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));z-index:20;min-height:52px;padding:0 20px;border-radius:18px;border:1px solid rgba(255,255,255,.18);background:linear-gradient(135deg,#8b5cf6,#5b4bdb 60%,#2563eb);color:#fff;font:700 16px inherit;font-family:inherit;box-shadow:0 8px 28px rgba(91,75,219,.4);transition:transform .18s,box-shadow .18s}#cbtn:hover{transform:translateY(-2px);box-shadow:0 12px 34px rgba(91,75,219,.5)}
+#chat{position:fixed;right:calc(12px + env(safe-area-inset-right));bottom:calc(76px + env(safe-area-inset-bottom));z-index:20;width:min(410px,calc(100vw - 24px));height:min(540px,72vh);display:none;flex-direction:column;background:linear-gradient(165deg,#19192b,#10101b 72%);border:1px solid #393653;border-radius:22px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.6)}
 #chat.on{display:flex}
-#cmsgs{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 12px;font-size:15px}
-#cmsgs div{margin:0 0 8px;word-wrap:break-word}#cmsgs b{color:#9d86ff}
-#cform{display:flex;gap:8px;padding:8px;border-top:1px solid var(--line)}
+#cmsgs{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 12px;font-size:14px;scrollbar-width:thin;scrollbar-color:#4a426d transparent}
+#cmsgs .msg{position:relative;margin:0 0 10px;padding:10px 11px;border:1px solid #2b2940;background:rgba(255,255,255,.035);border-radius:13px;word-wrap:break-word;overflow-wrap:anywhere}
+#cmsgs .msg-head{display:flex;align-items:center;gap:7px;margin-bottom:4px;flex-wrap:wrap}
+#cmsgs b{color:#b8a8ff;font-size:13px}
+#cmsgs .stamp{color:#77778f;font-size:11px;margin-left:auto}
+#cmsgs .msg-body{white-space:pre-wrap;line-height:1.45}
+#cmsgs .del{border:1px solid #6e3349;border-radius:7px;background:#321b29;color:#ff9db4;padding:3px 7px;font-size:11px;cursor:pointer}
+#cstatus{padding:7px 12px;font-size:11px;color:#a8a4c4;background:rgba(124,92,255,.08);border-bottom:1px solid #29263e}
+#chathead{display:flex;align-items:center;gap:8px;padding:12px 12px 10px;border-bottom:1px solid #2a2840}
+#chathead .chat-title{font-weight:800;letter-spacing:.02em;flex:1}
+#chathead .live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#4ade80;box-shadow:0 0 10px #4ade8066;margin-right:6px}
+#adminBtn{border:1px solid #393653;background:#222137;color:#cfc7ff;border-radius:9px;padding:7px 9px;font-size:11px;font-weight:700}
+#chatclose{width:32px;height:32px;border:0;border-radius:9px;background:#27263a;color:#ddd}
+#cform{display:flex;gap:8px;padding:10px;border-top:1px solid #2a2840;background:rgba(0,0,0,.12)}
 #cform input{flex:1;min-width:0;font-size:16px;min-height:44px;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:#0f0f1c;color:var(--txt)}
-#cform button{min-height:44px;padding:0 16px;border-radius:12px;border:0;background:var(--acc);color:#fff;font-weight:700}
-#cnote{padding:6px 12px;font-size:12px;color:var(--dim);border-bottom:1px solid var(--line)}
+#cform button{min-height:44px;padding:0 16px;border-radius:12px;border:0;background:linear-gradient(135deg,#8b5cf6,#5b4bdb);color:#fff;font-weight:800}
+#cnote{padding:9px 12px;font-size:11px;color:#8886a5;border-bottom:1px solid #29263e}
+#cform input:focus{outline:2px solid #7c5cff;outline-offset:1px}
+@media(max-width:480px){#chat{right:8px;bottom:calc(72px + env(safe-area-inset-bottom));width:calc(100vw - 16px);height:min(68vh,560px)}}
 </style>
 </head>
 <body>
@@ -110,8 +124,8 @@ h2{font-size:15px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em
  </div>
 </section>
 <button id="cbtn">&#128172; Chat</button>
-<div id="chat"><div id="cnote">Be kind. Messages are public. Spam and abuse get deleted.</div><div id="cmsgs"></div>
-<form id="cform"><input id="cin" maxlength="200" placeholder="Say something..." autocomplete="off"><button>Send</button></form></div>
+<div id="chat" role="dialog" aria-label="Johnny Games community chat"><div id="chathead"><span class="chat-title"><span class="live-dot"></span>JOHNNY LOUNGE</span><button id="adminBtn" type="button">Admin login</button><button id="chatclose" type="button" aria-label="Close chat">×</button></div><div id="cnote">Keep it friendly. Messages automatically expire after 6 hours.</div><div id="cstatus" role="status">Connecting to chat…</div><div id="cmsgs" aria-live="polite"></div>
+<form id="cform"><input id="cin" maxlength="200" placeholder="Send a message…" autocomplete="off" aria-label="Chat message"><button type="submit">Send</button></form></div>
 <script>
 (function(){
 'use strict';
@@ -184,20 +198,61 @@ fetch('games.json').then(function(r){return r.json()}).then(function(d){S.games=
  .catch(function(){$('grid').innerHTML='<p class="empty">Could not load games.json.</p>'});
 document.getElementById('rnd').addEventListener('click',function(){
  var g=S.games.filter(function(x){return!x.ext});if(g.length)location.href=g[Math.random()*g.length|0].href});
-// ---- Chat (Firebase Realtime Database REST) ----
-var DB = 'https://johnny-chat-aabd6-default-rtdb.europe-west1.firebasedatabase.app/';
-
-var BAD=/\b(fuck|shit|bitch|cunt|nigg\w*|fag\w*|retard\w*|rape|slut|whore)\b/gi,last=0,timer=0;
-var cb=$('cbtn'),ch=$('chat'),cm=$('cmsgs');
-cb.onclick=function(){ch.classList.toggle('on');if(ch.classList.contains('on')){if(!DB){cm.innerHTML='<div>Chat is not set up yet. The site owner needs to add a database URL.</div>';return}poll();timer=setInterval(poll,3000);$('cin').focus()}else clearInterval(timer)};
-function poll(){fetch(DB+'/chat.json?orderBy="$key"&limitToLast=50').then(function(r){return r.json()}).then(function(d){
- if(!d)return;var a=Object.keys(d).sort().map(function(k){return d[k]}),stick=cm.scrollTop+cm.clientHeight>=cm.scrollHeight-40;
- cm.innerHTML='';a.forEach(function(m){if(!m||!m.n||!m.m)return;var e=document.createElement('div'),b=document.createElement('b');b.textContent=String(m.n).slice(0,12)+': ';e.appendChild(b);e.appendChild(document.createTextNode(String(m.m).slice(0,200).replace(BAD,'***')));cm.appendChild(e)});
- if(stick)cm.scrollTop=cm.scrollHeight}).catch(function(){})}
-$('cform').addEventListener('submit',function(e){e.preventDefault();var t=$('cin').value.trim();if(!t||!DB||Date.now()-last<2500)return;
- var n=store.get('jg_name','');if(!n){n=(prompt('Pick a chat name (max 12 letters)')||'').trim().slice(0,12).replace(BAD,'***');if(!n)return;store.set('jg_name',n)}
+// ---- Johnny Lounge chat ----
+var DB='https://johnny-chat-aabd6-default-rtdb.europe-west1.firebasedatabase.app/';
+var BAD=/\b(fuck|shit|bitch|cunt|nigg\w*|fag\w*|retard\w*|rape|slut|whore)\b/gi,last=0,timer=0,adminMode=false,pollBusy=false;
+var cb=$('cbtn'),ch=$('chat'),cm=$('cmsgs'),status=$('cstatus'),adminBtn=$('adminBtn');
+var SIX_HOURS=6*60*60*1000;
+// SHA-256 avoids storing the code in plain text, but client-side admin checks are NOT secure.
+// Anyone with access to the public site source can bypass them; secure moderation needs a trusted backend.
+var ADMIN_HASH='77d177e7a78a85a54a468d4338640374deff4a8fbe212d2ef5d174b4eabb0079';
+function setStatus(t){status.textContent=t}
+function digestHex(s){return crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)).then(function(buf){return Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,'0')}).join('')})}
+function timeLabel(t){var now=Date.now(),diff=Math.max(0,now-t);if(diff<60000)return 'just now';if(diff<3600000)return Math.floor(diff/60000)+'m ago';if(diff<86400000)return Math.floor(diff/3600000)+'h ago';return new Date(t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}
+function removeMessage(key){return fetch(DB+'/chat/'+encodeURIComponent(key)+'.json',{method:'DELETE'}).then(function(r){if(!r.ok)throw new Error('delete denied')})}
+function poll(){
+ if(pollBusy)return;pollBusy=true;
+ fetch(DB+'/chat.json?orderBy="$key"&limitToLast=100').then(function(r){if(!r.ok)throw new Error('Chat unavailable');return r.json()}).then(function(d){
+  if(!d){cm.innerHTML='';setStatus('No messages yet — start the conversation!');return}
+  var keys=Object.keys(d).sort(),now=Date.now(),a=[],expired=[];
+  keys.forEach(function(k){var m=d[k];if(!m||!m.n||!m.m)return;var ts=Number(m.t)||0;
+   if(ts&&now-ts>SIX_HOURS){expired.push(k);return}a.push({key:k,m:m,ts:ts});
+  });
+  cm.innerHTML='';
+  a.forEach(function(item){
+   var m=item.m,e=document.createElement('div');e.className='msg';
+   var head=document.createElement('div');head.className='msg-head';
+   var b=document.createElement('b');b.textContent=String(m.n).slice(0,12);head.appendChild(b);
+   var stamp=document.createElement('span');stamp.className='stamp';stamp.textContent=item.ts?timeLabel(item.ts):'older message';head.appendChild(stamp);
+   if(adminMode){var del=document.createElement('button');del.className='del';del.type='button';del.textContent='Delete';del.setAttribute('aria-label','Delete message from '+String(m.n).slice(0,12));del.onclick=function(){if(!confirm('Delete this message?'))return;del.disabled=true;removeMessage(item.key).then(poll).catch(function(){setStatus('Delete failed. Firebase rules may block moderation.');del.disabled=false})};head.appendChild(del)}
+   var body=document.createElement('div');body.className='msg-body';body.textContent=String(m.m).slice(0,200).replace(BAD,'***');
+   e.appendChild(head);e.appendChild(body);cm.appendChild(e);
+  });
+  setStatus((adminMode?'ADMIN MODE · ':'')+a.length+' recent message'+(a.length===1?'':'s')+' · messages expire after 6 hours');
+  if(expired.length)expired.slice(0,20).forEach(function(k){removeMessage(k).catch(function(){})});
+  if(cm.scrollHeight-cm.scrollTop-cm.clientHeight<100)cm.scrollTop=cm.scrollHeight;
+ }).catch(function(){setStatus('Chat could not connect. Try again in a moment.')}).finally(function(){pollBusy=false})
+}
+function openChat(){ch.classList.add('on');cb.setAttribute('aria-expanded','true');poll();clearInterval(timer);timer=setInterval(poll,5000);setTimeout(function(){$('cin').focus()},50)}
+function closeChat(){ch.classList.remove('on');cb.setAttribute('aria-expanded','false');clearInterval(timer);timer=0}
+cb.setAttribute('aria-expanded','false');cb.onclick=function(){if(ch.classList.contains('on'))closeChat();else openChat()};
+$('chatclose').onclick=closeChat;
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&ch.classList.contains('on'))closeChat();if(e.key==='/'&&!/input|textarea/i.test(document.activeElement.tagName)&&!e.ctrlKey&&!e.metaKey){e.preventDefault();$('q').focus()}});
+adminBtn.onclick=function(){
+ if(adminMode){adminMode=false;adminBtn.textContent='Admin login';poll();return}
+ var code=prompt('Enter the chat admin code:');if(code===null)return;
+ if(!window.crypto||!crypto.subtle){alert('Admin login needs a modern secure browser.');return}
+ digestHex(code).then(function(hash){if(hash===ADMIN_HASH){adminMode=true;adminBtn.textContent='Admin: ON';poll();alert('Admin mode enabled for this page.')}else{alert('Incorrect admin code.')}}).catch(function(){alert('Could not verify the code in this browser.')});
+};
+$('cform').addEventListener('submit',function(e){
+ e.preventDefault();var t=$('cin').value.trim();if(!t||Date.now()-last<1800)return;
+ var n=store.get('jg_name','');
+ if(!n){n=(prompt('Choose a chat name (max 12 characters)')||'').trim().slice(0,12).replace(BAD,'***');if(!n)return;store.set('jg_name',n)}
+ if(!/[a-z0-9]/i.test(n)){alert('Please choose a chat name with at least one letter or number.');return}
  last=Date.now();$('cin').value='';
- fetch(DB+'/chat.json',{method:'POST',body:JSON.stringify({n:n,m:t.slice(0,200)})}).then(poll).catch(function(){})});
+ fetch(DB+'/chat.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({n:n,m:t.slice(0,200),t:Date.now()})}).then(function(r){if(!r.ok)throw new Error('send failed');poll()}).catch(function(){setStatus('Message could not be sent. Please try again.');$('cin').value=t});
+});
+
 })();
 </script>
 </body>
