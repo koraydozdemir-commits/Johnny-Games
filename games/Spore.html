@@ -410,10 +410,16 @@ body.inGameMode .zoomControls{top:252px}
 @media(pointer:coarse) and (orientation:landscape) and (max-height:500px){
  .controlHint{bottom:calc(156px + env(safe-area-inset-bottom));max-width:62vw;font-size:9px}
 }
+
+/* Deep broth rendering: real cell-stage food sprites layered into the 3D scene */
+#spriteLayer{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:2;isolation:isolate}
+.worldSprite{position:absolute;left:0;top:0;display:block;object-fit:contain;pointer-events:none;transform-origin:center center;filter:drop-shadow(0 3px 4px #06152990) saturate(1.12) contrast(1.04);will-change:transform,opacity}
+body.cellEditorMode #spriteLayer{display:none}
+.partThumb{object-fit:contain;background:radial-gradient(ellipse,#36536722,transparent 75%)}
 </style>
 </head>
 <body>
-<canvas id="scene"></canvas><div id="damageFlash" aria-hidden="true"></div><div id="gameReticle" aria-hidden="true"><i></i></div><div class="vignette"></div>
+<canvas id="scene"></canvas><div id="spriteLayer" aria-hidden="true"></div><div id="damageFlash" aria-hidden="true"></div><div id="gameReticle" aria-hidden="true"><i></i></div><div class="vignette"></div>
 <header><a class="back" href="../index.html" aria-label="Back to games">‹</a><div class="brand">SPORE<small>PRIMORDIAL SOUP · CELL STAGE</small></div><div class="grow"></div><div class="pill">🧬 DNA <strong id="dnaCount">25</strong></div><div class="pill" id="tierLabel">SCALE TIER 1 / 4</div><button id="soundToggle" aria-label="Toggle sound effects" title="Toggle sound effects">♫</button><button id="fullscreenToggle" aria-label="Toggle fullscreen" title="Toggle fullscreen">⛶</button></header>
 <div id="sporeEditorTop" aria-label="Cell editor tools">
  <div class="editorTopRail"></div>
