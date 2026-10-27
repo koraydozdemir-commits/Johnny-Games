@@ -491,6 +491,26 @@ const defs=[
 {id:'mito',name:'Mitochondria',icon:'❋',cat:'Body',cost:3,unlock:3,complex:7,hp:2,speed:1,desc:'Boosts membrane health capacity and sustained metabolism.',stats:{health:2,thrust:1},col:0xffb66f},
 {id:'armour',name:'Chitin Plates',icon:'⬡',cat:'Body',cost:8,unlock:8,complex:12,hp:5,speed:-1,desc:'Hard shell plates reduce incoming damage, at the expense of speed.',stats:{health:5,armour:2},col:0x9bbed3}
 ];
+/* Real Spore cell-part art (used as decals on the 3D organisms; procedural 3D parts remain as fallback). */
+const sporeAssetUrls={
+ jaw:'https://cdn.wikimg.net/en/strategywiki/images/7/7b/Spore_cell_jaw.png',
+ filter:'https://cdn.wikimg.net/en/strategywiki/images/4/49/Spore_cell_filter_mouth.png',
+ proboscis:'https://cdn.wikimg.net/en/strategywiki/images/b/b8/Spore_cell_proboscis.png',
+ flagellum:'https://cdn.wikimg.net/en/strategywiki/images/9/91/Spore_cell_flagella.png',
+ cilia:'https://cdn.wikimg.net/en/strategywiki/images/f/f0/Spore_cell_cilia.png',
+ jet:'https://cdn.wikimg.net/en/strategywiki/images/3/3f/Spore_cell_jet.png',
+ spike:'https://cdn.wikimg.net/en/strategywiki/images/c/c7/Spore_cell_spike.png',
+ poison:'https://cdn.wikimg.net/en/strategywiki/images/2/22/Spore_cell_poison.png',
+ electric:'https://cdn.wikimg.net/en/strategywiki/images/3/3d/Spore_cell_electric.png',
+ eye:'https://cdn.wikimg.net/en/strategywiki/images/f/fb/Spore_cell_beady_eye.png',
+ stalkEye:'https://cdn.wikimg.net/en/strategywiki/images/e/e6/Spore_cell_stalk_eye.png',
+ buttonEye:'https://cdn.wikimg.net/en/strategywiki/images/e/e4/Spore_cell_button_eye.png',
+ dna:'https://cdn.wikimg.net/en/strategywiki/images/b/bb/Spore_dna_point_icon.png'
+};
+const actualSporeTextures=new Map(),sporeTextureLoader=new THREE.TextureLoader();sporeTextureLoader.setCrossOrigin('anonymous');
+function addActualPartDecal(group,id,position,scale){const tex=actualSporeTextures.get(id);if(!tex||!group||group.userData['actual-'+id])return;const mat=new THREE.SpriteMaterial({map:tex,transparent:true,opacity:.92,depthTest:true,depthWrite:false,toneMapped:false});const sprite=new THREE.Sprite(mat);sprite.position.set(position.x,position.y,position.z);sprite.scale.set(scale,scale,1);sprite.renderOrder=7;sprite.userData.actualSporeArt=true;group.add(sprite);group.userData['actual-'+id]=sprite;return sprite}
+function refreshActualSporeArt(){if(typeof playerPartsGroup!=='undefined')playerPartsGroup.children.forEach(g=>{if(g.userData&&g.userData.type)addActualPartDecal(g,g.userData.type,{x:0,y:0,z:.28},.48)});if(typeof enemies!=='undefined')enemies.forEach(g=>{if(!g.userData||g.userData.actualArtAdded||!g.userData.alive)return;const mouth=g.userData.diet==='meat'?'jaw':g.userData.diet==='omni'?'proboscis':'filter';addActualPartDecal(g,mouth,{x:.66,y:0,z:.68},.42);const eye=actualSporeTextures.has('stalkEye')?'stalkEye':'eye';addActualPartDecal(g,eye,{x:.32,y:.32,z:.72},.29);if(g.userData.alpha){addActualPartDecal(g,'spike',{x:-.35,y:.42,z:.62},.34);addActualPartDecal(g,'spike',{x:-.35,y:-.42,z:.62},.34)}g.userData.actualArtAdded=true})}
+Object.entries(sporeAssetUrls).forEach(([id,url])=>sporeTextureLoader.load(url,tex=>{tex.colorSpace=THREE.SRGBColorSpace;tex.minFilter=THREE.LinearMipmapLinearFilter;tex.magFilter=THREE.LinearFilter;actualSporeTextures.set(id,tex);refreshActualSporeArt()},undefined,()=>{}));
 const state={joystick:{x:0,y:0},pointerScreen:null,pendingDiet:'plant',dna:25,tier:1,food:0,foodGoal:8,plants:0,meat:0,health:100,maxHealth:100,scale:1,vision:1,baseColor:baseColors[0],patternColor:patternColors[0],accentColor:accentColors[0],pattern:'speckle',selected:'filter',category:'Mouths',symmetry:true,stack:false,paint:false,editor:false,paused:false,hasMate:false,mateSignal:false,mateTimer:0,mate:null,selectedPart:-1,selectedNode:2,mouseWorld:new THREE.Vector2(),mouseActive:false,jetCooldown:0,electricCooldown:0,damageCooldown:0,meteorTimer:18,ventTimer:5,eliteTimer:30,epicTimer:95,toastTimer:0,runStarted:false,eliteKills:0,discoveries:0,foodSinceMate:0,stamina:100,paintStrokes:[],shake:0,hintDismissed:false,worldGeneration:0,dietHintAt:0};
 const unlocked=new Set(['filter','cilia','eye']);let nodes=[],parts=[],boundary=[],hullMesh=null,nucleusGroup=null,handleGroup=new THREE.Group(),playerPartsGroup=new THREE.Group();player.add(handleGroup,playerPartsGroup);
 const input={};let food=[],enemies=[],hazards=[],meteors=[],vents=[],currents=[],epics=[],floatingMeat=[],particles=[],floatingFX=[],undoStack=[],redoStack=[],lastTime=performance.now(),gameTime=0,worldSize=1,healthBarMeshes=[],radarDotCache=new Map(),coatTextureCache=new Map(),worldSprites=[],editorCenterX=0,editorEntrySnapshot=null,rebuildPending=false,audioContext=null,soundEnabled=true,hintTimeout=null,wakeCooldown=0,autoSaveTimer=28;
