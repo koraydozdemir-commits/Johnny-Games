@@ -538,6 +538,14 @@ body:before{position:fixed;inset:0;z-index:0;content:"";background:linear-gradie
 }
 @media(max-width:390px){.console-rail .console-brand .brand-copy{display:none}.console-rail{gap:4px}.tab{font-size:8px}}
 @media(prefers-reduced-motion:reduce){#grid .card,.tab{transition:none!important}}
+
+/* Make the focused cover feel selected without changing its carousel scale */
+#grid.grid>.card.is-selected:before{content:"";position:absolute;inset:-4px;z-index:8;pointer-events:none;border:1px solid rgba(219,205,255,.86);border-radius:15px;box-shadow:0 0 9px rgba(195,168,255,.72),0 0 23px rgba(142,103,255,.52),inset 0 0 8px rgba(208,192,255,.22);animation:focusEdgeGlow 2.4s ease-in-out infinite alternate}
+@keyframes focusEdgeGlow{from{opacity:.64;filter:brightness(.9)}to{opacity:1;filter:brightness(1.15)}}
+@media(min-width:761px){.bar{left:12px;right:94px;max-width:none}.search-shell{max-width:none;flex:1 1 340px}#jg-tools{margin-left:0}}
+@media(max-width:760px){#grid.grid>.card.is-selected:before{inset:-3px;border-radius:13px}.bar{left:7px;right:7px;width:auto}}
+@media(prefers-reduced-motion:reduce){#grid.grid>.card.is-selected:before{animation:none}}
+#recentWrap{display:none!important}
 </style>
 <link rel="manifest" href="manifest.webmanifest"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head>
 <body>
@@ -577,7 +585,7 @@ body:before{position:fixed;inset:0;z-index:0;content:"";background:linear-gradie
  </div>
  <main>
   <section id="gamesPanel">
-   <div id="recentWrap" hidden><h2>Continue playing</h2><div class="grid" id="recent"></div></div>
+   
    <h2 id="allTitle">Discover games</h2><div class="grid" id="grid"><p class="empty">Loading games...</p></div><p id="selectedGameInfo" aria-live="polite"><strong>Choose a game</strong><span>Use ← → to browse · Enter to play</span></p>
   </section>
   <section class="about"><h2>Built for quick play</h2><p>Pick a game, save favorites, or come back to your recent plays. Johnny Games works in your browser on iPad, Chromebook, phone, and desktop.</p></section>
@@ -631,15 +639,13 @@ function render(){
  var list=S.games.filter(function(g){
   return g.name.toLowerCase().indexOf(q)>-1&&(S.tab==='all'||S.favs.indexOf(g.name)>-1);
  }).sort(function(a,b){var c=a.name.localeCompare(b.name,undefined,{sensitivity:'base'});return S.sort==='az'?c:-c});
+ var recentOrder=store.get('jg_recent',[]);if(recentOrder.length)list.sort(function(a,b){var ai=recentOrder.indexOf(a.name),bi=recentOrder.indexOf(b.name);if(ai<0&&bi<0)return 0;if(ai<0)return 1;if(bi<0)return -1;return ai-bi});
  $('count').textContent=list.length+(list.length===1?' game':' games');
  var g=$('grid');
  if(!list.length){g.innerHTML='<p class="empty">'+(S.tab==='fav'&&!q?'No favorites yet. Tap the heart on any game.':'No games match your search.')+'</p>'}
  else fill(g,list);
  $('allTitle').textContent=S.tab==='fav'?'Favorites':'All games';
- var rec=S.recent.map(function(n){return S.games.filter(function(x){return x.name===n})[0]}).filter(Boolean).slice(0,6);
- var showRec=rec.length&&!q&&S.tab==='all';
- $('recentWrap').hidden=!showRec;
- if(showRec)fill($('recent'),rec);
+ 
 }
 $('q').addEventListener('input',function(e){S.q=e.target.value;render()});
 if($('sort'))$('sort').addEventListener('change',function(e){S.sort=e.target.value;render()});
@@ -757,7 +763,7 @@ var g=document.getElementById('grid');
 var cards=[].slice.call(g.querySelectorAll(':scope > .card:not(.jg-cycle-clone)'));
 var original=cards.slice();
 cards.forEach(function(c){var n=c.querySelector('p')?.textContent||'';c.style.display=(!category||c.dataset.category===category)?'':'none'});
-var ordered=cards.slice().sort(function(a,b){var an=a.querySelector('p')?.textContent||'',bn=b.querySelector('p')?.textContent||'';if(sort==='za')return bn.localeCompare(an);if(sort==='most')return (state.plays[bn]||0)-(state.plays[an]||0);if(sort==='rated')return (state.ratings[bn]||0)-(state.ratings[an]||0);if(sort==='new')return original.indexOf(a)-original.indexOf(b);return an.localeCompare(bn)});
+var recentOrder=[];try{recentOrder=JSON.parse(localStorage.getItem('jg_recent')||'[]')}catch(e){}var ordered=cards.slice().sort(function(a,b){var an=a.querySelector('p')?.textContent||'',bn=b.querySelector('p')?.textContent||'',ai=recentOrder.indexOf(an),bi=recentOrder.indexOf(bn);if(ai<0&&bi>=0)return 1;if(bi<0&&ai>=0)return -1;if(ai>=0&&bi>=0&&ai!==bi)return ai-bi;if(sort==='za')return bn.localeCompare(an);if(sort==='most')return (state.plays[bn]||0)-(state.plays[an]||0);if(sort==='rated')return (state.ratings[bn]||0)-(state.ratings[an]||0);if(sort==='new')return original.indexOf(a)-original.indexOf(b);return an.localeCompare(bn)});
 var changed=ordered.some(function(c,i){return c!==original[i]});
 if(changed){g.replaceChildren.apply(g,ordered);window.dispatchEvent(new Event('jg-library-updated'))}
 document.getElementById('jg-stats').textContent='Today: '+(state.today||0)+' plays · '+state.minutes+' min total';
