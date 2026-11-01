@@ -41,8 +41,7 @@ try {
       databaseURL: databaseUrl,
       // Firebase rules grant this identity access only to analytics leaves.
       databaseAuthVariableOverride: {
-        uid: "johnny-analytics-worker",
-        analytics: true
+        uid: "johnny-analytics-worker"
       }
     }, "johnny-analytics-api");
     analyticsDb = getDatabase(firebaseApp);
@@ -89,7 +88,7 @@ function validGameName(value) {
   return typeof value === "string" &&
     value.trim().length > 0 &&
     value.trim().length <= 100 &&
-    !/[.#$\[\]/\u0000-\u001f\u007f]/.test(value);
+    !/[.#$\[\]\/\u0000-\u001f\u007f]/.test(value);
 }
 
 function validVisitorId(value) {
