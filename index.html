@@ -266,6 +266,19 @@ main{padding-top:12px;padding-bottom:24px}
  #selectedGameInfo strong{font-size:20px}
  #recentWrap{margin:8px 12px 16px}
 }
+
+/* Reliable horizontal shelf layout across desktop and mobile */
+#grid.grid,#recent.grid{display:flex;flex-flow:row nowrap;align-items:stretch;overflow-x:auto;overflow-y:visible;overscroll-behavior-inline:contain}
+#grid.grid{gap:clamp(12px,2vw,24px);padding:24px max(16px,calc((100vw - 220px)/2)) 28px;scroll-snap-type:x mandatory}
+#grid.grid>.card{flex:0 0 clamp(175px,17vw,220px);width:clamp(175px,17vw,220px);min-width:0}
+#recent.grid{gap:14px}
+#recent.grid>.card{flex:0 0 clamp(190px,22vw,280px);width:clamp(190px,22vw,280px)}
+@media(max-width:760px){
+ #grid.grid{gap:12px;padding:18px max(15px,calc((100vw - 180px)/2)) 22px}
+ #grid.grid>.card{flex-basis:clamp(155px,46vw,185px);width:clamp(155px,46vw,185px)}
+ #recent.grid{gap:12px}
+ #recent.grid>.card{flex-basis:72vw;width:72vw}
+}
 </style>
 <link rel="manifest" href="manifest.webmanifest"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head>
 <body>
@@ -504,6 +517,6 @@ enhance();apply();
 })();
 </script>
 <script>if('serviceWorker' in navigator && location.protocol!=='file:'){window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js').catch(function(){});});}</script>
-<script>(function(){var grid=document.getElementById('grid'),info=document.getElementById('selectedGameInfo');if(!grid||!info)return;function select(card,scroll){if(!card)return;document.querySelectorAll('#grid .card.is-selected,#recent .card.is-selected').forEach(function(x){x.classList.remove('is-selected')});card.classList.add('is-selected');var title=card.querySelector('p');if(title)info.innerHTML='<strong>'+title.textContent.replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})+'</strong><span>Press Enter to play</span>';if(scroll)card.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'})}grid.addEventListener('focusin',function(e){var c=e.target.closest('.card');if(c)select(c,false)});grid.addEventListener('pointerover',function(e){var c=e.target.closest('.card');if(c)select(c,false)});grid.addEventListener('keydown',function(e){if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft')return;var cards=[].slice.call(grid.querySelectorAll('.card'));if(!cards.length)return;var current=e.target.closest('.card'),i=Math.max(0,cards.indexOf(current)),next=(i+(e.key==='ArrowRight'?1:-1)+cards.length)%cards.length;e.preventDefault();select(cards[next],true);var a=cards[next].querySelector('a');if(a)a.focus({preventScroll:true})});grid.addEventListener('focusin',function(e){if(e.target.closest('.card'))grid.tabIndex=0});var first=grid.querySelector('.card');if(first)select(first,false);})();</script>
+<script>(function(){var grid=document.getElementById('grid'),info=document.getElementById('selectedGameInfo');if(!grid||!info)return;function select(card,scroll){if(!card)return;document.querySelectorAll('#grid .card.is-selected,#recent .card.is-selected').forEach(function(x){x.classList.remove('is-selected')});card.classList.add('is-selected');var title=card.querySelector('p');if(title)info.innerHTML='<strong>'+title.textContent.replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})+'</strong><span>Press Enter to play</span>';if(scroll)card.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'})}grid.addEventListener('focusin',function(e){var c=e.target.closest('.card');if(c)select(c,false)});grid.addEventListener('pointerover',function(e){var c=e.target.closest('.card');if(c)select(c,false)});grid.addEventListener('keydown',function(e){if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft')return;var cards=[].slice.call(grid.querySelectorAll('.card'));if(!cards.length)return;var current=e.target.closest('.card'),i=Math.max(0,cards.indexOf(current)),next=(i+(e.key==='ArrowRight'?1:-1)+cards.length)%cards.length;e.preventDefault();select(cards[next],true);var a=cards[next].querySelector('a');if(a)a.focus({preventScroll:true})});grid.addEventListener('focusin',function(e){if(e.target.closest('.card'))grid.tabIndex=0});var first=grid.querySelector('.card');if(first)select(first,false);var watch=new MutationObserver(function(){var card=grid.querySelector('.card');if(card&&!grid.querySelector('.card.is-selected'))select(card,false)});watch.observe(grid,{childList:true});})();</script>
 </body>
 </html>
