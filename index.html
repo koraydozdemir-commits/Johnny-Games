@@ -89,7 +89,7 @@ h2{font-size:15px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em
 #cform input:focus{outline:2px solid #7c5cff;outline-offset:1px}
 @media(max-width:480px){#chat{right:8px;bottom:calc(72px + env(safe-area-inset-bottom));width:calc(100vw - 16px);height:min(68vh,560px)}}
 </style>
-</head>
+<link rel="manifest" href="manifest.webmanifest"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head>
 <body>
 <div class="hero"><img src="images/Banner.png" alt="Johnny Games"></div>
 <div class="bar">
@@ -328,7 +328,7 @@ new MutationObserver(function(){enhance();apply()}).observe(grid,{childList:true
 document.getElementById('jg-category').onchange=apply;document.getElementById('jg-sort').onchange=apply;
 document.getElementById('jg-hidden').onclick=function(){var b=this;b.setAttribute('aria-pressed',b.getAttribute('aria-pressed')!=='true');b.textContent=b.getAttribute('aria-pressed')==='true'?'Hide hidden':'Show hidden';apply()};
 document.getElementById('jg-feature').onclick=function(){var cards=[].slice.call(document.querySelectorAll('#grid .card'));var c=cards[new Date().getDate()%Math.max(1,cards.length)];if(c)c.querySelector('a').click()};
-document.addEventListener('click',function(e){if(e.target.closest('.jg-dialog [data-rate]')){var n=body.querySelector('h2').textContent;state.ratings[n]=Number(e.target.closest('[data-rate]').dataset.rate);save();show(n,'<p>Thanks! Your rating is saved on this device.</p><p>'+('★'.repeat(state.ratings[n]))+'</p>')}});
+document.addEventListener('click',function(e){if(e.target.closest('#jg-dialog [data-rate]')){var n=body.querySelector('h2').textContent;state.ratings[n]=Number(e.target.closest('[data-rate]').dataset.rate);save();show(n,'<p>Thanks! Your rating is saved on this device.</p><p>'+('★'.repeat(state.ratings[n]))+'</p>')}});
 document.addEventListener('click',function(e){var a=e.target.closest('#grid .card a');if(!a)return;var n=a.querySelector('p')?.textContent;if(n){state.plays[n]=(state.plays[n]||0)+1;var d=new Date().toDateString();if(state.day!==d){state.today=0;state.day=d}state.today++;var h=JSON.parse(localStorage.getItem('jg_recent')||'[]');h=[n].concat(h.filter(function(x){return x!==n})).slice(0,30);localStorage.setItem('jg_recent',JSON.stringify(h));save();setTimeout(apply,0)}},true);
 document.getElementById('jg-settings').onclick=function(){show('Settings & saved data','<p>Appearance</p><button id="jg-theme">Toggle light/dark theme</button><p>Manage your local profile and progress</p><button id="jg-export">Export saved data</button><label><p>Import saved data (JSON)</p><input id="jg-import" type="file" accept="application/json"></label><p><button id="jg-reset">Reset local Johnny Games data</button></p><small>Your settings and progress stay in this browser unless you export them.</small>')};
 document.addEventListener('click',function(e){if(e.target.id==='jg-theme'){document.body.classList.toggle('jg-light');localStorage.setItem('jg_theme',document.body.classList.contains('jg-light')?'light':'dark')}
@@ -340,5 +340,5 @@ var start=Date.now();setInterval(function(){if(!document.hidden){state.minutes+=
 enhance();apply();
 })();
 </script>
-</body>
+<script>if('serviceWorker' in navigator && location.protocol!=='file:'){window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js').catch(function(){});});}</script></body>
 </html>
