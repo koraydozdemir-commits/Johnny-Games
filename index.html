@@ -320,7 +320,7 @@ function apply(){
 var category=document.getElementById('jg-category').value, sort=document.getElementById('jg-sort').value, showHidden=document.getElementById('jg-hidden').getAttribute('aria-pressed')==='true';
 var cards=[].slice.call(document.querySelectorAll('#grid .card'));
 cards.forEach(function(c){var n=c.querySelector('p')?.textContent||'';c.style.display=((!category||c.dataset.category===category)&&(showHidden||state.hidden.indexOf(n)<0))?'':'none'});
-cards.sort(function(a,b){var an=a.querySelector('p')?.textContent||'',bn=b.querySelector('p')?.textContent||'';if(sort==='za')return bn.localeCompare(an);if(sort==='most')return (state.plays[bn]||0)-(state.plays[an]||0);if(sort==='rated')return (state.ratings[bn]||0)-(state.ratings[an]||0);if(sort==='new')return 0;return an.localeCompare(bn)}).forEach(function(c){document.getElementById('grid').appendChild(c)});
+var ordered=cards.sort(function(a,b){var an=a.querySelector('p')?.textContent||'',bn=b.querySelector('p')?.textContent||'';if(sort==='za')return bn.localeCompare(an);if(sort==='most')return (state.plays[bn]||0)-(state.plays[an]||0);if(sort==='rated')return (state.ratings[bn]||0)-(state.ratings[an]||0);if(sort==='new')return cards.indexOf(a)-cards.indexOf(b);return an.localeCompare(bn)});var g=document.getElementById('grid');ordered.forEach(function(c,i){if(g.children[i]!==c)g.insertBefore(c,g.children[i]||null)});
 document.getElementById('jg-stats').textContent='Today: '+(state.today||0)+' plays · '+state.minutes+' min total';
 }
 var grid=document.getElementById('grid');
