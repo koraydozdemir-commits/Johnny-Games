@@ -398,6 +398,14 @@ body:before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;bac
 }
 @media(max-width:390px){.console-rail .console-brand .brand-copy{display:none}.console-rail{gap:4px}.tab{font-size:8px}}
 @media(prefers-reduced-motion:reduce){#grid .card,.tab{transition:none!important}}
+
+/* Wallpaper sits above the page canvas so it remains visible behind every section */
+body{background:#080a13;isolation:isolate}
+body:before{z-index:0;opacity:1;background:linear-gradient(180deg,rgba(7,8,16,.12),rgba(7,8,16,.18) 45%,rgba(7,8,16,.32)),url('images/Wallpaper.jpg') center center/cover no-repeat;filter:saturate(1.18) brightness(.92)}
+.console-app{position:relative;z-index:1;background:transparent}
+#cbtn,#chat,#jg-modal{z-index:60}
+.console-main main{top:42%}
+@media(max-width:760px){.console-main main{top:37%}}
 </style>
 <link rel="manifest" href="manifest.webmanifest"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head>
 <body>
