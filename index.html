@@ -230,6 +230,40 @@ main{max-width:1600px;padding:25px clamp(18px,5vw,70px) 46px}
 }
 @media(max-width:390px){.console-rail .rail-link{font-size:0;padding:0 9px}.console-rail .rail-link .tab-icon{font-size:18px}}
 @media(prefers-reduced-motion:reduce){.card,.tab{transition:none!important}}
+
+/* Full-screen wallpaper and PlayStation-style library stage */
+body{min-height:100vh;background-color:#090a10;background-image:linear-gradient(180deg,rgba(8,9,16,.36) 0%,rgba(8,9,16,.48) 42%,rgba(7,8,14,.93) 100%),radial-gradient(ellipse at 50% 18%,rgba(116,85,210,.17),transparent 55%),url('images/Wallpaper.jpg');background-repeat:no-repeat;background-position:center,center,center;background-size:cover,cover,cover;background-attachment:fixed}
+.console-rail{position:sticky;top:0;z-index:30;background:linear-gradient(180deg,rgba(8,10,19,.89),rgba(10,11,20,.62));backdrop-filter:blur(18px);box-shadow:0 8px 35px #05050c35}
+.console-main{position:relative;background:transparent}
+.hero{height:clamp(190px,25vh,270px);background:linear-gradient(90deg,#090a10ad,#090a1022 58%,#090a1040),rgba(12,12,20,.15);overflow:hidden}
+.hero:before{background:linear-gradient(90deg,#080910b8 0%,#08091055 44%,transparent 82%),linear-gradient(0deg,#080a10b3 0%,transparent 55%)}
+.hero img{object-fit:cover;object-position:center 38%;filter:saturate(.9);opacity:.88}
+.hero:after{width:60vw;height:35vh;right:8%;top:-12%;background:#8065e61c;filter:blur(75px)}
+.hero-copy{left:clamp(24px,5vw,76px);bottom:20px;width:min(560px,80%)}
+.hero-copy h1{font-size:clamp(27px,3vw,40px);margin:8px 0 5px}
+.hero-copy p{font-size:12px;max-width:440px}
+.hero-actions{margin-top:12px}
+.hero-action{min-height:39px;padding-inline:15px}
+.bar{position:relative;top:auto;z-index:18;background:rgba(10,11,19,.76);backdrop-filter:blur(18px);padding-block:10px}
+main{position:relative;z-index:2;max-width:none;min-height:calc(75vh - 80px);padding:24px clamp(20px,6vw,90px) 38px;background:linear-gradient(180deg,rgba(8,9,15,.22),rgba(8,9,15,.58))}
+#gamesPanel{min-height:0}
+#allTitle{font-size:14px;text-transform:uppercase;letter-spacing:.18em;color:#b6aecf;margin:0 0 0 8px}
+#grid.grid{grid-auto-flow:column;grid-auto-columns:clamp(185px,19vw,250px);grid-template-columns:none;gap:clamp(12px,2vw,24px);overflow-x:auto;overflow-y:visible;padding:38px max(14px,calc((100vw - 250px)/2)) 36px;scroll-padding-inline:42%;scroll-snap-type:x mandatory;scrollbar-width:none;mask-image:linear-gradient(90deg,transparent 0,#000 3%,#000 97%,transparent 100%)}
+#grid.grid::-webkit-scrollbar{display:none}
+#grid .card{scroll-snap-align:center;border:1px solid #ffffff23;border-radius:12px;background:#11131dcf;box-shadow:0 15px 38px #0008;transform-origin:center center;transition:transform .3s cubic-bezier(.2,.8,.2,1),border-color .25s,box-shadow .25s;opacity:.79}
+#grid .card img{aspect-ratio:1/1.12;border-radius:11px 11px 0 0}
+#grid .card p{font-size:13px;padding:11px}
+#grid .card:hover,#grid .card.is-selected,#grid .card:focus-within{z-index:5;opacity:1;transform:translateY(-13px) scale(1.12);border-color:#b6a4ff;box-shadow:0 0 0 2px #8e72ff65,0 22px 54px #000d,0 0 34px #8e72ff38}
+#selectedGameInfo{min-height:48px;margin:0 0 22px;text-align:center;color:#aaa4c4;font-size:12px;letter-spacing:.08em}
+#selectedGameInfo strong{display:block;color:#f4f0ff;font-size:clamp(20px,2.2vw,28px);font-weight:650;letter-spacing:.01em;margin-bottom:2px}
+#selectedGameInfo span{color:#aaa6ba}
+#recentWrap{margin:18px 0 22px}
+#recentWrap h2{font-size:14px;text-transform:uppercase;letter-spacing:.18em;color:#b6aecf}
+#recent.grid{grid-auto-columns:clamp(190px,22vw,280px);padding:18px 14px 25px;mask-image:none}
+#recent .card{opacity:.9}
+.about{max-width:900px;margin:22px auto 35px}
+@media(max-width:760px){body{background-attachment:scroll;background-position:center,center,center}.console-rail{position:sticky;top:0}.hero{height:230px}.hero-copy{bottom:16px}.hero-copy h1{font-size:31px}.hero-copy p{font-size:11px}main{min-height:calc(72vh - 70px);padding:25px 0 30px}#allTitle{margin-left:17px;font-size:12px}#grid.grid{grid-auto-columns:clamp(165px,57vw,205px);gap:13px;padding:34px max(15px,calc((100vw - 205px)/2)) 30px}#grid .card:hover,#grid .card.is-selected,#grid .card:focus-within{transform:translateY(-8px) scale(1.06)}#selectedGameInfo{margin-inline:14px}#recentWrap{margin-inline:15px}#recent.grid{grid-auto-columns:72vw}}
+@media(prefers-reduced-motion:reduce){#grid .card{transition:none!important}}
 </style>
 <link rel="manifest" href="manifest.webmanifest"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head>
 <body>
@@ -270,8 +304,7 @@ main{max-width:1600px;padding:25px clamp(18px,5vw,70px) 46px}
  <main>
   <section id="gamesPanel">
    <div id="recentWrap" hidden><h2>Continue playing</h2><div class="grid" id="recent"></div></div>
-   <h2 id="allTitle">Discover games</h2><p id="selectedGameInfo" aria-live="polite"><strong>Choose a game</strong><span>Use ← → to browse · Enter to play</span></p>
-   <div class="grid" id="grid"><p class="empty">Loading games...</p></div>
+   <h2 id="allTitle">Discover games</h2><div class="grid" id="grid"><p class="empty">Loading games...</p></div><p id="selectedGameInfo" aria-live="polite"><strong>Choose a game</strong><span>Use ← → to browse · Enter to play</span></p>
   </section>
   <section class="about"><h2>Built for quick play</h2><p>Pick a game, save favorites, or come back to your recent plays. Johnny Games works in your browser on iPad, Chromebook, phone, and desktop.</p></section>
  </main>
