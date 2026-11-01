@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0b14"><title>Popular Games · Johnny Games</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0b14;--card:#161624;--line:#2a2a40;--txt:#f2f2f7;--dim:#9a9ab0;--acc:#7c5cff}
+*{box-sizing:border-box}body{margin:0;padding:env(safe-area-inset-top) 18px env(safe-area-inset-bottom);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:var(--txt);background:var(--bg)}
+header,main{max-width:900px;margin:auto}header{padding:22px 0;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center;flex-wrap:wrap}header h1{font-size:23px;margin:0;flex:1}a,button{color:var(--txt)}header a{color:#c6baff;text-decoration:none}main{padding:20px 0 50px}.intro{color:var(--dim);max-width:720px}.boards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,350px),1fr));gap:16px;margin-top:24px}.board{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px}.board h2{font-size:18px;margin:0 0 4px}.board p{color:var(--dim);font-size:13px;margin:0 0 14px}.rows{list-style:none;padding:0;margin:0}.rows li{display:grid;grid-template-columns:32px 1fr auto;gap:10px;align-items:center;padding:11px 0;border-top:1px solid var(--line)}.rank{color:var(--dim)}.game{font-weight:650}.count{color:#c6baff;font-variant-numeric:tabular-nums}.empty,.status{color:var(--dim);padding:15px 0}.privacy{margin-top:24px;padding:13px 15px;border:1px solid var(--line);border-radius:13px;color:var(--dim);font-size:13px}.retry{background:var(--acc);border:0;border-radius:9px;padding:9px 13px;margin-top:8px}
+</style></head>
+<body><header><a href="./">← Johnny Games</a><h1>Popular games</h1><a href="./">Play games</a></header>
+<main><p class="intro">See which games visitors are favoriting and playing most. The rankings update from anonymous site wide counts.</p>
+<div class="boards"><section class="board"><h2>Most favorited</h2><p>Distinct browsers currently favoriting each game.</p><ol class="rows" id="favorites"><li class="status">Loading…</li></ol></section>
+<section class="board"><h2>Most played</h2><p>Total game launches recorded.</p><ol class="rows" id="plays"><li class="status">Loading…</li></ol></section></div>
+<p class="privacy">Favorites use a random ID saved in this browser so adding or removing a favorite updates that browser’s count. Play events store only the game and launch time. No names are collected.</p></main>
+<script>
+(function(){
+var DB='https://johnny-chat-aabd6-default-rtdb.europe-west1.firebasedatabase.app/';
+function rows(el,data,metric){
+var entries=Object.keys(data||{}).map(function(name){var raw=data[name]||{};var count=metric==='favorites'?Object.keys(raw).filter(function(k){return raw[k]===true}).length:Object.keys(raw).length;return {name:name,count:count}}).filter(function(x){return x.count>0}).sort(function(a,b){return b.count-a.count||a.name.localeCompare(b.name)}).slice(0,10);
+el.innerHTML='';if(!entries.length){el.innerHTML='<li class="empty">No counts yet. Play or favorite a game to get started.</li>';return}
+entries.forEach(function(item,i){var li=document.createElement('li'),rank=document.createElement('span'),name=document.createElement('span'),count=document.createElement('span');rank.className='rank';rank.textContent=(i+1)+'.';name.className='game';name.textContent=item.name;count.className='count';count.textContent=item.count.toLocaleString();li.append(rank,name,count);el.appendChild(li)})
+}
+Promise.all([fetch(DB+'favoriteAnalytics.json').then(function(r){if(!r.ok)throw Error('Could not load favorites');return r.json()}),fetch(DB+'playAnalytics.json').then(function(r){if(!r.ok)throw Error('Could not load plays');return r.json()})]).then(function(d){rows(document.getElementById('favorites'),d[0],'favorites');rows(document.getElementById('plays'),d[1],'plays')}).catch(function(){['favorites','plays'].forEach(function(id){document.getElementById(id).innerHTML='<li class="status">Analytics could not load right now.</li>'})})
+})();
+</script></body></html>
