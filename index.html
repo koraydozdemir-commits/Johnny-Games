@@ -256,5 +256,89 @@ $('cform').addEventListener('submit',function(e){
 
 })();
 </script>
+
+<style>
+#jg-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 16px;max-width:1400px;margin:auto}
+#jg-tools button,#jg-tools select,#jg-tools input{min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:var(--card);color:var(--txt);font:inherit}
+#jg-tools button[aria-pressed=true]{background:var(--acc);color:white}
+#jg-tools .spacer{flex:1}
+#jg-stats{color:var(--dim);font-size:13px;padding:0 4px}
+#jg-modal{position:fixed;inset:0;z-index:100;background:#000b;display:none;place-items:center;padding:18px}
+#jg-modal.open{display:grid}
+#jg-dialog{width:min(520px,100%);max-height:85vh;overflow:auto;background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 20px 80px #0009}
+#jg-dialog h2{color:var(--txt);text-transform:none;letter-spacing:0;font-size:24px}
+#jg-dialog button,#jg-dialog select{min-height:42px;border:1px solid var(--line);border-radius:10px;background:#222238;color:var(--txt);padding:0 12px;margin:4px}
+#jg-dialog .close{float:right}
+.jg-info{position:absolute;left:7px;top:7px;border:0;border-radius:50%;width:38px;height:38px;background:#0009;color:white;font-size:18px}
+.jg-badge{position:absolute;left:8px;bottom:58px;background:#7c5cff;color:white;border-radius:8px;padding:3px 7px;font-size:11px}
+.jg-hide{position:absolute;left:50px;top:7px;border:0;border-radius:50%;width:38px;height:38px;background:#0009;color:white;font-size:15px}
+body.jg-light{--bg:#f4f3fb;--card:#fff;--line:#d9d6e7;--txt:#181626;--dim:#66627a}
+body.jg-light{background:var(--bg)}
+@media(prefers-reduced-motion:reduce){html:focus-within{scroll-behavior:auto}}
+</style>
+<div id="jg-tools" aria-label="More library controls">
+  <select id="jg-category" aria-label="Filter by category"><option value="">All categories</option></select>
+  <select id="jg-sort" aria-label="Sort games"><option value="az">A–Z</option><option value="za">Z–A</option><option value="most">Most played</option><option value="rated">Highest rated</option><option value="new">Recently added</option></select>
+  <button id="jg-feature" type="button">⭐ Today's pick</button>
+  <button id="jg-hidden" type="button" aria-pressed="false">Show hidden</button>
+  <span class="spacer"></span><span id="jg-stats"></span><button id="jg-settings" type="button">⚙ Settings & data</button>
+</div>
+<div id="jg-modal" role="presentation"><section id="jg-dialog" role="dialog" aria-modal="true" aria-labelledby="jg-title"><button class="close" id="jg-close">Close</button><div id="jg-body"></div></section></div>
+<script>
+(function(){
+'use strict';
+var key='jg_extra_v1', state={};
+try{state=JSON.parse(localStorage.getItem(key)||'{}')||{}}catch(e){}
+state.plays=state.plays||{};state.ratings=state.ratings||{};state.hidden=state.hidden||[];state.minutes=state.minutes||0;
+var save=function(){try{localStorage.setItem(key,JSON.stringify(state))}catch(e){}};
+var cat=function(n){n=n.toLowerCase();if(/football|golf|soccer|bowl|league|penalty|cup|racing|drift|drive|hill climb/.test(n))return 'Sports & Racing';if(/puzzle|cut the rope|sort/.test(n))return 'Puzzle';if(/zombie|angry|bloon|plants|war|night/.test(n))return 'Action';if(/minecraft|obby|over it|spore|monkey|garden/.test(n))return 'Adventure';return 'Arcade'};
+var modal=document.getElementById('jg-modal'),body=document.getElementById('jg-body');
+function show(title,content){body.innerHTML='<h2 id="jg-title">'+title.replace(/[&<>]/g,'')+'</h2>'+content;modal.classList.add('open')}
+document.getElementById('jg-close').onclick=function(){modal.classList.remove('open')};
+modal.addEventListener('click',function(e){if(e.target===modal)modal.classList.remove('open')});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')modal.classList.remove('open')});
+function enhance(){
+var cards=[].slice.call(document.querySelectorAll('#grid .card'));
+var select=document.getElementById('jg-category'), old=select.value;
+var cats=Array.from(new Set(cards.map(function(c){var n=c.querySelector('p')?.textContent||'';return cat(n)}))).sort();
+select.innerHTML='<option value="">All categories</option>'+cats.map(function(c){return '<option>'+c+'</option>'}).join('');select.value=old;
+cards.forEach(function(c){
+var name=c.querySelector('p')?.textContent||'', category=cat(name);
+c.dataset.category=category;
+if(!c.querySelector('.jg-info')){
+var info=document.createElement('button');info.className='jg-info';info.type='button';info.textContent='ⓘ';info.setAttribute('aria-label','Details for '+name);
+info.onclick=function(e){e.preventDefault();e.stopPropagation();var rating=state.ratings[name]||0;show(name,'<p>Category: '+category+'</p><p>Play sessions: '+(state.plays[name]||0)+'</p><p>Your rating: '+(rating?'★'.repeat(rating):'Not rated yet')+'</p><p>Mark your rating:</p><div>'+[1,2,3,4,5].map(function(n){return '<button data-rate="'+n+'">'+('★'.repeat(n))+'</button>'}).join('')+'</div>')};
+c.appendChild(info);
+var hide=document.createElement('button');hide.className='jg-hide';hide.type='button';hide.textContent='🙈';hide.title='Hide game';
+hide.onclick=function(e){e.preventDefault();e.stopPropagation();state.hidden.indexOf(name)<0&&state.hidden.push(name);save();apply()};
+c.appendChild(hide);
+var badge=document.createElement('span');badge.className='jg-badge';badge.textContent=category;c.appendChild(badge);
+}
+});
+}
+function apply(){
+var category=document.getElementById('jg-category').value, sort=document.getElementById('jg-sort').value, showHidden=document.getElementById('jg-hidden').getAttribute('aria-pressed')==='true';
+var cards=[].slice.call(document.querySelectorAll('#grid .card'));
+cards.forEach(function(c){var n=c.querySelector('p')?.textContent||'';c.style.display=((!category||c.dataset.category===category)&&(showHidden||state.hidden.indexOf(n)<0))?'':'none'});
+cards.sort(function(a,b){var an=a.querySelector('p')?.textContent||'',bn=b.querySelector('p')?.textContent||'';if(sort==='za')return bn.localeCompare(an);if(sort==='most')return (state.plays[bn]||0)-(state.plays[an]||0);if(sort==='rated')return (state.ratings[bn]||0)-(state.ratings[an]||0);if(sort==='new')return 0;return an.localeCompare(bn)}).forEach(function(c){document.getElementById('grid').appendChild(c)});
+document.getElementById('jg-stats').textContent='Today: '+(state.today||0)+' plays · '+state.minutes+' min total';
+}
+var grid=document.getElementById('grid');
+new MutationObserver(function(){enhance();apply()}).observe(grid,{childList:true});
+document.getElementById('jg-category').onchange=apply;document.getElementById('jg-sort').onchange=apply;
+document.getElementById('jg-hidden').onclick=function(){var b=this;b.setAttribute('aria-pressed',b.getAttribute('aria-pressed')!=='true');b.textContent=b.getAttribute('aria-pressed')==='true'?'Hide hidden':'Show hidden';apply()};
+document.getElementById('jg-feature').onclick=function(){var cards=[].slice.call(document.querySelectorAll('#grid .card'));var c=cards[new Date().getDate()%Math.max(1,cards.length)];if(c)c.querySelector('a').click()};
+document.addEventListener('click',function(e){if(e.target.closest('.jg-dialog [data-rate]')){var n=body.querySelector('h2').textContent;state.ratings[n]=Number(e.target.closest('[data-rate]').dataset.rate);save();show(n,'<p>Thanks! Your rating is saved on this device.</p><p>'+('★'.repeat(state.ratings[n]))+'</p>')}});
+document.addEventListener('click',function(e){var a=e.target.closest('#grid .card a');if(!a)return;var n=a.querySelector('p')?.textContent;if(n){state.plays[n]=(state.plays[n]||0)+1;var d=new Date().toDateString();if(state.day!==d){state.today=0;state.day=d}state.today++;var h=JSON.parse(localStorage.getItem('jg_recent')||'[]');h=[n].concat(h.filter(function(x){return x!==n})).slice(0,30);localStorage.setItem('jg_recent',JSON.stringify(h));save();setTimeout(apply,0)}},true);
+document.getElementById('jg-settings').onclick=function(){show('Settings & saved data','<p>Appearance</p><button id="jg-theme">Toggle light/dark theme</button><p>Manage your local profile and progress</p><button id="jg-export">Export saved data</button><label><p>Import saved data (JSON)</p><input id="jg-import" type="file" accept="application/json"></label><p><button id="jg-reset">Reset local Johnny Games data</button></p><small>Your settings and progress stay in this browser unless you export them.</small>')};
+document.addEventListener('click',function(e){if(e.target.id==='jg-theme'){document.body.classList.toggle('jg-light');localStorage.setItem('jg_theme',document.body.classList.contains('jg-light')?'light':'dark')}
+if(e.target.id==='jg-export'){var data={extra:state,favorites:JSON.parse(localStorage.getItem('jg_favs')||'[]'),recent:JSON.parse(localStorage.getItem('jg_recent')||'[]'),name:localStorage.getItem('jg_name')};var u=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));var a=document.createElement('a');a.href=u;a.download='johnny-games-save.json';a.click();URL.revokeObjectURL(u)}
+if(e.target.id==='jg-reset'&&confirm('Clear Johnny Games saved data on this device?')){['jg_extra_v1','jg_favs','jg_recent','jg_name'].forEach(function(k){localStorage.removeItem(k)});location.reload()}});
+document.addEventListener('change',function(e){if(e.target.id==='jg-import'){var f=e.target.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(){try{var d=JSON.parse(rd.result);if(d.extra)state=d.extra;if(d.favorites)localStorage.setItem('jg_favs',JSON.stringify(d.favorites));if(d.recent)localStorage.setItem('jg_recent',JSON.stringify(d.recent));save();alert('Saved data imported.');location.reload()}catch(x){alert('That file is not a valid Johnny Games save.')}};rd.readAsText(f)}});
+if(localStorage.getItem('jg_theme')==='light')document.body.classList.add('jg-light');
+var start=Date.now();setInterval(function(){if(!document.hidden){state.minutes+=Math.max(0,Math.floor((Date.now()-start)/60000));start=Date.now();save();apply()}},60000);
+enhance();apply();
+})();
+</script>
 </body>
 </html>
