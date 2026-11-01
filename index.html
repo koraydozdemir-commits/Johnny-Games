@@ -146,7 +146,7 @@ function norm(e){
 function toggleFav(n){
  var i=S.favs.indexOf(n);
  if(i<0)S.favs.push(n);else S.favs.splice(i,1);
- store.set('jg_favs',S.favs);trackFavorite(n,i<0);render();
+ store.set('jg_favs',S.favs);window.trackFavorite(n,i<0);render();
 }
 function card(g){
  var d=document.createElement('div');d.className='card';
@@ -283,7 +283,7 @@ body.jg-light{background:var(--bg)}
 var DB='https://johnny-chat-aabd6-default-rtdb.europe-west1.firebasedatabase.app/';
 var analyticsVisitor=localStorage.getItem('jg_analytics_visitor');
 if(!analyticsVisitor){analyticsVisitor=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'v'+Date.now().toString(36)+Math.random().toString(36).slice(2);try{localStorage.setItem('jg_analytics_visitor',analyticsVisitor)}catch(e){}}
-function trackFavorite(game,active){var url=DB+'favoriteAnalytics/'+encodeURIComponent(game)+'/'+encodeURIComponent(analyticsVisitor)+'.json';fetch(url,{method:active?'PUT':'DELETE',headers:{'Content-Type':'application/json'},body:active?'true':undefined,keepalive:true}).catch(function(){});}
+window.trackFavorite=function(game,active){var url=DB+'favoriteAnalytics/'+encodeURIComponent(game)+'/'+encodeURIComponent(analyticsVisitor)+'.json';fetch(url,{method:active?'PUT':'DELETE',headers:{'Content-Type':'application/json'},body:active?'true':undefined,keepalive:true}).catch(function(){});};
 function trackPlay(game){var eventId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);fetch(DB+'playAnalytics/'+encodeURIComponent(game)+'/'+eventId+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({at:Date.now()}),keepalive:true}).catch(function(){});}
 var key='jg_extra_v1', state={};
 try{state=JSON.parse(localStorage.getItem(key)||'{}')||{}}catch(e){}
