@@ -594,6 +594,15 @@ body:before{position:fixed;inset:0;z-index:0;content:"";background:linear-gradie
 }
 @media (prefers-reduced-motion:reduce){#grid.grid>.card{transition:none!important}}
 
+
+/* Restore the full Johnny Games banner at the top */
+.hero{top:-68px;left:0;transform:none;width:100%;height:clamp(195px,25vh,260px);overflow:hidden;z-index:2;pointer-events:none}
+.hero img{object-fit:cover;object-position:center 42%;opacity:.86;filter:saturate(1.02) brightness(.98) drop-shadow(0 5px 20px #0009);mask-image:linear-gradient(180deg,#000 0%,#000 66%,#000b 83%,transparent 100%)}
+@media(max-width:760px){
+ .hero{top:-54px;width:100%;height:clamp(145px,24vh,190px)}
+ .hero img{object-position:center 42%;opacity:.82;mask-image:linear-gradient(180deg,#000 0%,#000 64%,#0009 82%,transparent 100%)}
+}
+
 </style>
 <link rel="manifest" href="manifest.webmanifest"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head>
 <body>
