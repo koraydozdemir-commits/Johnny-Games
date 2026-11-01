@@ -546,6 +546,9 @@ body:before{position:fixed;inset:0;z-index:0;content:"";background:linear-gradie
 @media(max-width:760px){#grid.grid>.card.is-selected:before{inset:-3px;border-radius:13px}.bar{left:7px;right:7px;width:auto}}
 @media(prefers-reduced-motion:reduce){#grid.grid>.card.is-selected:before{animation:none}}
 #recentWrap{display:none!important}
+
+/* Keep the full-width dock anchored to the viewport instead of offsetting it */
+.bar{transform:none}
 </style>
 <link rel="manifest" href="manifest.webmanifest"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head>
 <body>
