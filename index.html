@@ -146,7 +146,7 @@ function norm(e){
 function toggleFav(n){
  var i=S.favs.indexOf(n);
  if(i<0)S.favs.push(n);else S.favs.splice(i,1);
- store.set('jg_favs',S.favs);window.trackFavorite(n,i<0);render();
+ store.set('jg_favs',S.favs);try{if(typeof window.trackFavorite==='function')window.trackFavorite(n,i<0)}catch(e){}render();
 }
 function card(g){
  var d=document.createElement('div');d.className='card';
@@ -161,7 +161,7 @@ function card(g){
  var f=document.createElement('button');var on=S.favs.indexOf(g.name)>-1;
  f.className='fav'+(on?' on':'');f.innerHTML=on?'&#9829;':'&#9825;';
  f.setAttribute('aria-label',(on?'Remove ':'Add ')+g.name+(on?' from':' to')+' favorites');
- f.onclick=function(){toggleFav(g.name)};
+ f.onclick=function(e){e.preventDefault();e.stopPropagation();toggleFav(g.name)};
  d.appendChild(f);return d;
 }
 function fill(el,list){el.innerHTML='';list.forEach(function(g){el.appendChild(card(g))})}
@@ -258,22 +258,28 @@ $('cform').addEventListener('submit',function(e){
 </script>
 
 <style>
-#jg-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 16px;max-width:1400px;margin:auto}
-#jg-tools button,#jg-tools select,#jg-tools input{min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:var(--card);color:var(--txt);font:inherit}
-#jg-tools button[aria-pressed=true]{background:var(--acc);color:white}
-#jg-tools .spacer{flex:1}
-#jg-tools .jg-popular{display:inline-flex;align-items:center;text-decoration:none;min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:var(--card);color:var(--txt);white-space:nowrap}\n#jg-stats{color:var(--dim);font-size:13px;padding:0 4px}
+#jg-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0;padding:0;max-width:none}
+#jg-tools button,#jg-tools select,#jg-tools .jg-popular{min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:12px;background:rgba(22,22,36,.94);color:var(--txt);font:600 14px inherit;font-family:inherit;white-space:nowrap}
+#jg-tools button{cursor:pointer}
+#jg-tools button:hover,#jg-tools select:hover,#jg-tools .jg-popular:hover{border-color:var(--acc);background:#23213a}
+#jg-tools .jg-popular{display:inline-flex;align-items:center;text-decoration:none}
+#jg-stats{color:var(--dim);font-size:12px;white-space:nowrap}
+#jg-feedback{position:relative}
+#jg-feedback summary{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border:1px solid #6552ca;border-radius:12px;background:linear-gradient(135deg,#7859ef,#5140bd);box-shadow:0 4px 14px #5b4bdb44;color:white;font-weight:700;cursor:pointer;list-style:none}
+#jg-feedback summary:hover{filter:brightness(1.12)}
+#jg-feedback summary::-webkit-details-marker{display:none}
+#jg-feedback[open] a{position:absolute;right:0;top:48px;z-index:50;display:block;width:240px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:0 14px 40px #0008;color:var(--txt);text-decoration:none;font-weight:650}
+#jg-feedback[open] a:hover{border-color:var(--acc);color:#c9bcff}
 #jg-modal{position:fixed;inset:0;z-index:100;background:#000b;display:none;place-items:center;padding:18px}
 #jg-modal.open{display:grid}
 #jg-dialog{width:min(520px,100%);max-height:85vh;overflow:auto;background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 20px 80px #0009}
 #jg-dialog h2{color:var(--txt);text-transform:none;letter-spacing:0;font-size:24px}
 #jg-dialog button,#jg-dialog select{min-height:42px;border:1px solid var(--line);border-radius:10px;background:#222238;color:var(--txt);padding:0 12px;margin:4px}
 #jg-dialog .close{float:right}
-
 .jg-badge{position:absolute;left:8px;bottom:58px;background:#7c5cff;color:white;border-radius:8px;padding:3px 7px;font-size:11px}
-
 body.jg-light{--bg:#f4f3fb;--card:#fff;--line:#d9d6e7;--txt:#181626;--dim:#66627a}
 body.jg-light{background:var(--bg)}
+@media(max-width:760px){#jg-tools{flex:1 1 100%;width:100%}#jg-tools select{flex:1 1 auto;min-width:125px}.bar{align-items:center}}
 @media(prefers-reduced-motion:reduce){html:focus-within{scroll-behavior:auto}}
 </style>
 <div id="jg-modal" role="presentation"><section id="jg-dialog" role="dialog" aria-modal="true" aria-labelledby="jg-title"><button class="close" id="jg-close">Close</button><div id="jg-body"></div></section></div>
@@ -281,7 +287,8 @@ body.jg-light{background:var(--bg)}
 (function(){
 'use strict';
 var DB='https://johnny-chat-aabd6-default-rtdb.europe-west1.firebasedatabase.app/';
-var analyticsVisitor=localStorage.getItem('jg_analytics_visitor');
+var analyticsVisitor='';
+try{analyticsVisitor=localStorage.getItem('jg_analytics_visitor')||''}catch(e){}
 if(!analyticsVisitor){analyticsVisitor=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'v'+Date.now().toString(36)+Math.random().toString(36).slice(2);try{localStorage.setItem('jg_analytics_visitor',analyticsVisitor)}catch(e){}}
 window.trackFavorite=function(game,active){var url=DB+'favoriteAnalytics/'+encodeURIComponent(game)+'/'+encodeURIComponent(analyticsVisitor)+'.json';fetch(url,{method:active?'PUT':'DELETE',headers:{'Content-Type':'application/json'},body:active?'true':undefined,keepalive:true}).catch(function(){});};
 function trackPlay(game){var eventId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);fetch(DB+'playAnalytics/'+encodeURIComponent(game)+'/'+eventId+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({at:Date.now()}),keepalive:true}).catch(function(){});}
