@@ -100,8 +100,16 @@ h2{font-size:15px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em
   <button class="tab" data-t="browser">&#127760; Browser</button>
  </div>
  <button class="tab rnd" id="rnd">&#127922; Random</button>
- <select id="sort" aria-label="Sort"><option value="az">A to Z</option><option value="za">Z to A</option></select>
+ 
  <span class="count" id="count"></span>
+ <div id="jg-tools" aria-label="Library controls">
+  <select id="jg-category" aria-label="Filter by category"><option value="">All categories</option></select>
+  <select id="jg-sort" aria-label="Sort games"><option value="az">A–Z</option><option value="za">Z–A</option><option value="most">Most played</option><option value="rated">Highest rated</option><option value="new">Recently added</option></select>
+  <button id="jg-feature" type="button">⭐ Today's pick</button><span id="jg-stats"></span>
+  <button id="jg-settings" type="button">⚙ Settings & data</button>
+  <details id="jg-feedback"><summary>✉ Feedback</summary><a href="https://forms.gle/5QXE8RFMUHAxRxx16" target="_blank" rel="noopener noreferrer">Send feedback ↗</a></details>
+</div>
+
 </div>
 <main>
  <section id="gamesPanel">
@@ -113,16 +121,7 @@ h2{font-size:15px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em
 <section class="about"><h2>Free unblocked games you can play anywhere</h2>
 <p>Johnny Games is a free collection of unblocked browser games. There is nothing to download and no account to make. Every game runs right in your browser, and the site is built to work well on iPad Safari, Chromebooks, phones and desktop computers.</p>
 <p>Search the list, tap the heart to save your favorite games, and jump back into the ones you played recently. Add the site to your iPad Home Screen to launch it like an app.</p></section>
-<section class="feedback" aria-labelledby="feedbackTitle">
- <div class="feedback-inner">
-  <div class="feedback-icon" aria-hidden="true">&#9993;</div>
-  <div class="feedback-copy">
-   <h2 id="feedbackTitle">Help improve Johnny Games</h2>
-   <p>Got a suggestion, found a broken game, or have an idea for the site? Send your feedback!</p>
-  </div>
-  <a class="feedback-link" href="https://forms.gle/5QXE8RFMUHAxRxx16" target="_blank" rel="noopener noreferrer">Send Feedback &#8599;</a>
- </div>
-</section>
+
 <button id="cbtn">&#128172; Chat</button>
 <div id="chat" role="dialog" aria-label="Johnny Games community chat"><div id="chathead"><span class="chat-title"><span class="live-dot"></span>JOHNNY LOUNGE</span><button id="adminBtn" type="button">Admin login</button><button id="chatclose" type="button" aria-label="Close chat">×</button></div><div id="cnote">Keep it friendly. Messages automatically expire after 6 hours.</div><div id="cstatus" role="status">Connecting to chat…</div><div id="cmsgs" aria-live="polite"></div>
 <form id="cform"><input id="cin" maxlength="200" placeholder="Send a message…" autocomplete="off" aria-label="Chat message"><button type="submit">Send</button></form></div>
@@ -181,7 +180,7 @@ function render(){
  if(showRec)fill($('recent'),rec);
 }
 $('q').addEventListener('input',function(e){S.q=e.target.value;render()});
-$('sort').addEventListener('change',function(e){S.sort=e.target.value;render()});
+if($('sort'))$('sort').addEventListener('change',function(e){S.sort=e.target.value;render()});
 document.querySelectorAll('.tab').forEach(function(b){
  b.addEventListener('click',function(){
   if(b.dataset.t==='browser'){
@@ -269,20 +268,13 @@ $('cform').addEventListener('submit',function(e){
 #jg-dialog h2{color:var(--txt);text-transform:none;letter-spacing:0;font-size:24px}
 #jg-dialog button,#jg-dialog select{min-height:42px;border:1px solid var(--line);border-radius:10px;background:#222238;color:var(--txt);padding:0 12px;margin:4px}
 #jg-dialog .close{float:right}
-.jg-info{position:absolute;left:7px;top:7px;border:0;border-radius:50%;width:38px;height:38px;background:#0009;color:white;font-size:18px}
+
 .jg-badge{position:absolute;left:8px;bottom:58px;background:#7c5cff;color:white;border-radius:8px;padding:3px 7px;font-size:11px}
-.jg-hide{position:absolute;left:50px;top:7px;border:0;border-radius:50%;width:38px;height:38px;background:#0009;color:white;font-size:15px}
+
 body.jg-light{--bg:#f4f3fb;--card:#fff;--line:#d9d6e7;--txt:#181626;--dim:#66627a}
 body.jg-light{background:var(--bg)}
 @media(prefers-reduced-motion:reduce){html:focus-within{scroll-behavior:auto}}
 </style>
-<div id="jg-tools" aria-label="More library controls">
-  <select id="jg-category" aria-label="Filter by category"><option value="">All categories</option></select>
-  <select id="jg-sort" aria-label="Sort games"><option value="az">A–Z</option><option value="za">Z–A</option><option value="most">Most played</option><option value="rated">Highest rated</option><option value="new">Recently added</option></select>
-  <button id="jg-feature" type="button">⭐ Today's pick</button>
-  <button id="jg-hidden" type="button" aria-pressed="false">Show hidden</button>
-  <span class="spacer"></span><span id="jg-stats"></span><button id="jg-settings" type="button">⚙ Settings & data</button>
-</div>
 <div id="jg-modal" role="presentation"><section id="jg-dialog" role="dialog" aria-modal="true" aria-labelledby="jg-title"><button class="close" id="jg-close">Close</button><div id="jg-body"></div></section></div>
 <script>
 (function(){
@@ -305,28 +297,21 @@ select.innerHTML='<option value="">All categories</option>'+cats.map(function(c)
 cards.forEach(function(c){
 var name=c.querySelector('p')?.textContent||'', category=cat(name);
 c.dataset.category=category;
-if(!c.querySelector('.jg-info')){
-var info=document.createElement('button');info.className='jg-info';info.type='button';info.textContent='ⓘ';info.setAttribute('aria-label','Details for '+name);
-info.onclick=function(e){e.preventDefault();e.stopPropagation();var rating=state.ratings[name]||0;show(name,'<p>Category: '+category+'</p><p>Play sessions: '+(state.plays[name]||0)+'</p><p>Your rating: '+(rating?'★'.repeat(rating):'Not rated yet')+'</p><p>Mark your rating:</p><div>'+[1,2,3,4,5].map(function(n){return '<button data-rate="'+n+'">'+('★'.repeat(n))+'</button>'}).join('')+'</div>')};
-c.appendChild(info);
-var hide=document.createElement('button');hide.className='jg-hide';hide.type='button';hide.textContent='🙈';hide.title='Hide game';
-hide.onclick=function(e){e.preventDefault();e.stopPropagation();state.hidden.indexOf(name)<0&&state.hidden.push(name);save();apply()};
-c.appendChild(hide);
-var badge=document.createElement('span');badge.className='jg-badge';badge.textContent=category;c.appendChild(badge);
+if(!c.querySelector('.jg-badge')){var badge=document.createElement('span');badge.className='jg-badge';badge.textContent=category;c.appendChild(badge);}
 }
 });
 }
 function apply(){
-var category=document.getElementById('jg-category').value, sort=document.getElementById('jg-sort').value, showHidden=document.getElementById('jg-hidden').getAttribute('aria-pressed')==='true';
+var category=document.getElementById('jg-category').value, sort=document.getElementById('jg-sort').value;
 var cards=[].slice.call(document.querySelectorAll('#grid .card'));
-cards.forEach(function(c){var n=c.querySelector('p')?.textContent||'';c.style.display=((!category||c.dataset.category===category)&&(showHidden||state.hidden.indexOf(n)<0))?'':'none'});
+cards.forEach(function(c){var n=c.querySelector('p')?.textContent||'';c.style.display=(!category||c.dataset.category===category)?'':'none'});
 var ordered=cards.sort(function(a,b){var an=a.querySelector('p')?.textContent||'',bn=b.querySelector('p')?.textContent||'';if(sort==='za')return bn.localeCompare(an);if(sort==='most')return (state.plays[bn]||0)-(state.plays[an]||0);if(sort==='rated')return (state.ratings[bn]||0)-(state.ratings[an]||0);if(sort==='new')return cards.indexOf(a)-cards.indexOf(b);return an.localeCompare(bn)});var g=document.getElementById('grid');ordered.forEach(function(c,i){if(g.children[i]!==c)g.insertBefore(c,g.children[i]||null)});
 document.getElementById('jg-stats').textContent='Today: '+(state.today||0)+' plays · '+state.minutes+' min total';
 }
 var grid=document.getElementById('grid');
 new MutationObserver(function(){enhance();apply()}).observe(grid,{childList:true});
 document.getElementById('jg-category').onchange=apply;document.getElementById('jg-sort').onchange=apply;
-document.getElementById('jg-hidden').onclick=function(){var b=this;b.setAttribute('aria-pressed',b.getAttribute('aria-pressed')!=='true');b.textContent=b.getAttribute('aria-pressed')==='true'?'Hide hidden':'Show hidden';apply()};
+
 document.getElementById('jg-feature').onclick=function(){var cards=[].slice.call(document.querySelectorAll('#grid .card'));var c=cards[new Date().getDate()%Math.max(1,cards.length)];if(c)c.querySelector('a').click()};
 document.addEventListener('click',function(e){if(e.target.closest('#jg-dialog [data-rate]')){var n=body.querySelector('h2').textContent;state.ratings[n]=Number(e.target.closest('[data-rate]').dataset.rate);save();show(n,'<p>Thanks! Your rating is saved on this device.</p><p>'+('★'.repeat(state.ratings[n]))+'</p>')}});
 document.addEventListener('click',function(e){var a=e.target.closest('#grid .card a');if(!a)return;var n=a.querySelector('p')?.textContent;if(n){state.plays[n]=(state.plays[n]||0)+1;var d=new Date().toDateString();if(state.day!==d){state.today=0;state.day=d}state.today++;var h=JSON.parse(localStorage.getItem('jg_recent')||'[]');h=[n].concat(h.filter(function(x){return x!==n})).slice(0,30);localStorage.setItem('jg_recent',JSON.stringify(h));save();setTimeout(apply,0)}},true);
