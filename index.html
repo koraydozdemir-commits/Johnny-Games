@@ -107,6 +107,7 @@ h2{font-size:15px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em
   <select id="jg-sort" aria-label="Sort games"><option value="az">A–Z</option><option value="za">Z–A</option><option value="most">Most played</option><option value="rated">Highest rated</option><option value="new">Recently added</option></select>
   <button id="jg-feature" type="button">⭐ Today's pick</button><span id="jg-stats"></span>
   <button id="jg-settings" type="button">⚙ Settings & data</button>
+  <a class="jg-popular" href="analytics.html">📊 Popular games</a>
   <details id="jg-feedback"><summary>✉ Feedback</summary><a href="https://forms.gle/5QXE8RFMUHAxRxx16" target="_blank" rel="noopener noreferrer">Send feedback ↗</a></details>
 </div>
 
@@ -145,7 +146,7 @@ function norm(e){
 function toggleFav(n){
  var i=S.favs.indexOf(n);
  if(i<0)S.favs.push(n);else S.favs.splice(i,1);
- store.set('jg_favs',S.favs);render();
+ store.set('jg_favs',S.favs);trackFavorite(n,i<0);render();
 }
 function card(g){
  var d=document.createElement('div');d.className='card';
@@ -261,7 +262,7 @@ $('cform').addEventListener('submit',function(e){
 #jg-tools button,#jg-tools select,#jg-tools input{min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:var(--card);color:var(--txt);font:inherit}
 #jg-tools button[aria-pressed=true]{background:var(--acc);color:white}
 #jg-tools .spacer{flex:1}
-#jg-stats{color:var(--dim);font-size:13px;padding:0 4px}
+#jg-tools .jg-popular{display:inline-flex;align-items:center;text-decoration:none;min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:var(--card);color:var(--txt);white-space:nowrap}\n#jg-stats{color:var(--dim);font-size:13px;padding:0 4px}
 #jg-modal{position:fixed;inset:0;z-index:100;background:#000b;display:none;place-items:center;padding:18px}
 #jg-modal.open{display:grid}
 #jg-dialog{width:min(520px,100%);max-height:85vh;overflow:auto;background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 20px 80px #0009}
@@ -279,6 +280,11 @@ body.jg-light{background:var(--bg)}
 <script>
 (function(){
 'use strict';
+var DB='https://johnny-chat-aabd6-default-rtdb.europe-west1.firebasedatabase.app/';
+var analyticsVisitor=localStorage.getItem('jg_analytics_visitor');
+if(!analyticsVisitor){analyticsVisitor=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'v'+Date.now().toString(36)+Math.random().toString(36).slice(2);try{localStorage.setItem('jg_analytics_visitor',analyticsVisitor)}catch(e){}}
+function trackFavorite(game,active){var url=DB+'favoriteAnalytics/'+encodeURIComponent(game)+'/'+encodeURIComponent(analyticsVisitor)+'.json';fetch(url,{method:active?'PUT':'DELETE',headers:{'Content-Type':'application/json'},body:active?'true':undefined,keepalive:true}).catch(function(){});}
+function trackPlay(game){var eventId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);fetch(DB+'playAnalytics/'+encodeURIComponent(game)+'/'+eventId+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({at:Date.now()}),keepalive:true}).catch(function(){});}
 var key='jg_extra_v1', state={};
 try{state=JSON.parse(localStorage.getItem(key)||'{}')||{}}catch(e){}
 state.plays=state.plays||{};state.ratings=state.ratings||{};state.hidden=state.hidden||[];state.minutes=state.minutes||0;
@@ -314,7 +320,7 @@ document.getElementById('jg-category').onchange=apply;document.getElementById('j
 
 document.getElementById('jg-feature').onclick=function(){var cards=[].slice.call(document.querySelectorAll('#grid .card'));var c=cards[new Date().getDate()%Math.max(1,cards.length)];if(c)c.querySelector('a').click()};
 document.addEventListener('click',function(e){if(e.target.closest('#jg-dialog [data-rate]')){var n=body.querySelector('h2').textContent;state.ratings[n]=Number(e.target.closest('[data-rate]').dataset.rate);save();show(n,'<p>Thanks! Your rating is saved on this device.</p><p>'+('★'.repeat(state.ratings[n]))+'</p>')}});
-document.addEventListener('click',function(e){var a=e.target.closest('#grid .card a');if(!a)return;var n=a.querySelector('p')?.textContent;if(n){state.plays[n]=(state.plays[n]||0)+1;var d=new Date().toDateString();if(state.day!==d){state.today=0;state.day=d}state.today++;var h=JSON.parse(localStorage.getItem('jg_recent')||'[]');h=[n].concat(h.filter(function(x){return x!==n})).slice(0,30);localStorage.setItem('jg_recent',JSON.stringify(h));save();setTimeout(apply,0)}},true);
+document.addEventListener('click',function(e){var a=e.target.closest('#grid .card a');if(!a)return;var n=a.querySelector('p')?.textContent;if(n){trackPlay(n);state.plays[n]=(state.plays[n]||0)+1;var d=new Date().toDateString();if(state.day!==d){state.today=0;state.day=d}state.today++;var h=JSON.parse(localStorage.getItem('jg_recent')||'[]');h=[n].concat(h.filter(function(x){return x!==n})).slice(0,30);localStorage.setItem('jg_recent',JSON.stringify(h));save();setTimeout(apply,0)}},true);
 document.getElementById('jg-settings').onclick=function(){show('Settings & saved data','<p>Appearance</p><button id="jg-theme">Toggle light/dark theme</button><p>Manage your local profile and progress</p><button id="jg-export">Export saved data</button><label><p>Import saved data (JSON)</p><input id="jg-import" type="file" accept="application/json"></label><p><button id="jg-reset">Reset local Johnny Games data</button></p><small>Your settings and progress stay in this browser unless you export them.</small>')};
 document.addEventListener('click',function(e){if(e.target.id==='jg-theme'){document.body.classList.toggle('jg-light');localStorage.setItem('jg_theme',document.body.classList.contains('jg-light')?'light':'dark')}
 if(e.target.id==='jg-export'){var data={extra:state,favorites:JSON.parse(localStorage.getItem('jg_favs')||'[]'),recent:JSON.parse(localStorage.getItem('jg_recent')||'[]'),name:localStorage.getItem('jg_name')};var u=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));var a=document.createElement('a');a.href=u;a.download='johnny-games-save.json';a.click();URL.revokeObjectURL(u)}
