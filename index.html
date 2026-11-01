@@ -406,6 +406,14 @@ body:before{z-index:0;opacity:1;background:linear-gradient(180deg,rgba(7,8,16,.1
 #cbtn,#chat,#jg-modal{z-index:60}
 .console-main main{top:42%}
 @media(max-width:760px){.console-main main{top:37%}}
+
+body:before{background:linear-gradient(180deg,rgba(7,8,16,.25),rgba(7,8,16,.30) 45%,rgba(7,8,16,.44)),url('images/Wallpaper.jpg') center center/cover no-repeat;filter:saturate(.9) brightness(.68)}
+.hero{width:min(850px,76vw);height:92px}
+@media(max-width:760px){
+ .hero{width:90vw;height:76px}
+ #jg-tools .jg-popular:after{content:'↗';font-size:14px}
+ #jg-feedback summary:after{content:'✉';font-size:12px}
+}
 </style>
 <link rel="manifest" href="manifest.webmanifest"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head>
 <body>
