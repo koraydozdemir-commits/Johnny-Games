@@ -387,12 +387,13 @@ $('cform').addEventListener('submit',function(e){
 <script>
 (function(){
 'use strict';
-var DB='https://johnny-chat-aabd6-default-rtdb.europe-west1.firebasedatabase.app/';
+var ANALYTICS_API='https://johnny-games-proxy.onrender.com/api/analytics';
+function sendAnalytics(event){fetch(ANALYTICS_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(event),keepalive:true,mode:'cors'}).catch(function(){});}
 var analyticsVisitor='';
 try{analyticsVisitor=localStorage.getItem('jg_analytics_visitor')||''}catch(e){}
 if(!analyticsVisitor){analyticsVisitor=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'v'+Date.now().toString(36)+Math.random().toString(36).slice(2);try{localStorage.setItem('jg_analytics_visitor',analyticsVisitor)}catch(e){}}
-window.trackFavorite=function(game,active){var url=DB+'favoriteAnalytics/'+encodeURIComponent(game)+'/'+encodeURIComponent(analyticsVisitor)+'.json';fetch(url,{method:active?'PUT':'DELETE',headers:{'Content-Type':'application/json'},body:active?'true':undefined,keepalive:true}).catch(function(){});};
-function trackPlay(game){var eventId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);fetch(DB+'playAnalytics/'+encodeURIComponent(game)+'/'+eventId+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({at:Date.now()}),keepalive:true}).catch(function(){});}
+window.trackFavorite=function(game,active){sendAnalytics({type:'favorite',game:game,visitor:analyticsVisitor,active:!!active});};
+function trackPlay(game){sendAnalytics({type:'play',game:game});}
 var key='jg_extra_v1', state={};
 try{state=JSON.parse(localStorage.getItem(key)||'{}')||{}}catch(e){}
 state.plays=state.plays||{};state.ratings=state.ratings||{};state.hidden=state.hidden||[];state.minutes=state.minutes||0;
