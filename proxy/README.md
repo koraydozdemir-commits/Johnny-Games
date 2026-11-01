@@ -34,7 +34,7 @@ only to individual analytics records; do not add public `.write: true` rules.
   ".read": true,
   "$game": {
     "$visitor": {
-      ".write": "auth != null && auth.uid === 'johnny-analytics-worker' && auth.token.analytics === true",
+      ".write": "auth != null && auth.uid === 'johnny-analytics-worker'",
       ".validate": "newData.val() === true"
     }
   }
@@ -43,7 +43,7 @@ only to individual analytics records; do not add public `.write: true` rules.
   ".read": true,
   "$game": {
     "$event": {
-      ".write": "auth != null && auth.uid === 'johnny-analytics-worker' && auth.token.analytics === true",
+      ".write": "auth != null && auth.uid === 'johnny-analytics-worker'",
       ".validate": "newData.hasChildren(['at']) && newData.child('at').isNumber()"
     }
   }
