@@ -157,6 +157,33 @@ body.jg-light{--bg:#f4f3fb;--card:#fff;--line:#d9d6e7;--txt:#181626;--dim:#66627
  .about{margin-bottom:20px}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+
+/* Blue console dashboard refresh */
+:root{--bg:#06172a;--panel:#0b2438;--card:#102a40;--line:rgba(123,207,240,.17);--txt:#f2f8ff;--dim:#9bb9ca;--acc:#16b9ee;--hot:#ff5978;--cyan:#52d9ff}
+body{background:radial-gradient(ellipse at 48% -30%,#128bb344,transparent 56%),linear-gradient(145deg,#06182c,#071321 74%)}
+.console-rail{position:relative;inset:auto;width:100%;height:148px;padding:17px clamp(20px,5vw,72px) 15px;background:linear-gradient(100deg,#071c33f5,#08263af2 55%,#071a2bf5);border-right:0;border-bottom:1px solid #74d7fa22;display:grid;grid-template-columns:auto 1fr auto;grid-template-rows:54px 60px;align-items:center;gap:8px 30px;backdrop-filter:blur(18px)}
+.console-brand{grid-column:1;grid-row:1;margin:0;gap:12px}.brand-mark{border-radius:7px;background:linear-gradient(145deg,#19c9ff,#087fb5);box-shadow:0 0 24px #19b9f455;color:#031a2b}.brand-copy{letter-spacing:.15em}.brand-copy small{color:#54c8ed}
+.console-rail .rail-label{display:none}.console-rail .tabs{grid-column:1/-1;grid-row:2;display:flex;justify-content:center;gap:10px;max-width:none}
+.tab{height:56px;min-width:145px;justify-content:center;border:1px solid #5fc8e71f;border-radius:7px;background:linear-gradient(135deg,#0b4464,#103650);color:#58c8ea;font-size:14px;font-weight:750;letter-spacing:.04em;box-shadow:inset 0 1px #ffffff0a;transition:transform .22s,filter .22s,box-shadow .22s,border-color .22s}
+.tab:hover{transform:translateY(-2px);filter:brightness(1.2);background:linear-gradient(135deg,#0d577a,#124765)}
+.tab.on{color:#e7f8ff;border:2px solid #9beaff;background:linear-gradient(145deg,#1475a0,#0a3b5a);box-shadow:0 0 0 2px #35bce744,0 0 22px #42c9f466,inset 0 0 24px #39bfe633}
+.tab-icon{font-size:19px}.console-rail .rail-divider,.console-rail .rail-bottom{display:none}.console-rail .rail-link{grid-column:3;grid-row:1;justify-self:end;height:38px;margin:0;padding-inline:13px;color:#7bcce7;background:#ffffff08;border:1px solid #81d8f51c}
+.console-main{margin-left:0}.hero{height:clamp(275px,30vw,390px);background:#071b2d}.hero:before{background:linear-gradient(90deg,#061a2bdc 0%,#061a2b9c 35%,#061a2b32 70%,#061a2b3a 100%),linear-gradient(0deg,#071522 0%,transparent 34%)}
+.hero img{object-position:center 40%;filter:saturate(1.08) contrast(1.03)}.hero:after{background:#1cbfea20}.hero-copy{left:clamp(28px,7vw,100px);bottom:34px}.hero-kicker{color:#74dfff}.hero-kicker:before{background:#29c9f5}.hero-copy h1{text-shadow:0 3px 22px #001522}.hero-copy p{color:#d3e2eb}.hero-action{border-color:#67dcff;background:linear-gradient(135deg,#18bde9,#0878a8);box-shadow:0 7px 24px #05a9db55}.hero-action:hover{box-shadow:0 10px 30px #05a9db77}.hero-action.secondary{border-color:#a6ddf45c;background:#082238d9}
+.bar{background:#081c2deF;border-color:#6acde51a}.search-shell{border-color:#7dd9ef25;background:#ffffff07}.search-shell:focus-within{border-color:#5ed9ff;box-shadow:0 0 0 3px #16b9ee20}.bar input::placeholder{color:#84a5b7}
+#jg-tools button,#jg-tools select,#jg-tools .jg-popular{border-color:#79d6ef24;background:#10283b;color:#deeff7}#jg-tools button:hover,#jg-tools select:hover,#jg-tools .jg-popular:hover{border-color:#4ccdf3;background:#14364c}
+#jg-feedback summary{border-color:#3bc9ed88;background:linear-gradient(135deg,#148aad,#086185);box-shadow:0 4px 16px #038cb736}
+main{max-width:1600px;padding:25px clamp(20px,5vw,72px) 46px}h2{font-size:20px;color:#e8f6fc;letter-spacing:.005em}#recentWrap{margin-bottom:34px}#recentWrap h2:before{color:#47c8ed}
+#recent{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(240px,29%);grid-template-columns:none;overflow-x:auto;padding:3px 3px 16px;scroll-snap-type:x mandatory;scrollbar-width:thin;scrollbar-color:#1d789a #0a1e30}
+#recent .card{scroll-snap-align:start;border-radius:8px;background:#0c263a;border-color:#80d6ed30}#recent .card img{aspect-ratio:1.65/1}#recent .card:hover{border-color:#74e3ff;box-shadow:0 0 0 2px #59d7f377,0 16px 34px #0008}
+.grid{grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:16px}.card{border-radius:8px;background:linear-gradient(145deg,#123149,#0b2235);border-color:#8ad9ef20}.card:hover{border-color:#77ddf5;box-shadow:0 0 0 1px #55cde966,0 14px 34px #0008,0 0 20px #1bb7dc20}.card img{aspect-ratio:1.35/1}.fav{border-radius:7px;background:#061b2bc9;border-color:#a6e8fa35}.fav.on{color:#ff6f93;background:#3a1729dd;border-color:#ff638a77}.jg-badge{background:#071a2bd9;border-color:#85d9ef36;color:#a7edff}
+.about{color:#7692a2}.about h2{color:#bfd4df}#jg-dialog{background:#0e2639;border-color:#63c9e52c}#jg-dialog button,#jg-dialog select{background:#12364c;border-color:#63c9e52a}
+#cbtn{background:linear-gradient(135deg,#18bde9,#0878a8);box-shadow:0 8px 28px #039bc344;border-radius:9px}#chat{background:linear-gradient(165deg,#102c40,#091a2b);border-color:#2d7891}
+@media(max-width:760px){.console-rail{height:auto;min-height:126px;padding:10px 12px calc(10px + env(safe-area-inset-top));grid-template-columns:1fr auto;grid-template-rows:38px 52px;gap:8px}.console-brand{grid-column:1;grid-row:1}.brand-mark{width:34px;height:34px;border-radius:6px}.console-rail .tabs{grid-column:1/-1;grid-row:2;gap:6px}.tab{height:48px;min-width:0;flex:1;font-size:11px;padding:0 5px}.console-rail .rail-link{grid-column:2;grid-row:1;font-size:11px}.console-main{padding-bottom:80px}.hero{height:310px}.hero-copy{left:22px;bottom:22px}.hero-copy h1{font-size:clamp(33px,9vw,46px)}#recent{grid-auto-columns:minmax(220px,76%)}.grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:11px}main{padding:20px 15px 32px}}
+@media(max-width:390px){.console-rail .rail-link{font-size:0;padding:0 10px}.console-rail .rail-link .tab-icon{font-size:18px}.hero{height:285px}}
+@media(prefers-reduced-motion:no-preference){.tab.on{animation:consoleGlow 3s ease-in-out infinite alternate}.hero-action:not(.secondary){animation:buttonBreathe 3.5s ease-in-out infinite alternate}}
+@keyframes consoleGlow{to{box-shadow:0 0 0 2px #35bce744,0 0 29px #42c9f477,inset 0 0 28px #39bfe644}}
+@keyframes buttonBreathe{to{box-shadow:0 8px 28px #05a9db77}}
 </style>
 <link rel="manifest" href="manifest.webmanifest"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head>
 <body>
