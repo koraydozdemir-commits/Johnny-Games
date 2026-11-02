@@ -143,7 +143,7 @@ function handle(id,m){
   var n=Object.keys(P).length;if(n>=10)return;
   var used=Object.keys(P).map(function(k){return P[k].col});
   P[id]={name:m.name,col:COL.filter(function(c){return used.indexOf(c)<0})[0]};
-  bcast({t:'lobby',P:P});return;
+  bcast({t:'lobby',P:P,cfg:roomCfg});return;
  }
  if(!HS)return;var p=HS.p[id];if(!p)return;
  if(m.t==='in'){p.ix=m.x;p.iy=m.y}
@@ -151,7 +151,7 @@ function handle(id,m){
   p.done.push(m.id);HS.done++;sendTo(id,{t:'td',id:m.id});if(HS.done>=HS.total)endGame('crew')}
  else if(m.t==='kill'&&HS.phase==='play'&&p.alive&&p.role==='imp'&&Date.now()>p.cd){
   var best=null,bd=KR;Object.keys(HS.p).forEach(function(k){var q=HS.p[k];if(q.alive&&q.role==='crew'&&d(p,q)<bd){bd=d(p,q);best=k}});
-  if(best){var q=HS.p[best];q.alive=false;HS.bodies.push({id:best,x:q.x,y:q.y});p.x=q.x;p.y=q.y;p.cd=Date.now()+KCD;if(!checkWin())return}}
+  if(best){var q=HS.p[best];q.alive=false;HS.bodies.push({id:best,x:q.x,y:q.y});p.x=q.x;p.y=q.y;p.cd=Date.now()+HS.cfg.cooldown;if(!checkWin())return}}
  else if(m.t==='rep'&&HS.phase==='play'&&p.alive&&HS.bodies.some(function(b){return d(p,b)<110}))startMeet(id,'body');
  else if(m.t==='meet'&&HS.phase==='play'&&p.alive&&!p.usedMeet&&d(p,{x:TBL[0],y:TBL[1]})<110){p.usedMeet=1;startMeet(id,'table')}
  else if(m.t==='vote'&&HS.phase==='meet'&&p.alive&&HS.votes[id]==null){HS.votes[id]=m.v;bcast({t:'voted',id:id});
@@ -160,12 +160,13 @@ function handle(id,m){
 function d(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
 $('start').onclick=function(){
  var ids=Object.keys(P);if(ids.length<3)return;
- HS={phase:'play',p:{},bodies:[],done:0,total:0,votes:{},t:0};
- var imp=ids[Math.random()*ids.length|0];
+ readRoomCfg();if(roomCfg.imps>=ids.length){$('lmsg').textContent='There must be more crew than impostors.';return}
+ HS={phase:'play',p:{},bodies:[],done:0,total:0,votes:{},t:0,cfg:Object.assign({},roomCfg)};
+ var shuffled=ids.slice().sort(function(){return Math.random()-.5}),imps=shuffled.slice(0,roomCfg.imps);
  ids.forEach(function(k,i){
-  var a=i/ids.length*Math.PI*2,tl=[0,1,2,3,4,5].sort(function(){return Math.random()-.5}).slice(0,3);
-  HS.p[k]={x:TBL[0]+Math.cos(a)*70,y:TBL[1]+Math.sin(a)*70,ix:0,iy:0,alive:true,role:k===imp?'imp':'crew',tasks:k===imp?[]:tl,done:[],cd:Date.now()+8000,usedMeet:0};
-  if(k!==imp)HS.total+=3;
+  var a=i/ids.length*Math.PI*2,tl=[0,1,2,3,4,5].sort(function(){return Math.random()-.5}).slice(0,roomCfg.tasks),isImp=imps.indexOf(k)>-1;
+  HS.p[k]={x:TBL[0]+Math.cos(a)*70,y:TBL[1]+Math.sin(a)*70,ix:0,iy:0,alive:true,role:isImp?'imp':'crew',tasks:isImp?[]:tl,done:[],cd:Date.now()+roomCfg.cooldown,usedMeet:0};
+  if(!isImp)HS.total+=roomCfg.tasks;
  });
  ids.forEach(function(k){sendTo(k,{t:'role',role:HS.p[k].role,tasks:HS.p[k].tasks,total:HS.total,P:P})});
  clearInterval(HS.t);HS.t=setInterval(tick,50);
@@ -173,7 +174,7 @@ $('start').onclick=function(){
 function tick(){
  if(!HS||HS.phase!=='play')return;
  Object.keys(HS.p).forEach(function(k){var p=HS.p[k];if(!p.alive)return;var l=Math.hypot(p.ix,p.iy);if(l>1){p.ix/=l;p.iy/=l}
-  move(p,p.ix*SPD*.05,p.iy*SPD*.05)});
+  move(p,p.ix*SPD*HS.cfg.speed*.05,p.iy*SPD*HS.cfg.speed*.05)});
  bcast({t:'st',p:Object.keys(HS.p).map(function(k){var p=HS.p[k];return[k,p.x|0,p.y|0,p.alive?1:0,p.role==='imp'&&HS.bodies.length&&0?1:0]}),b:HS.bodies,dn:HS.done});
 }
 function move(p,dx,dy){
@@ -197,7 +198,7 @@ function tally(){
  setTimeout(function(){
   if(!HS)return;if(!checkWin())return;
   HS.bodies=[];var ids=Object.keys(HS.p),n=0;
-  ids.forEach(function(k){var p=HS.p[k];var a=n++/ids.length*Math.PI*2;p.x=TBL[0]+Math.cos(a)*70;p.y=TBL[1]+Math.sin(a)*70;p.cd=Date.now()+8000});
+  ids.forEach(function(k){var p=HS.p[k];var a=n++/ids.length*Math.PI*2;p.x=TBL[0]+Math.cos(a)*70;p.y=TBL[1]+Math.sin(a)*70;p.cd=Date.now()+HS.cfg.cooldown});
   HS.phase='play';bcast({t:'resume'});
  },4000);
 }
@@ -216,7 +217,7 @@ $('again').onclick=function(){bcast({t:'lobby',P:P})};
 
 /* ---------- client logic ---------- */
 function onMsg(m){
- if(m.t==='lobby'){P=m.P;C.phase='lobby';show('lobby');lobbyUI()}
+ if(m.t==='lobby'){P=m.P;if(m.cfg)roomCfg=m.cfg;C.phase='lobby';show('lobby');lobbyUI()}
  else if(m.t==='role'){P=m.P;C.role=m.role;C.tasks=m.tasks;C.mine={};C.total=m.total;C.done=0;C.bodies=[];C.alive=true;C.phase='play';
   killAt=Date.now()+8000;show(null);$('hud').style.display='flex';$('btns').style.display='flex';$('role').textContent=m.role==='imp'?'SABOTEUR':'CREW';
   $('role').style.color=m.role==='imp'?'#fb7185':'#8fe3ff';taskUI()}
@@ -232,9 +233,11 @@ function onMsg(m){
   $('again').hidden=!isHost}
 }
 function lobbyUI(){
- var ids=Object.keys(P);$('plist').innerHTML=ids.map(function(k){return'<span class="chip" style="background:'+P[k].col+'33;border-color:'+P[k].col+'">'+esc(P[k].name)+'</span>'}).join('');
- $('start').hidden=!isHost;$('start').disabled=ids.length<3;
- $('lmsg').textContent=ids.length+' player'+(ids.length>1?'s':'')+(ids.length<3?' (need 3+)':'')+(isHost?'':' - waiting for host');
+ var ids=Object.keys(P);$('roomsettings').style.display=isHost?'block':'none';
+ if(isHost){$('cfgImps').value=String(roomCfg.imps);$('cfgSpeed').value=String(roomCfg.speed);$('cfgCooldown').value=String(roomCfg.cooldown);$('cfgTasks').value=String(roomCfg.tasks)}
+ $('plist').innerHTML=ids.map(function(k){return'<span class="chip" style="background:'+P[k].col+'33;border-color:'+P[k].col+'">'+esc(P[k].name)+'</span>'}).join('');
+ $('start').hidden=!isHost;$('start').disabled=ids.length<3||roomCfg.imps>=ids.length;
+ $('lmsg').textContent=ids.length+' player'+(ids.length>1?'s':'')+(ids.length<3?' (need 3+)':'')+(isHost?'':' - waiting for host')+(roomCfg.imps>=ids.length?' · reduce impostors to start':'');
 }
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 function taskUI(){$('tl').innerHTML=C.role==='imp'?'Eliminate the crew. Do not get caught.':C.tasks.map(function(i){return(C.mine[i]?'&#10003; ':'&#9675; ')+['Reactor','Engine','Comms','Medbay','Cargo','Shields'][i]}).join('<br>')}
