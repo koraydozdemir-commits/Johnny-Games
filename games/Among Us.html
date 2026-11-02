@@ -35,7 +35,7 @@ button.g{background:#2a2f55}button:disabled{opacity:.35}
 #aligntrack{width:min(360px,90%);height:28px;background:#101827;border:2px solid #8ca4c5;border-radius:20px;position:relative;overflow:hidden}
 #alignzone{position:absolute;left:42%;width:16%;height:100%;background:#22c55e88;border-left:2px solid #86efac;border-right:2px solid #86efac}
 #alignneedle{position:absolute;left:0;top:0;width:5px;height:100%;background:#fff;box-shadow:0 0 8px #fff}
-</style></head><body>
+<style>.settinggrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.settinggrid label{display:flex;flex-direction:column;gap:5px;color:#aabbd2;font-size:13px}.settinggrid select{width:100%;min-height:42px;padding:6px;border:1px solid #526582;border-radius:9px;background:#202e45;color:white;font:inherit}#lobby{overflow-y:auto;justify-content:flex-start;padding-top:22px;padding-bottom:22px}@media(max-width:420px){.settinggrid{grid-template-columns:1fr}#lobby{gap:10px}}</style></head><body>
 <canvas id="cv"></canvas>
 <div id="hud"><div>Role: <span id="role"></span><div id="tl" style="font-weight:400;font-size:14px;margin-top:4px"></div></div><div>Tasks<div id="bar"><i></i></div></div></div>
 <div id="hold"><i></i></div>
@@ -48,13 +48,12 @@ button.g{background:#2a2f55}button:disabled{opacity:.35}
  <div class="row"><button id="host">Host game</button></div>
  <input id="jc" maxlength="4" placeholder="CODE" autocapitalize="characters" autocomplete="off">
  <button id="join" class="g">Join with code</button>
- <div id="err" style="color:#fb7185;min-height:22px"></div>
+ <div id="err" style="color:#fb7185;min-height:22px"></div><div id="connectstate" style="min-height:20px;color:#a9c7e8;font-size:13px"></div>
  <div style="color:#667;font-size:13px;max-width:380px">Needs internet. 3 or more players. Everyone opens the same page.</div>
 </div>
 <div class="scr" id="lobby" hidden>
  <div>Join code</div><div id="code"></div>
- <div class="pl" id="plist"></div><div id="lmsg" style="color:#9aa"></div>
- <button id="start" hidden>Start game</button>
+ <div class="pl" id="plist"></div><div id="lmsg" style="color:#9aa"></div><section id="roomsettings" style="display:none;width:min(560px,100%);padding:14px;border:1px solid #39496c;border-radius:14px;background:#111a2b;text-align:left"><h3>ROOM SETTINGS · HOST ONLY</h3><div class="settinggrid"><label>Impostors<select id="cfgImps"><option value="1">1</option><option value="2">2</option></select></label><label>Speed<select id="cfgSpeed"><option value=".8">Slow</option><option value="1" selected>Normal</option><option value="1.25">Fast</option><option value="1.5">Very fast</option></select></label><label>Kill cooldown<select id="cfgCooldown"><option value="8000">8 sec</option><option value="12000" selected>12 sec</option><option value="18000">18 sec</option><option value="25000">25 sec</option></select></label><label>Tasks per crewmate<select id="cfgTasks"><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option></select></label></div></section><button id="start" hidden>Start game</button>
 </div>
 <div class="scr" id="vote" hidden><h2 id="vt" style="margin:0"></h2><div id="vopts" class="row" style="max-width:640px"></div><div id="vtime"></div></div>
 <div class="scr" id="end" hidden><h1 id="et"></h1><div id="es" style="color:#9aa"></div><button id="again" hidden>Back to lobby</button></div>
