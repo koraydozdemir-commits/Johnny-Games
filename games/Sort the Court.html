@@ -11,10 +11,27 @@
 <base href="https://cdn.jsdelivr.net/gh/bubbls/UGS-Assets@main/sort-court/">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
   <title>Unity WebGL Player | Sort the Court!</title>
   <link rel="stylesheet" href="TemplateData/style.css">
   <link rel="shortcut icon" href="TemplateData/favicon.ico" />
+  <style>
+    html, body { margin: 0; width: 100%; min-height: 100%; background: #000; }
+    body.template { box-sizing: border-box; overflow: auto; -webkit-text-size-adjust: 100%; }
+    .template-wrap { box-sizing: border-box; width: 100%; max-width: 960px; margin: 0 auto; }
+    #canvas.emscripten { display: block; width: min(100%, 960px, calc((100dvh - 24px) * 1.7777778)) !important; height: auto !important; aspect-ratio: 16 / 9; margin: 0 auto; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    @media (max-width: 700px) {
+      html, body { min-height: 100dvh; }
+      body.template { display: flex; flex-direction: column; justify-content: center; overflow: hidden; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+      .header, .footer { display: none !important; }
+      .template-wrap { width: 100%; max-width: none; margin: 0; }
+      #canvas.emscripten { width: min(100vw, calc((100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 1.7777778)) !important; max-width: 100vw; }
+      .fullscreen { position: fixed; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); z-index: 10; }
+      .fullscreen img { width: 32px; height: 32px; }
+      .title, .logo { display: none !important; }
+    }
+  </style>
   <script src="TemplateData/UnityProgress.js"></script>
 </head>
 
