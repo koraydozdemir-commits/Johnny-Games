@@ -7,6 +7,76 @@
 :root{color-scheme:dark;--bg:#0b0b14;--card:#161624;--line:#2a2a40;--txt:#f2f2f7;--dim:#9a9ab0;--acc:#7c5cff}
 *{box-sizing:border-box}body{margin:0;padding:env(safe-area-inset-top) 18px env(safe-area-inset-bottom);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:var(--txt);background:var(--bg)}
 header,main{max-width:900px;margin:auto}header{padding:22px 0;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center;flex-wrap:wrap}header h1{font-size:23px;margin:0;flex:1}a,button{color:var(--txt)}header a{color:#c6baff;text-decoration:none}main{padding:20px 0 50px}.intro{color:var(--dim);max-width:720px}.boards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,350px),1fr));gap:16px;margin-top:24px}.board{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px}.board h2{font-size:18px;margin:0 0 4px}.board p{color:var(--dim);font-size:13px;margin:0 0 14px}.rows{list-style:none;padding:0;margin:0}.rows li{display:grid;grid-template-columns:32px 1fr auto;gap:10px;align-items:center;padding:11px 0;border-top:1px solid var(--line)}.rank{color:var(--dim)}.game{font-weight:650}.count{color:#c6baff;font-variant-numeric:tabular-nums}.empty,.status{color:var(--dim);padding:15px 0}.privacy{margin-top:24px;padding:13px 15px;border:1px solid var(--line);border-radius:13px;color:var(--dim);font-size:13px}.retry{background:var(--acc);border:0;border-radius:9px;padding:9px 13px;margin-top:8px}
+
+/* Matching Johnny Games visual system */
+:root{
+ color-scheme:dark;--bg:#080913;--card:rgba(20,20,36,.88);--line:rgba(255,255,255,.13);
+ --txt:#f6f4ff;--dim:#aaa7bc;--acc:#a48cff;
+}
+html{min-height:100%;background:#080913}
+body{
+ min-height:100vh;padding:env(safe-area-inset-top) clamp(14px,4vw,54px) env(safe-area-inset-bottom);
+ background:
+  radial-gradient(ellipse at 12% 0%,rgba(112,82,235,.2),transparent 38%),
+  radial-gradient(ellipse at 90% 35%,rgba(48,156,186,.1),transparent 32%),
+  linear-gradient(160deg,#090a15,#0b0c18 58%,#080913);
+ color:var(--txt);
+}
+header,main{max-width:1120px}
+header{
+ position:relative;min-height:78px;padding:18px 0;border-bottom:1px solid var(--line);
+ gap:18px;
+}
+header h1{font-size:clamp(23px,3vw,34px);font-weight:850;letter-spacing:-.045em}
+header a{color:#c8bdff;font-size:12px;font-weight:800;text-decoration:none}
+header a:hover{color:#fff;text-decoration:underline;text-underline-offset:4px}
+main{padding:30px 0 60px}
+.intro{max-width:680px;color:#aaa7bc;font-size:14px;line-height:1.7}
+.boards{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:28px}
+.board{
+ position:relative;overflow:hidden;min-width:0;padding:22px;
+ border:1px solid rgba(255,255,255,.13);border-radius:20px;
+ background:linear-gradient(145deg,rgba(29,27,48,.92),rgba(15,17,29,.92));
+ box-shadow:0 18px 48px rgba(0,0,0,.22);
+}
+.board:before{
+ content:"";position:absolute;top:0;left:22px;right:22px;height:2px;
+ background:linear-gradient(90deg,#a48cff,rgba(131,233,242,.55),transparent);
+}
+.board h2{margin:2px 0 5px;font-size:18px;font-weight:850;letter-spacing:-.02em}
+.board p{margin:0 0 15px;color:#9b98ad;font-size:12px;line-height:1.5}
+.rows{margin:0}
+.rows li{
+ grid-template-columns:34px minmax(0,1fr) auto;gap:12px;
+ min-height:50px;padding:12px 2px;border-top:1px solid rgba(255,255,255,.075);
+}
+.rank{color:#9290a6;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
+.game{min-width:0;color:#f0edfa;font-size:13px;font-weight:750;overflow-wrap:anywhere}
+.count{color:#c6b7ff;font-size:13px;font-weight:850;font-variant-numeric:tabular-nums}
+.rows li:nth-child(1) .rank{color:#f7d17b}
+.rows li:nth-child(2) .rank{color:#d6d9e7}
+.rows li:nth-child(3) .rank{color:#d9a27c}
+.empty,.status{color:#aaa7bc;font-size:13px}
+.privacy{
+ margin-top:22px;padding:15px 17px;border:1px solid rgba(255,255,255,.1);
+ border-radius:14px;background:rgba(255,255,255,.035);color:#9895aa;font-size:12px;line-height:1.6;
+}
+.retry{
+ min-height:38px;margin-top:10px;padding:0 14px;border:1px solid rgba(204,190,255,.5);
+ border-radius:10px;background:linear-gradient(135deg,#9275f3,#6449d3);
+ color:#fff;font-size:12px;font-weight:850;
+}
+.retry:hover{filter:brightness(1.1)}
+@media(max-width:700px){
+ header{min-height:64px;padding:15px 0;gap:10px}
+ header h1{flex-basis:100%;order:3;font-size:26px}
+ header a{font-size:11px}
+ main{padding:23px 0 45px}
+ .boards{grid-template-columns:1fr;gap:13px;margin-top:22px}
+ .board{padding:19px;border-radius:17px}
+ .intro{font-size:13px}
+}
+
 </style></head>
 <body><header><a href="./">← Johnny Games</a><h1>Popular games</h1><a href="./">Play games</a></header>
 <main><p class="intro">See which games visitors are favouriting and playing most. Rankings update from anonymous site-wide counts.</p>
