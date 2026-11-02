@@ -819,7 +819,6 @@ cards.forEach(function(c){
 var name=c.querySelector('p')?.textContent||'', category=cat(name);
 c.dataset.category=category;
 if(!c.querySelector('.jg-badge')){var badge=document.createElement('span');badge.className='jg-badge';badge.textContent=category;c.appendChild(badge);}
-}
 });
 }
 function apply(){
