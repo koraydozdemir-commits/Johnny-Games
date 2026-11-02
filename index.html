@@ -631,13 +631,14 @@ body.jg-light #cbtn{background:rgba(255,255,255,.92);color:#302849;border-color:
    <div class="hero-kicker">THE JOHNNY GAMES ARCADE</div>
    <h1>Your next favorite<br>is waiting.</h1>
    <p>Jump into a quick round, discover something new, and pick up right where you left off.</p>
-   <div class="hero-actions"><button class="hero-action" id="jg-feature" type="button">▶ &nbsp; PLAY TODAY'S PICK</button><button class="hero-action secondary console-random" id="rnd" type="button">🎲 &nbsp; SURPRISE ME</button></div>
+   <div class="hero-actions"><button class="hero-action secondary console-random" id="rnd" type="button">🎲 &nbsp; SURPRISE ME</button></div>
   </div>
  </div>
  <div class="bar">
   <label class="search-shell"><span>⌕</span><input id="q" type="search" placeholder="Search the library..." aria-label="Search games" autocomplete="off"></label>
   <span class="count" id="count"></span>
   <div id="jg-tools" aria-label="Library controls">
+   <button id="jg-feature" type="button" aria-label="Play today’s pick">✦ &nbsp; Today’s Pick</button>
    <select id="jg-category" aria-label="Filter by category"><option value="">All categories</option></select>
    <select id="jg-sort" aria-label="Sort games"><option value="az">A–Z</option><option value="za">Z–A</option><option value="most">Most played</option><option value="new">Recently played</option></select>
    <button id="jg-settings" type="button">⚙ &nbsp; Settings</button>
@@ -836,11 +837,21 @@ var grid=document.getElementById('grid');
 new MutationObserver(function(){enhance();apply()}).observe(grid,{childList:true});
 document.getElementById('jg-category').onchange=apply;document.getElementById('jg-sort').onchange=apply;
 
-document.getElementById('jg-feature').onclick=function(){var cards=[].slice.call(document.querySelectorAll('#grid .card'));var c=cards[new Date().getDate()%Math.max(1,cards.length)];if(c){window.jgCarouselPlay=true;window.jgCarouselLaunching=true;c.querySelector('a').click();window.jgCarouselLaunching=false}};
+document.getElementById('jg-feature').onclick=function(){
+ var cards=[].slice.call(document.querySelectorAll('#grid > .card:not(.jg-cycle-clone)')).filter(function(c){return getComputedStyle(c).display!=='none'&&c.querySelector('a[href]')});
+ if(!cards.length){alert('Games are still loading — try again in a moment.');return}
+ var now=new Date(),day=Math.floor(Date.UTC(now.getFullYear(),now.getMonth(),now.getDate())/86400000);
+ var card=cards[((day%cards.length)+cards.length)%cards.length],link=card.querySelector('a[href]');
+ if(!link)return;
+ window.jgCarouselPlay=true;window.jgCarouselLaunching=true;
+ location.href=link.href;
+};
 document.addEventListener('click',function(e){if(e.target.closest('#jg-dialog [data-rate]')){var n=body.querySelector('h2').textContent;state.ratings[n]=Number(e.target.closest('[data-rate]').dataset.rate);save();show(n,'<p>Thanks! Your rating is saved on this device.</p><p>'+('★'.repeat(state.ratings[n]))+'</p>')}});
 document.addEventListener('click',function(e){var a=e.target.closest('#grid .card a');if(!a||!window.jgCarouselPlay)return;window.jgCarouselPlay=false;var n=a.querySelector('p')?.textContent;if(n){trackPlay(n);state.plays[n]=(state.plays[n]||0)+1;var d=new Date().toDateString();if(state.day!==d){state.today=0;state.day=d}state.today++;var h=JSON.parse(localStorage.getItem('jg_recent')||'[]');h=[n].concat(h.filter(function(x){return x!==n})).slice(0,30);localStorage.setItem('jg_recent',JSON.stringify(h));save();setTimeout(apply,0)}},true);
-document.getElementById('jg-settings').onclick=function(){show('Settings & saved data','<p>Appearance</p><button id="jg-theme">Toggle light/dark theme</button><p>Manage your local profile and progress</p><button id="jg-export">Export saved data</button><label><p>Import saved data (JSON)</p><input id="jg-import" type="file" accept="application/json"></label><p><button id="jg-reset">Reset local Johnny Games data</button></p><small>Your settings and progress stay in this browser unless you export them.</small>')};
-document.addEventListener('click',function(e){if(e.target.id==='jg-theme'){document.body.classList.toggle('jg-light');localStorage.setItem('jg_theme',document.body.classList.contains('jg-light')?'light':'dark')}
+document.getElementById('jg-settings').addEventListener('click',function(){
+ show('Settings & saved data','<p>Appearance</p><button id="jg-theme" type="button">Toggle light/dark theme</button><p>Manage your local profile and progress</p><button id="jg-export" type="button">Export saved data</button><label><p>Import saved data (JSON)</p><input id="jg-import" type="file" accept="application/json"></label><p><button id="jg-reset" type="button">Reset local Johnny Games data</button></p><small>Your settings and progress stay in this browser unless you export them.</small>');
+});
+document.addEventListener('click',function(e){if(e.target.closest&&e.target.closest('#jg-theme')){document.body.classList.toggle('jg-light');try{localStorage.setItem('jg_theme',document.body.classList.contains('jg-light')?'light':'dark')}catch(err){}}
 if(e.target.id==='jg-export'){var data={extra:state,favorites:JSON.parse(localStorage.getItem('jg_favs')||'[]'),recent:JSON.parse(localStorage.getItem('jg_recent')||'[]'),name:localStorage.getItem('jg_name')};var u=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));var a=document.createElement('a');a.href=u;a.download='johnny-games-save.json';a.click();URL.revokeObjectURL(u)}
 if(e.target.id==='jg-reset'&&confirm('Clear Johnny Games saved data on this device?')){['jg_extra_v1','jg_favs','jg_recent','jg_name'].forEach(function(k){localStorage.removeItem(k)});location.reload()}});
 document.addEventListener('change',function(e){if(e.target.id==='jg-import'){var f=e.target.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(){try{var d=JSON.parse(rd.result);if(d.extra)state=d.extra;if(d.favorites)localStorage.setItem('jg_favs',JSON.stringify(d.favorites));if(d.recent)localStorage.setItem('jg_recent',JSON.stringify(d.recent));save();alert('Saved data imported.');location.reload()}catch(x){alert('That file is not a valid Johnny Games save.')}};rd.readAsText(f)}});
