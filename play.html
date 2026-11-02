@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0b0b14">
-<title>Play</title>
+<title>Examinations.ie</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:#000;overflow:hidden;overscroll-behavior:none}
@@ -50,7 +50,7 @@ if(!name||/[\/\\]|\.\./.test(name)){
  $('wrap').innerHTML='<p class="err">No game selected. <a href="index.html" style="color:#9d86ff">Back to games</a></p>';
  $('tb').style.display='none';return;
 }
-document.title=name;
+document.title='Examinations.ie';
 $('title').textContent=name;
 var src='games/'+encodeURIComponent(name)+'.html';
 // Cache-bust the multiplayer mini-golf launcher so browsers don't keep showing the old solo game.
