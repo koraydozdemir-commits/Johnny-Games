@@ -69,7 +69,8 @@ WALLS=WALLS.concat(WALLS.map(function(w){return[W-w[0]-w[2],H-w[1]-w[3],w[2],w[3
 var ST=[[200,180],[1400,180],[200,820],[1400,820],[800,120],[800,880]],TBL=[800,500];
 var CH='ABCDEFGHJKLMNPQRSTUVWXYZ';
 
-var isHost=false,peer,conns={},hostConn,me='me';
+var isHost=false,peer,conns={},hostConn,me='me',connectTimer=null,connectBusy=false;
+var roomCfg={imps:1,speed:1,cooldown:12000,tasks:3};
 var P={};            // id -> {name,col}
 var C={phase:'home',pos:{},bodies:[],done:0,total:0,role:'',tasks:[],mine:{},meet:null};
 var HS=null;         // host sim state
@@ -77,6 +78,22 @@ var inp={x:0,y:0},killAt=0;
 
 function show(id){['home','lobby','vote','end'].forEach(function(s){$(s).hidden=s!==id})}
 function err(t){$('err').textContent=t}
+function stopConnectTimer(){if(connectTimer){clearTimeout(connectTimer);connectTimer=null}}
+function resetConnection(message){
+ stopConnectTimer();connectBusy=false;
+ try{if(hostConn){hostConn.close();hostConn=null}}catch(e){}
+ try{if(peer){peer.destroy();peer=null}}catch(e){}
+ $('host').disabled=$('join').disabled=false;
+ $('connectstate').textContent='';if(message)err(message);
+}
+function beginConnect(message,ms,fail){
+ connectBusy=true;$('host').disabled=$('join').disabled=true;err('');$('connectstate').textContent=message;
+ stopConnectTimer();connectTimer=setTimeout(function(){if(connectBusy)resetConnection(fail)},ms);
+}
+function readRoomCfg(){
+ roomCfg={imps:Number($('cfgImps').value)||1,speed:Number($('cfgSpeed').value)||1,cooldown:Number($('cfgCooldown').value)||12000,tasks:Number($('cfgTasks').value)||3};
+}
+['cfgImps','cfgSpeed','cfgCooldown','cfgTasks'].forEach(function(id){$(id).addEventListener('change',function(){readRoomCfg();if(isHost)bcast({t:'lobby',P:P,cfg:roomCfg})})});
 
 /* ---------- networking ---------- */
 function toHost(m){if(isHost)handle(me,m);else if(hostConn&&hostConn.open)hostConn.send(m)}
@@ -85,31 +102,37 @@ function sendTo(id,m){if(id===me)onMsg(m);else if(conns[id]&&conns[id].open)conn
 function nm(){return($('nm').value.trim()||'Crew').slice(0,10)}
 
 $('host').onclick=function(){
+ if(connectBusy)return;
  if(!window.Peer)return err('Could not load PeerJS (network blocked?)');
- var code='';for(var i=0;i<4;i++)code+=CH[Math.random()*CH.length|0];
- err('Creating game...');
- peer=new Peer('vcrew-'+code);
- peer.on('error',function(e){err(e.type==='unavailable-id'?'Code taken, try again':'Network error: '+e.type)});
+ readRoomCfg();var code='';for(var i=0;i<4;i++)code+=CH[Math.random()*CH.length|0];
+ beginConnect('Creating room…',12000,'Room creation timed out. Check your connection and try again.');
+ try{peer=new Peer('vcrew-'+code,{debug:0});}catch(e){resetConnection('Could not start networking. Please try again.');return}
+ peer.on('error',function(e){resetConnection(e.type==='unavailable-id'?'That room code was taken. Please host again.':'Network error ('+e.type+'). Please try again.')});
  peer.on('open',function(){
+  stopConnectTimer();connectBusy=false;$('host').disabled=$('join').disabled=false;$('connectstate').textContent='';
   isHost=true;me='host';P={host:{name:nm(),col:COL[0]}};$('code').textContent=code;
-  show('lobby');lobbyUI();
+  show('lobby');lobbyUI();bcast({t:'lobby',P:P,cfg:roomCfg});
   peer.on('connection',function(c){
    c.on('data',function(m){handle(c.peer,m)});
    c.on('open',function(){conns[c.peer]=c});
-   c.on('close',function(){delete conns[c.peer];if(P[c.peer]&&C.phase==='lobby'){delete P[c.peer];bcast({t:'lobby',P:P})}});
+   c.on('close',function(){delete conns[c.peer];if(P[c.peer]&&C.phase==='lobby'){delete P[c.peer];bcast({t:'lobby',P:P,cfg:roomCfg})}});
   });
  });
 };
 $('join').onclick=function(){
+ if(connectBusy)return;
  var code=$('jc').value.trim().toUpperCase();if(code.length!==4)return err('Enter the 4 letter code');
  if(!window.Peer)return err('Could not load PeerJS (network blocked?)');
- err('Connecting...');peer=new Peer();
- peer.on('error',function(e){err(e.type==='peer-unavailable'?'No game with that code':'Network error: '+e.type)});
- peer.on('open',function(id){
-  me=id;hostConn=peer.connect('vcrew-'+code,{reliable:true});
-  hostConn.on('open',function(){hostConn.send({t:'join',name:nm()});show('lobby');$('code').textContent=code});
+ beginConnect('Connecting to PeerJS…',18000,'Connection timed out. Check the code, then try again.');
+ try{peer=new Peer({debug:0});}catch(e){resetConnection('Could not start networking. Please try again.');return}
+ peer.on('error',function(e){resetConnection((e.type==='peer-unavailable'?'No room found with that code.':'Network error ('+e.type+').')+' Please try again.')});
+ peer.on('open',function(){
+  $('connectstate').textContent='Contacting room host…';
+  try{hostConn=peer.connect('vcrew-'+code,{reliable:true});}catch(e){resetConnection('Could not contact the host. Try again.');return}
+  hostConn.on('open',function(){stopConnectTimer();connectBusy=false;$('host').disabled=$('join').disabled=false;$('connectstate').textContent='';hostConn.send({t:'join',name:nm()});show('lobby');$('code').textContent=code});
   hostConn.on('data',onMsg);
-  hostConn.on('close',function(){alert('Host left the game');location.reload()});
+  hostConn.on('error',function(){resetConnection('Connection to the room failed. Try again.')});
+  hostConn.on('close',function(){if(C.phase==='lobby'||C.phase==='home')resetConnection('The room connection closed. Check the code and try again.');else{alert('Host left the game');location.reload()}});
  });
 };
 
