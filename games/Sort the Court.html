@@ -21,6 +21,20 @@
     body.template { box-sizing: border-box; overflow: auto; -webkit-text-size-adjust: 100%; }
     .template-wrap { box-sizing: border-box; width: 100%; max-width: 960px; margin: 0 auto; }
     #mobile-controls { display: none; }
+    .touch-capable #mobile-controls {
+      display: flex !important; position: fixed; left: 0; right: 0; bottom: 0;
+      z-index: 2147483000; justify-content: center; gap: 10px;
+      box-sizing: border-box; padding: 12px 12px max(14px, env(safe-area-inset-bottom));
+      background: linear-gradient(transparent, rgba(0,0,0,.88));
+      pointer-events: auto;
+    }
+    .touch-capable #mobile-controls button {
+      flex: 1; max-width: 180px; min-height: 58px; border: 2px solid #fff;
+      border-radius: 12px; background: #292929; color: #fff;
+      font: 800 17px/1 Arial,sans-serif; box-shadow: 0 4px 0 #111;
+      touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    }
+    .touch-capable #mobile-controls button:active { transform: translateY(3px); background: #555; }
     #canvas.emscripten { display: block; width: min(100%, 960px, calc((100dvh - 24px) * 1.7777778)) !important; height: auto !important; aspect-ratio: 16 / 9; margin: 0 auto; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
     @media (max-width: 700px) {
       html, body { min-height: 100dvh; }
@@ -65,6 +79,8 @@
   </script>
   <script>
     (function () {
+      var isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+      if (isTouch) document.documentElement.classList.add('touch-capable');
       var controls = document.getElementById('mobile-controls');
       if (!controls) return;
       controls.addEventListener('pointerdown', function (event) {
