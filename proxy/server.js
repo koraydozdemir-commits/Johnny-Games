@@ -56,7 +56,7 @@ function analyticsCors(request, response, next) {
   if (!allowedAnalyticsOrigins.has(origin)) return response.sendStatus(403);
   response.setHeader("Access-Control-Allow-Origin", origin);
   response.setHeader("Vary", "Origin");
-  response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   response.setHeader("Access-Control-Allow-Headers", "Content-Type");
   response.setHeader("Cache-Control", "no-store");
   next();
@@ -96,6 +96,21 @@ function validVisitorId(value) {
 }
 
 app.options("/api/analytics", analyticsCors, (_, response) => response.sendStatus(204));
+app.get("/api/analytics", analyticsCors, async (_, response) => {
+  if (!analyticsDb) return response.status(503).json({ error: "Analytics backend is not configured." });
+  try {
+    const [favoritesSnapshot, playsSnapshot] = await Promise.all([
+      analyticsDb.ref("favoriteAnalytics").get(),
+      analyticsDb.ref("playAnalytics").get()
+    ]);
+    response.json({
+      favorites: favoritesSnapshot.exists() ? favoritesSnapshot.val() : {},
+      plays: playsSnapshot.exists() ? playsSnapshot.val() : {}
+    });
+  } catch {
+    response.status(503).json({ error: "Analytics could not be loaded." });
+  }
+});
 app.post("/api/analytics", analyticsCors, limitAnalytics, async (request, response) => {
   if (!analyticsDb) return response.status(503).json({ error: "Analytics backend is not configured." });
   const body = request.body;
