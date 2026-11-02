@@ -837,15 +837,17 @@ var grid=document.getElementById('grid');
 new MutationObserver(function(){enhance();apply()}).observe(grid,{childList:true});
 document.getElementById('jg-category').onchange=apply;document.getElementById('jg-sort').onchange=apply;
 
-document.getElementById('jg-feature').onclick=function(){
- var cards=[].slice.call(document.querySelectorAll('#grid > .card:not(.jg-cycle-clone)')).filter(function(c){return getComputedStyle(c).display!=='none'&&c.querySelector('a[href]')});
- if(!cards.length){alert('Games are still loading — try again in a moment.');return}
+document.getElementById('jg-feature').addEventListener('click',function(){
+ var cards=[].slice.call(document.querySelectorAll('#grid > .card:not(.jg-cycle-clone)'))
+  .filter(function(c){return c.querySelector('a[href]')&&!c.querySelector('a').target});
+ if(!cards.length){alert('Games are still loading. Please try again in a moment.');return}
  var now=new Date(),day=Math.floor(Date.UTC(now.getFullYear(),now.getMonth(),now.getDate())/86400000);
- var card=cards[((day%cards.length)+cards.length)%cards.length],link=card.querySelector('a[href]');
- if(!link)return;
- window.jgCarouselPlay=true;window.jgCarouselLaunching=true;
- location.href=link.href;
-};
+ var card=cards[((day%cards.length)+cards.length)%cards.length];
+ var name=card.querySelector('p')&&card.querySelector('p').textContent.trim();
+ if(!name)return;
+ // Navigate directly instead of triggering the carousel's click interception.
+ window.location.assign('play.html?g='+encodeURIComponent(name));
+});
 document.addEventListener('click',function(e){if(e.target.closest('#jg-dialog [data-rate]')){var n=body.querySelector('h2').textContent;state.ratings[n]=Number(e.target.closest('[data-rate]').dataset.rate);save();show(n,'<p>Thanks! Your rating is saved on this device.</p><p>'+('★'.repeat(state.ratings[n]))+'</p>')}});
 document.addEventListener('click',function(e){var a=e.target.closest('#grid .card a');if(!a||!window.jgCarouselPlay)return;window.jgCarouselPlay=false;var n=a.querySelector('p')?.textContent;if(n){trackPlay(n);state.plays[n]=(state.plays[n]||0)+1;var d=new Date().toDateString();if(state.day!==d){state.today=0;state.day=d}state.today++;var h=JSON.parse(localStorage.getItem('jg_recent')||'[]');h=[n].concat(h.filter(function(x){return x!==n})).slice(0,30);localStorage.setItem('jg_recent',JSON.stringify(h));save();setTimeout(apply,0)}},true);
 document.getElementById('jg-settings').addEventListener('click',function(){
