@@ -111,9 +111,11 @@
     "name": "Krillion"
   },
   {
-    "name": "Kour.io"
+    "name": "Kour.io",
+    "thumb": "thumbnails/Kour.io.svg"
   },
   {
-    "name": "Veck.io"
+    "name": "Veck.io",
+    "thumb": "thumbnails/Veck.io.svg"
   }
 ]
