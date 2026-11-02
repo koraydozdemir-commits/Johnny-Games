@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07131c">
+<title>Krillion · Johnny Games</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:#07131c;color:#f4f8fb;font:15px/1.45 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+body{padding:clamp(12px,2vw,24px);background:radial-gradient(ellipse at 50% 0%,#123447 0,transparent 55%),#07131c}
+main{width:min(100%,900px);margin:0 auto}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 16px}
+.brand{flex:1;min-width:150px}
+h1{margin:0;font-size:clamp(24px,5vw,36px);letter-spacing:-.04em}
+.sub{margin:3px 0 0;color:#a8c2ce;font-size:12px}
+.modes{display:flex;gap:8px}
+button{min-height:40px;padding:0 15px;border:1px solid #355465;border-radius:11px;background:#102b3a;color:#d9edf5;font-weight:750;cursor:pointer}
+button.active{background:#1c6071;border-color:#64c9d7;color:white;box-shadow:0 0 0 2px #64c9d733}
+.frame{overflow:hidden;width:100%;min-height:640px;border:1px solid #315366;border-radius:16px;background:#061019;box-shadow:0 20px 55px #0007}
+iframe{display:block;width:100%;height:640px;border:0;background:#061019}
+footer{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:12px 2px;color:#8eabb8;font-size:11px}
+a{color:#9ce4ee;text-decoration:none}
+@media(max-width:520px){header{align-items:flex-start}.modes{width:100%}.modes button{flex:1}.frame{border-radius:12px}}
+</style>
+</head>
+<body>
+<main>
+<header>
+ <div class="brand"><h1>KRILLION</h1><p class="sub">Find the rare answer. Dive deeper.</p></div>
+ <nav class="modes" aria-label="Game mode">
+  <button type="button" class="active" data-mode="daily" aria-pressed="true">Daily Dive</button>
+  <button type="button" data-mode="unlimited" aria-pressed="false">Unlimited ∞</button>
+ </nav>
+</header>
+<div class="frame"><iframe id="krillion" src="https://krillion.cc/embed/?mode=daily" title="Krillion game" allow="fullscreen; autoplay" allowfullscreen loading="eager"></iframe></div>
+<footer><span>Seven prompts. 25 seconds each. Rarer answers score more.</span><a href="https://krillion.cc/" target="_blank" rel="noopener noreferrer">Open Krillion directly ↗</a></footer>
+</main>
+<script>
+(function(){
+ var frame=document.getElementById('krillion');
+ document.querySelectorAll('[data-mode]').forEach(function(button){
+  button.addEventListener('click',function(){
+   var mode=button.getAttribute('data-mode');
+   document.querySelectorAll('[data-mode]').forEach(function(b){
+    var active=b===button;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active?'true':'false');
+   });
+   frame.src='https://krillion.cc/embed/?mode='+encodeURIComponent(mode);
+  });
+ });
+ window.addEventListener('message',function(event){
+  if(event.origin!=='https://krillion.cc')return;
+  var data=event.data;
+  if(!data||data.source!=='krillion'||data.type!=='resize')return;
+  var height=Number(data.height);
+  if(Number.isFinite(height)&&height>=320&&height<=3000)frame.style.height=height+'px';
+ });
+})();
+</script>
+</body>
+</html>
