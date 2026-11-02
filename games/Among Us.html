@@ -23,10 +23,23 @@ button.g{background:#2a2f55}button:disabled{opacity:.35}
 #kill{background:#e11d48}#rep{background:#f59e0b;color:#000}
 #hold{position:fixed;left:50%;bottom:90px;width:200px;margin-left:-100px;height:12px;background:#222;border-radius:6px;overflow:hidden;display:none;z-index:3}#hold i{display:block;height:100%;width:0;background:#8fe3ff}
 #vote .chip{min-width:200px;font-size:18px;background:#12142a;border-color:#6c4cff}
+
+#taskpanel{position:fixed;inset:0;z-index:8;display:none;align-items:center;justify-content:center;background:#050914cc;padding:16px;touch-action:manipulation}
+#taskcard{width:min(520px,100%);background:linear-gradient(145deg,#263650,#101a2b);border:2px solid #829bbd;border-radius:18px;padding:20px;box-shadow:0 22px 70px #000b;text-align:center;color:#f4f8ff}
+#taskcard h2{margin:0 0 6px;font-size:25px;letter-spacing:1px}#taskdesc{color:#b9c9dc;margin:0 0 18px;font-size:14px}
+#taskarea{min-height:190px;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap}
+.tasktile{min-width:58px;min-height:58px;border:2px solid #ffffff66;border-radius:12px;background:#344967;color:white;font-size:22px;font-weight:800;padding:10px;touch-action:manipulation}
+.tasktile:disabled{opacity:.45}.taskstatus{min-height:24px;color:#a9eaff;margin:10px 0}
+.taskclose{background:#53647c!important;margin-top:8px}
+.wirecol{display:flex;flex-direction:column;gap:10px}.wire{width:46px;height:46px;border-radius:50%;border:3px solid #fff9;min-width:46px;padding:0}
+#aligntrack{width:min(360px,90%);height:28px;background:#101827;border:2px solid #8ca4c5;border-radius:20px;position:relative;overflow:hidden}
+#alignzone{position:absolute;left:42%;width:16%;height:100%;background:#22c55e88;border-left:2px solid #86efac;border-right:2px solid #86efac}
+#alignneedle{position:absolute;left:0;top:0;width:5px;height:100%;background:#fff;box-shadow:0 0 8px #fff}
 </style></head><body>
 <canvas id="cv"></canvas>
 <div id="hud"><div>Role: <span id="role"></span><div id="tl" style="font-weight:400;font-size:14px;margin-top:4px"></div></div><div>Tasks<div id="bar"><i></i></div></div></div>
 <div id="hold"><i></i></div>
+<div id="taskpanel" role="dialog" aria-modal="true" aria-labelledby="tasktitle"><div id="taskcard"><h2 id="tasktitle">TASK</h2><p id="taskdesc"></p><div id="taskarea"></div><div class="taskstatus" id="taskstatus" aria-live="polite"></div><button class="taskclose" id="taskcancel">CANCEL</button></div></div>
 <div id="btns"><button id="use">USE</button><button id="rep">REPORT</button><button id="kill">KILL</button></div>
 
 <div class="scr" id="home">
@@ -225,10 +238,41 @@ cv.addEventListener('pointerup',jend);cv.addEventListener('pointercancel',jend);
 var holdT=0,holdId=-1;
 function nearTask(){var p=C.pos[me];if(!p||C.role!=='crew'||!p.al)return-1;for(var i=0;i<C.tasks.length;i++){var s=C.tasks[i];if(!C.mine[s]&&Math.hypot(p.x-ST[s][0],p.y-ST[s][1])<80)return s}return-1}
 $('use').addEventListener('pointerdown',function(e){e.preventDefault();var p=C.pos[me];if(!p||!p.al)return;var t=nearTask();
- if(t>-1){holdId=t;holdT=Date.now();$('hold').style.display='block'}
- else if(Math.hypot(p.x-TBL[0],p.y-TBL[1])<110)toHost({t:'meet'})});
+ if(t>-1)startTask(t);else if(Math.hypot(p.x-TBL[0],p.y-TBL[1])<110)toHost({t:'meet'})});
 function endHold(){holdId=-1;$('hold').style.display='none'}
-$('use').addEventListener('pointerup',endHold);$('use').addEventListener('pointerleave',endHold);$('use').addEventListener('pointercancel',endHold);
+$('taskcancel').onclick=function(){closeTask()};
+function closeTask(){ $('taskpanel').style.display='none'; activeTask=-1; if(taskTimer)clearInterval(taskTimer);taskTimer=null }
+var activeTask=-1,taskTimer=null,taskRound=0,taskTarget=[],taskChosen=[],taskPos=0;
+var taskColors=['#ef4444','#3b82f6','#22c55e','#eab308'];
+function startTask(id){
+ if(activeTask!==-1)return;activeTask=id;$('taskpanel').style.display='flex';$('taskstatus').textContent='';$('taskarea').innerHTML='';
+ var names=['REACTOR: POWER ROUTING','ENGINE: STABILISE OUTPUT','COMMS: SIGNAL CALIBRATION','MEDBAY: SAMPLE SCAN','CARGO: SORT SUPPLIES','SHIELDS: GRID REPAIR'];
+ $('tasktitle').textContent=names[id]||'SHIP SYSTEM';
+ if(id%3===0)wireTask();else if(id%3===1)memoryTask();else alignTask();
+}
+function finishTask(){var id=activeTask;if(id<0)return;toHost({t:'do',id:id});$('taskstatus').textContent='SYSTEM RESTORED';setTimeout(closeTask,650)}
+function wireTask(){
+ $('taskdesc').textContent='Reconnect each matching pair of coloured cables.';
+ var order=[0,1,2,3].sort(function(){return Math.random()-.5}),left=document.createElement('div'),right=document.createElement('div');left.className=right.className='wirecol';
+ taskChosen=[];taskPos=0;
+ for(var i=0;i<4;i++){(function(n){var a=document.createElement('button');a.className='wire';a.style.background=taskColors[n];a.setAttribute('aria-label','Select cable '+(n+1));a.onclick=function(){taskChosen=[n];$('taskstatus').textContent='Now choose its matching socket.';Array.from(right.children).forEach(function(b){b.disabled=false})};left.appendChild(a);
+ var b=document.createElement('button');b.className='wire';b.style.background=taskColors[order[n]];b.setAttribute('aria-label','Socket '+(n+1));b.onclick=function(){if(taskChosen.length&&order[n]===taskChosen[0]){b.disabled=true;left.children[taskChosen[0]].disabled=true;taskPos++;$('taskstatus').textContent=taskPos+'/4 connections';taskChosen=[];if(taskPos===4)finishTask()}else{$('taskstatus').textContent='Wrong socket — try another.'}};right.appendChild(b)})(i)}
+ $('taskarea').append(left,right);
+}
+function memoryTask(){
+ $('taskdesc').textContent='Watch the panel, then repeat the sequence.';
+ var seq=[0,1,2,3].sort(function(){return Math.random()-.5}).slice(0,3);taskTarget=seq;taskChosen=[];
+ var box=document.createElement('div');box.style.display='flex';box.style.gap='10px';box.style.flexWrap='wrap';box.style.justifyContent='center';
+ for(var i=0;i<4;i++){(function(n){var b=document.createElement('button');b.className='tasktile';b.style.borderColor=taskColors[n];b.textContent='●';b.onclick=function(){if(taskPos>=seq.length)return;if(n===seq[taskPos]){taskPos++;$('taskstatus').textContent=taskPos+'/'+seq.length+' correct';if(taskPos===seq.length)finishTask()}else{taskPos=0;$('taskstatus').textContent='Incorrect. Sequence reset.'}};box.appendChild(b)})(i)}
+ taskPos=0;$('taskarea').appendChild(box);var step=0;
+ function flash(){if(step>=seq.length){$('taskstatus').textContent='Your turn — repeat the sequence.';return}var b=box.children[seq[step]];b.style.background=taskColors[seq[step]];setTimeout(function(){b.style.background='';step++;setTimeout(flash,220)},450)}
+ setTimeout(flash,350);
+}
+function alignTask(){
+ $('taskdesc').textContent='Tap LOCK when the moving marker is inside the green zone. Do this three times.';
+ var track=document.createElement('div');track.id='aligntrack';var zone=document.createElement('div');zone.id='alignzone';var needle=document.createElement('div');needle.id='alignneedle';track.append(zone,needle);var lock=document.createElement('button');lock.className='tasktile';lock.textContent='LOCK';lock.onclick=function(){var x=parseFloat(needle.style.left)||0;if(x>=42&&x<=58){taskRound++;$('taskstatus').textContent='Calibration '+taskRound+'/3';if(taskRound===3)finishTask()}else{$('taskstatus').textContent='Missed — keep calibrating.'}};$('taskarea').append(track,lock);taskRound=0;var x=0,dir=1;
+ taskTimer=setInterval(function(){x+=dir*1.8;if(x>95||x<0)dir*=-1;needle.style.left=x+'%'},20);
+}
 $('kill').addEventListener('pointerdown',function(e){e.preventDefault();toHost({t:'kill'});killAt=Date.now()+KCD});
 $('rep').addEventListener('pointerdown',function(e){e.preventDefault();toHost({t:'rep'})});
 
@@ -279,6 +323,10 @@ function frame(){
  for(var gy=0;gy<=H;gy+=100){cx.beginPath();cx.moveTo(0,gy);cx.lineTo(W,gy);cx.stroke()}
  cx.strokeStyle='rgba(137,180,224,.18)';cx.lineWidth=3;
  for(var gx=50;gx<W;gx+=200){cx.beginPath();cx.moveTo(gx,0);cx.lineTo(gx,H);cx.stroke()}
+ // compartment floor insets, glass observation windows and corridor lighting
+ var rooms=[[65,65,390,250],[1145,65,390,250],[65,685,390,250],[1145,685,390,250],[610,65,380,180],[610,755,380,180]];
+ rooms.forEach(function(r,i){var rg=cx.createLinearGradient(r[0],r[1],r[0]+r[2],r[1]+r[3]);rg.addColorStop(0,'rgba(111,159,207,.14)');rg.addColorStop(1,'rgba(18,35,59,.05)');cx.fillStyle=rg;cx.fillRect(r[0],r[1],r[2],r[3]);cx.strokeStyle='rgba(143,190,235,.22)';cx.lineWidth=5;cx.strokeRect(r[0]+8,r[1]+8,r[2]-16,r[3]-16);});
+ cx.save();cx.shadowColor='#55b9ff';cx.shadowBlur=15;cx.strokeStyle='rgba(86,190,255,.42)';cx.lineWidth=5;[[520,145,20,110],[1060,145,20,110],[520,745,20,110],[1060,745,20,110],[700,380,200,12],[700,608,200,12]].forEach(function(w){cx.strokeRect(w[0],w[1],w[2],w[3])});cx.restore();
  // room labels
  cx.save();cx.font='bold 34px Arial';cx.textAlign='center';cx.fillStyle='rgba(180,210,255,.13)';
  [['REACTOR',360,170],['ENGINE',1240,170],['MEDBAY',360,820],['COMMUNICATIONS',1240,820],['CAFETERIA',800,280],['STORAGE',800,740]].forEach(function(a){cx.fillText(a[0],a[1],a[2])});cx.restore();
@@ -299,7 +347,7 @@ function frame(){
  u.disabled=!p.al||(t<0&&!nearT);u.textContent=t>-1?'TASK':(nearT?'MEETING':'USE');
  var nb=C.bodies.some(function(b){return Math.hypot(p.x-b.x,p.y-b.y)<110});$('rep').disabled=!p.al||!nb;
  var k=$('kill');k.style.display=C.role==='imp'?'block':'none';var cd=Math.max(0,Math.ceil((killAt-Date.now())/1000));k.textContent=cd>0?'KILL '+cd:'KILL';k.disabled=!p.al||cd>0;
- if(holdId>-1){var f=(Date.now()-holdT)/1500;$('hold').firstChild.style.width=Math.min(100,f*100)+'%';if(t!==holdId)endHold();else if(f>=1){toHost({t:'do',id:holdId});endHold()}}
+ 
  if(joy&&joy.cx!=null){cx.fillStyle='rgba(255,255,255,.12)';cx.beginPath();cx.arc(joy.x*devicePixelRatio,joy.y*devicePixelRatio,60*devicePixelRatio,0,7);cx.fill();cx.fillStyle='rgba(255,255,255,.35)';cx.beginPath();cx.arc(joy.cx*devicePixelRatio,joy.cy*devicePixelRatio,24*devicePixelRatio,0,7);cx.fill()}
 }
 frame();
