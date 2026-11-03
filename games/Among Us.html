@@ -67,6 +67,7 @@ var W=1600,H=1000,SPD=200,R=18,KR=90,KCD=12000;
 var WALLS=[[520,0,20,140],[520,260,20,140],[0,380,140,20],[260,380,260,20]];
 WALLS=WALLS.concat(WALLS.map(function(w){return[W-w[0]-w[2],H-w[1]-w[3],w[2],w[3]]}),WALLS.map(function(w){return[W-w[0]-w[2],w[1],w[2],w[3]]}),WALLS.map(function(w){return[w[0],H-w[1]-w[3],w[2],w[3]]}));
 var ST=[[200,180],[1400,180],[200,820],[1400,820],[800,120],[800,880]],TBL=[800,500];
+var ambience=Array.from({length:54},function(_,i){return{x:(i*347)%W,y:(i*613)%H,r:1+(i%3),phase:i*.73}});
 var CH='ABCDEFGHJKLMNPQRSTUVWXYZ';
 
 var isHost=false,peer,conns={},hostConn,me='me',connectTimer=null,connectBusy=false;
@@ -313,7 +314,8 @@ setInterval(function(){
 function rs(){cv.width=innerWidth*devicePixelRatio;cv.height=innerHeight*devicePixelRatio;sc=Math.min(innerWidth,innerHeight)/620*devicePixelRatio}
 addEventListener('resize',rs);rs();
 function body(x,y,col,dead){
- cx.save();cx.translate(x,y);
+ cx.save();cx.translate(x,dead?y:y+Math.sin(Date.now()*.006+x*.03)*1.15);
+ cx.save();cx.fillStyle='rgba(0,0,0,.34)';cx.filter='blur(5px)';cx.beginPath();cx.ellipse(0,17,21,7,0,0,Math.PI*2);cx.fill();cx.restore();
  if(dead){cx.rotate(1.35);}
  cx.shadowColor='rgba(0,0,0,.5)';cx.shadowBlur=12;cx.shadowOffsetY=7;
  // backpack
@@ -343,6 +345,8 @@ function frame(){
  cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#0b0c1a';cx.fillRect(0,0,cv.width,cv.height);
  cx.setTransform(sc,0,0,sc,cv.width/2-p.x*sc,cv.height/2-p.y*sc);
  var floor=cx.createLinearGradient(0,0,W,H);floor.addColorStop(0,'#202945');floor.addColorStop(.5,'#151d35');floor.addColorStop(1,'#10172b');cx.fillStyle=floor;cx.fillRect(0,0,W,H);
+ // soft drifting bioluminescent dust gives the ship a little depth
+ var now=Date.now()*.001;ambience.forEach(function(v){var px=(v.x+Math.sin(now*.32+v.phase)*13+W)%W,py=(v.y+Math.cos(now*.24+v.phase)*10+H)%H;cx.globalAlpha=.12+.13*(.5+.5*Math.sin(now*1.8+v.phase));cx.fillStyle='#9bdcff';cx.beginPath();cx.arc(px,py,v.r,0,Math.PI*2);cx.fill()});cx.globalAlpha=1;
  // deck plating
  cx.strokeStyle='rgba(111,151,201,.09)';cx.lineWidth=2;
  for(var gx=0;gx<=W;gx+=100){cx.beginPath();cx.moveTo(gx,0);cx.lineTo(gx,H);cx.stroke()}
