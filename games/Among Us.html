@@ -35,7 +35,7 @@ button.g{background:#2a2f55}button:disabled{opacity:.35}
 #aligntrack{width:min(360px,90%);height:28px;background:#101827;border:2px solid #8ca4c5;border-radius:20px;position:relative;overflow:hidden}
 #alignzone{position:absolute;left:42%;width:16%;height:100%;background:#22c55e88;border-left:2px solid #86efac;border-right:2px solid #86efac}
 #alignneedle{position:absolute;left:0;top:0;width:5px;height:100%;background:#fff;box-shadow:0 0 8px #fff}
-<style>.settinggrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.settinggrid label{display:flex;flex-direction:column;gap:5px;color:#aabbd2;font-size:13px}.settinggrid select{width:100%;min-height:42px;padding:6px;border:1px solid #526582;border-radius:9px;background:#202e45;color:white;font:inherit}#lobby{overflow-y:auto;justify-content:flex-start;padding-top:22px;padding-bottom:22px}@media(max-width:420px){.settinggrid{grid-template-columns:1fr}#lobby{gap:10px}}</style></head><body>
+.settinggrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.settinggrid label{display:flex;flex-direction:column;gap:5px;color:#aabbd2;font-size:13px}.settinggrid select{width:100%;min-height:42px;padding:6px;border:1px solid #526582;border-radius:9px;background:#202e45;color:white;font:inherit}#lobby{overflow-y:auto;justify-content:flex-start;padding-top:22px;padding-bottom:22px}@media(max-width:420px){.settinggrid{grid-template-columns:1fr}#lobby{gap:10px}}</style></head><body>
 <canvas id="cv"></canvas>
 <div id="hud"><div>Role: <span id="role"></span><div id="tl" style="font-weight:400;font-size:14px;margin-top:4px"></div></div><div>Tasks<div id="bar"><i></i></div></div></div>
 <div id="hold"><i></i></div>
@@ -115,7 +115,7 @@ $('host').onclick=function(){
   peer.on('connection',function(c){
    c.on('data',function(m){handle(c.peer,m)});
    c.on('open',function(){conns[c.peer]=c});
-   c.on('close',function(){delete conns[c.peer];if(P[c.peer]&&C.phase==='lobby'){delete P[c.peer];bcast({t:'lobby',P:P,cfg:roomCfg})}});
+   c.on('close',function(){delete conns[c.peer];if(P[c.peer]){delete P[c.peer];if(HS&&HS.p[c.peer]){delete HS.p[c.peer];if(HS.phase==='play')checkWin()}else if(C.phase==='lobby'){bcast({t:'lobby',P:P,cfg:roomCfg})}}});
   });
  });
 };
@@ -151,7 +151,7 @@ function handle(id,m){
   p.done.push(m.id);HS.done++;sendTo(id,{t:'td',id:m.id});if(HS.done>=HS.total)endGame('crew')}
  else if(m.t==='kill'&&HS.phase==='play'&&p.alive&&p.role==='imp'&&Date.now()>p.cd){
   var best=null,bd=KR;Object.keys(HS.p).forEach(function(k){var q=HS.p[k];if(q.alive&&q.role==='crew'&&d(p,q)<bd){bd=d(p,q);best=k}});
-  if(best){var q=HS.p[best];q.alive=false;HS.bodies.push({id:best,x:q.x,y:q.y});p.x=q.x;p.y=q.y;p.cd=Date.now()+HS.cfg.cooldown;if(!checkWin())return}}
+  if(best){var q=HS.p[best];q.alive=false;HS.bodies.push({id:best,x:q.x,y:q.y});p.x=q.x;p.y=q.y;p.cd=Date.now()+HS.cfg.cooldown;sendTo(id,{t:'cd',until:p.cd});if(!checkWin())return}}
  else if(m.t==='rep'&&HS.phase==='play'&&p.alive&&HS.bodies.some(function(b){return d(p,b)<110}))startMeet(id,'body');
  else if(m.t==='meet'&&HS.phase==='play'&&p.alive&&!p.usedMeet&&d(p,{x:TBL[0],y:TBL[1]})<110){p.usedMeet=1;startMeet(id,'table')}
  else if(m.t==='vote'&&HS.phase==='meet'&&p.alive&&HS.votes[id]==null){HS.votes[id]=m.v;bcast({t:'voted',id:id});
@@ -168,7 +168,7 @@ $('start').onclick=function(){
   HS.p[k]={x:TBL[0]+Math.cos(a)*70,y:TBL[1]+Math.sin(a)*70,ix:0,iy:0,alive:true,role:isImp?'imp':'crew',tasks:isImp?[]:tl,done:[],cd:Date.now()+roomCfg.cooldown,usedMeet:0};
   if(!isImp)HS.total+=roomCfg.tasks;
  });
- ids.forEach(function(k){sendTo(k,{t:'role',role:HS.p[k].role,tasks:HS.p[k].tasks,total:HS.total,P:P})});
+ ids.forEach(function(k){sendTo(k,{t:'role',role:HS.p[k].role,tasks:HS.p[k].tasks,total:HS.total,P:P,cooldown:HS.cfg.cooldown})});
  clearInterval(HS.t);HS.t=setInterval(tick,50);
 };
 function tick(){
@@ -219,14 +219,15 @@ $('again').onclick=function(){bcast({t:'lobby',P:P})};
 function onMsg(m){
  if(m.t==='lobby'){P=m.P;if(m.cfg)roomCfg=m.cfg;C.phase='lobby';show('lobby');lobbyUI()}
  else if(m.t==='role'){P=m.P;C.role=m.role;C.tasks=m.tasks;C.mine={};C.total=m.total;C.done=0;C.bodies=[];C.alive=true;C.phase='play';
-  killAt=Date.now()+8000;show(null);$('hud').style.display='flex';$('btns').style.display='flex';$('role').textContent=m.role==='imp'?'SABOTEUR':'CREW';
+  killAt=Date.now()+(m.cooldown||12000);show(null);$('hud').style.display='flex';$('btns').style.display='flex';$('role').textContent=m.role==='imp'?'SABOTEUR':'CREW';
   $('role').style.color=m.role==='imp'?'#fb7185':'#8fe3ff';taskUI()}
  else if(m.t==='st'){C.pos={};m.p.forEach(function(a){C.pos[a[0]]={x:a[1],y:a[2],al:a[3]}});C.bodies=m.b;C.done=m.dn;$('bar').firstChild.style.width=(C.total?m.dn/C.total*100:0)+'%'}
  else if(m.t==='td'){C.mine[m.id]=1;taskUI()}
+ else if(m.t==='cd'){killAt=m.until||Date.now()+12000}
  else if(m.t==='meet'){C.phase='meet';meetUI(m)}
  else if(m.t==='voted'){var e=$('v_'+m.id);if(e)e.style.opacity=.4}
  else if(m.t==='res'){clearInterval(C.vi);$('vt').textContent=m.out?(P[m.out].name+(m.imp?' was a SABOTEUR':' was NOT a saboteur')):'Nobody was ejected';$('vopts').innerHTML='';$('vtime').textContent=''}
- else if(m.t==='resume'){C.phase='play';show(null);killAt=Date.now()+8000;C.alive=C.pos[me]?C.pos[me].al:true}
+ else if(m.t==='resume'){C.phase='play';show(null);killAt=Date.now()+12000;C.alive=C.pos[me]?C.pos[me].al:true}
  else if(m.t==='end'){C.phase='end';$('hud').style.display=$('btns').style.display='none';show('end');
   var win=(m.w==='crew')===(m.r[me]==='crew');$('et').textContent=win?'VICTORY':'DEFEAT';$('et').style.color=win?'#4ade80':'#fb7185';
   $('es').textContent=(m.w==='crew'?'The crew won.':'The saboteurs won.')+' Saboteur: '+Object.keys(m.r).filter(function(k){return m.r[k]==='imp'}).map(function(k){return P[k].name}).join(', ');
@@ -298,7 +299,7 @@ function alignTask(){
  var track=document.createElement('div');track.id='aligntrack';var zone=document.createElement('div');zone.id='alignzone';var needle=document.createElement('div');needle.id='alignneedle';track.append(zone,needle);var lock=document.createElement('button');lock.className='tasktile';lock.textContent='LOCK';lock.onclick=function(){var x=parseFloat(needle.style.left)||0;if(x>=42&&x<=58){taskRound++;$('taskstatus').textContent='Calibration '+taskRound+'/3';if(taskRound===3)finishTask()}else{$('taskstatus').textContent='Missed — keep calibrating.'}};$('taskarea').append(track,lock);taskRound=0;var x=0,dir=1;
  taskTimer=setInterval(function(){x+=dir*1.8;if(x>95||x<0)dir*=-1;needle.style.left=x+'%'},20);
 }
-$('kill').addEventListener('pointerdown',function(e){e.preventDefault();toHost({t:'kill'});killAt=Date.now()+KCD});
+$('kill').addEventListener('pointerdown',function(e){e.preventDefault();toHost({t:'kill'})});
 $('rep').addEventListener('pointerdown',function(e){e.preventDefault();toHost({t:'rep'})});
 
 setInterval(function(){
