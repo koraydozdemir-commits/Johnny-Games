@@ -115,8 +115,9 @@ $('host').onclick=function(){
   isHost=true;me='host';P={host:{name:nm(),col:COL[0]}};$('code').textContent=code;
   show('lobby');lobbyUI();bcast({t:'lobby',P:P,cfg:roomCfg});
   peer.on('connection',function(c){
-   c.on('data',function(m){handle(c.peer,m)});
    c.on('open',function(){conns[c.peer]=c});
+   c.on('data',function(m){handle(c.peer,m)});
+   c.on('error',function(){delete conns[c.peer]});
    c.on('close',function(){delete conns[c.peer];if(P[c.peer]){delete P[c.peer];if(HS&&HS.p[c.peer]){delete HS.p[c.peer];if(HS.phase==='play')checkWin()}else if(C.phase==='lobby'){bcast({t:'lobby',P:P,cfg:roomCfg})}}});
   });
  });
@@ -131,10 +132,13 @@ $('join').onclick=function(){
  peer.on('open',function(){
   $('connectstate').textContent='Contacting room host…';
   try{hostConn=peer.connect('vcrew-'+code,{reliable:true});}catch(e){resetConnection('Could not contact the host. Try again.');return}
-  hostConn.on('open',function(){stopConnectTimer();connectBusy=false;$('host').disabled=$('join').disabled=false;$('connectstate').textContent='';hostConn.send({t:'join',name:nm()});show('lobby');$('code').textContent=code});
+  hostConn.on('open',function(){
+   $('connectstate').textContent='Connected to PeerJS — waiting for the host…';
+   try{hostConn.send({t:'join',name:nm()})}catch(e){resetConnection('Could not send the join request. Try again.')}
+  });
   hostConn.on('data',onMsg);
-  hostConn.on('error',function(){resetConnection('Connection to the room failed. Try again.')});
-  hostConn.on('close',function(){if(C.phase==='lobby'||C.phase==='home')resetConnection('The room connection closed. Check the code and try again.');else{alert('Host left the game');location.reload()}});
+  hostConn.on('error',function(){if(connectBusy||C.phase==='home'||C.phase==='lobby')resetConnection('Connection to the room failed. Try again.')});
+  hostConn.on('close',function(){if(connectBusy||C.phase==='lobby'||C.phase==='home')resetConnection('The room connection closed before the lobby was ready. Check the code and try again.');else{alert('Host left the game');location.reload()}});
  });
 };
 
@@ -223,7 +227,10 @@ $('again').onclick=function(){bcast({t:'lobby',P:P})};
 /* ---------- client logic ---------- */
 function onMsg(m){
  if(m.t==='welcome'){me=m.id}
- else if(m.t==='lobby'){P=m.P;if(m.cfg)roomCfg=m.cfg;C.phase='lobby';show('lobby');lobbyUI()}
+ else if(m.t==='lobby'){
+  stopConnectTimer();connectBusy=false;$('host').disabled=$('join').disabled=false;$('connectstate').textContent='';
+  P=m.P;if(m.cfg)roomCfg=m.cfg;C.phase='lobby';show('lobby');$('code').textContent=$('jc').value.trim().toUpperCase();lobbyUI()
+ }
  else if(m.t==='role'){P=m.P;C.role=m.role;C.tasks=m.tasks;C.mine={};C.total=m.total;C.done=0;C.bodies=[];C.alive=true;C.phase='play';
   killAt=Date.now()+(m.cooldown||12000);show(null);$('hud').style.display='flex';$('btns').style.display='flex';$('role').textContent=m.role==='imp'?'SABOTEUR':'CREW';
   $('role').style.color=m.role==='imp'?'#fb7185':'#8fe3ff';taskUI()}
