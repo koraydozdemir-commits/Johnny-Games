@@ -1405,7 +1405,7 @@ var DOORWAYS=MAPDATA.DOORWAYS;
   {x:971,y:355,angle:Math.PI*.75,along:40,across:50,door:12}, // O2
   {x:1314,y:426,angle:Math.PI/2,along:40,across:50,door:11}, // Navigation
   {x:1113,y:591,angle:0,along:40,across:50,door:9}, // Shields
-  {x:630,y:597,angle:Math.PI/2,along:40,across:50,door:5} // Electrical
+  {x:630,y:597,angle:0,along:95,across:48,door:5} // Electrical — horizontal clearance through the vertical doorway
  ];
  function inRoomEntryPassage(x,y){for(var i=0;i<ROOM_ENTRY_PASSAGES.length;i++){var p=ROOM_ENTRY_PASSAGES[i],dx=x-p.x,dy=y-p.y,c=Math.cos(p.angle),s=Math.sin(p.angle),lx=dx*c+dy*s,ly=-dx*s+dy*c;if(Math.abs(lx)<=p.along&&Math.abs(ly)<=p.across)return true}return false}
 var OCCLUDERS=null,MAP_WALL_SEGMENTS=null;
