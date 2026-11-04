@@ -1190,7 +1190,7 @@ setInterval(function(){
 },50);
 
 /* ---------- render ---------- */
-var DPR=1;function rs(){DPR=Math.min(window.devicePixelRatio||1,2);cv.width=Math.round(innerWidth*DPR);cv.height=Math.round(innerHeight*DPR);sc=Math.min(innerWidth,innerHeight)/620*2.05*1.2;cx.imageSmoothingEnabled=true}
+var DPR=1;function rs(){DPR=Math.min(window.devicePixelRatio||1,2);cv.width=Math.round(innerWidth*DPR);cv.height=Math.round(innerHeight*DPR);sc=Math.min(innerWidth,innerHeight)/620*2.05*1.65;cx.imageSmoothingEnabled=true}
 addEventListener('resize',rs);rs();
 function body(x,y,col,dead,size){
  cx.save();cx.translate(x,dead?y:y+Math.sin(Date.now()*.006+x*.03)*1.15);var bodyScale=size||.78;cx.scale(bodyScale,bodyScale);
