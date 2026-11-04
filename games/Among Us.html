@@ -262,6 +262,10 @@ canvas{image-rendering:auto}
  #home{height:var(--app-height,100dvh)!important;min-height:var(--app-height,100dvh)!important;max-height:var(--app-height,100dvh);overflow-y:auto!important;overscroll-behavior-y:contain;scroll-padding:24px}
  #nm,#jc{font-size:16px!important;touch-action:manipulation;scroll-margin:24px}
  @media(max-width:600px){#home{justify-content:flex-start!important;padding-bottom:max(30px,env(safe-area-inset-bottom))!important}#home .menu-card{flex-shrink:0}}
+ /* Prevent Safari page zoom gestures; keep the game canvas on direct touch controls. */
+ html,body{touch-action:pan-x pan-y;overscroll-behavior:none;-webkit-text-size-adjust:100%}
+ #cv{touch-action:none;-ms-touch-action:none}
+ input,textarea,select,button{touch-action:manipulation}
  </style></head><body>
 <canvas id="cv"></canvas>
 <div id="hud"><div>Role: <span id="role"></span><div id="tl" style="font-weight:400;font-size:14px;margin-top:4px"></div></div><div>Tasks<div id="bar"><i></i></div></div></div>
@@ -940,6 +944,8 @@ addEventListener('keydown',function(e){keys[e.key.toLowerCase()]=1});addEventLis
 var cv=$('cv'),cx=cv.getContext('2d'),sc=1;
 function syncEntryViewport(){var v=window.visualViewport,h=v&&v.height?v.height:window.innerHeight;document.documentElement.style.setProperty('--app-height',Math.max(260,Math.round(h))+'px')}
 syncEntryViewport();addEventListener('resize',syncEntryViewport);if(window.visualViewport){window.visualViewport.addEventListener('resize',syncEntryViewport);window.visualViewport.addEventListener('scroll',syncEntryViewport)}
+ // iPad Safari can still initiate page magnification from native gesture events.
+ document.addEventListener('gesturestart',function(e){e.preventDefault()},{passive:false});document.addEventListener('gesturechange',function(e){e.preventDefault()},{passive:false});document.addEventListener('gestureend',function(e){e.preventDefault()},{passive:false});document.addEventListener('touchmove',function(e){if(e.touches&&e.touches.length>1)e.preventDefault()},{passive:false});document.addEventListener('dblclick',function(e){e.preventDefault()},{passive:false});
 document.addEventListener('pointerdown',function(e){if((C.phase!=='play'&&C.phase!=='lobby')||joy||e.clientX>innerWidth*.6||(e.target.closest&&e.target.closest('button,input,select')))return;joy={id:e.pointerId,x:e.clientX,y:e.clientY}});
 document.addEventListener('pointermove',function(e){if(!joy||e.pointerId!==joy.id)return;var dx=e.clientX-joy.x,dy=e.clientY-joy.y,l=Math.hypot(dx,dy),m=Math.min(l,60);jv=l>6?{x:dx/l*m/60,y:dy/l*m/60}:{x:0,y:0};joy.cx=e.clientX;joy.cy=e.clientY});
 function jend(e){if(joy&&e.pointerId===joy.id){joy=null;jv={x:0,y:0}}}
