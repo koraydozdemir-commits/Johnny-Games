@@ -1385,27 +1385,28 @@ var OCCLUDERS=null,MAP_WALL_SEGMENTS=null;
 var REACTOR_PANELS=MAPDATA.REACTOR_PANELS,O2_PANELS=MAPDATA.O2_PANELS,COMMS_PANEL=MAPDATA.COMMS_PANEL;
 function buildMapWalls(){
  if(MAP_WALL_SEGMENTS)return MAP_WALL_SEGMENTS;
- var out=[];
- MAPDATA.WALLS.slice(1).forEach(function(poly){
-  for(var i=0;i<poly.length;i++){
-   var a=poly[i],b=poly[(i+1)%poly.length],dx=b[0]-a[0],dy=b[1]-a[1],len=Math.hypot(dx,dy),gaps=[];
-   if(!len)continue;
-   DOORWAYS.forEach(function(d){
-    var px=d[0]+d[2]/2,py=d[1]+d[3]/2;
-    var t=Math.max(0,Math.min(1,((px-a[0])*dx+(py-a[1])*dy)/(len*len)));
-    if(Math.hypot(px-(a[0]+dx*t),py-(a[1]+dy*t))<34){
-     var half=(Math.max(d[2],d[3])/2+23)/len;
-     gaps.push([Math.max(0,t-half),Math.min(1,t+half)]);
-    }
-   });
-   gaps.sort(function(x,y){return x[0]-y[0]});
-   var cursor=0;
-   gaps.forEach(function(g){
-    if(g[0]>cursor)out.push([a[0]+dx*cursor,a[1]+dy*cursor,a[0]+dx*g[0],a[1]+dy*g[0]]);
-    cursor=Math.max(cursor,g[1]);
-   });
-   if(cursor<1)out.push([a[0]+dx*cursor,a[1]+dy*cursor,b[0],b[1]]);
-  }
+ var out=[],tagged=MAPDATA.LIGHT_WALLS||[];
+ // Only explicitly tagged structural edges can cast shadows. This prevents
+ // floor edges, hull trim and empty-space geometry from entering the raycaster.
+ tagged.forEach(function(edge){
+  if(!edge||edge.kind!=='structural-wall'||edge.castLight!==true||!edge.a||!edge.b)return;
+  var a=edge.a,b=edge.b,dx=b[0]-a[0],dy=b[1]-a[1],len=Math.hypot(dx,dy),gaps=[];
+  if(!Number.isFinite(len)||len<2)return;
+  DOORWAYS.forEach(function(d){
+   var px=d[0]+d[2]/2,py=d[1]+d[3]/2;
+   var t=Math.max(0,Math.min(1,((px-a[0])*dx+(py-a[1])*dy)/(len*len)));
+   if(Math.hypot(px-(a[0]+dx*t),py-(a[1]+dy*t))<34){
+    var half=(Math.max(d[2],d[3])/2+23)/len;
+    gaps.push([Math.max(0,t-half),Math.min(1,t+half)]);
+   }
+  });
+  gaps.sort(function(x,y){return x[0]-y[0]});
+  var cursor=0;
+  gaps.forEach(function(g){
+   if(g[0]>cursor)out.push([a[0]+dx*cursor,a[1]+dy*cursor,a[0]+dx*g[0],a[1]+dy*g[0]]);
+   cursor=Math.max(cursor,g[1]);
+  });
+  if(cursor<1)out.push([a[0]+dx*cursor,a[1]+dy*cursor,b[0],b[1]]);
  });
  MAP_WALL_SEGMENTS=out;return out;
 }
@@ -1423,52 +1424,74 @@ function raySegmentDistance(px,py,dx,dy,line){
  return t>=0&&u>=0&&u<=1?t:Infinity;
 }
 function raycastVisibility(p,radius){
- var source=buildOccluders(),limit=radius+28;
- var walls=source.filter(function(w){var x=Math.max(Math.min(w[0],w[2]),Math.min(p.x,Math.max(w[0],w[2]))),y=Math.max(Math.min(w[1],w[3]),Math.min(p.y,Math.max(w[1],w[3])));return Math.hypot(x-p.x,y-p.y)<limit});
+ var source=buildOccluders(),limit=radius+24;
+ var walls=source.filter(function(w){
+  var x=Math.max(Math.min(w[0],w[2]),Math.min(p.x,Math.max(w[0],w[2])));
+  var y=Math.max(Math.min(w[1],w[3]),Math.min(p.y,Math.max(w[1],w[3])));
+  return Math.hypot(x-p.x,y-p.y)<limit;
+ });
  if(C.sabotage&&C.sabotage.type==='doors'&&C.sabotage.until>Date.now()){
-  (C.sabotage.doors||[]).forEach(function(i){var d=DOORWAYS[i];if(d){var x=d[0],y=d[1],r=x+d[2],b=y+d[3];walls.push([x,y,r,y],[r,y,r,b],[r,b,x,b],[x,b,x,y])}});
+  (C.sabotage.doors||[]).forEach(function(i){
+   var d=DOORWAYS[i];if(d){var x=d[0],y=d[1],r=x+d[2],b=y+d[3];walls.push([x,y,r,y],[r,y,r,b],[r,b,x,b],[x,b,x,y])}
+  });
  }
- var angles=[],step=Math.PI*2/144;
- for(var a=0;a<Math.PI*2;a+=step)angles.push(a);
- walls.forEach(function(w){[[w[0],w[1]],[w[2],w[3]]].forEach(function(v){var a=Math.atan2(v[1]-p.y,v[0]-p.x);angles.push(a-.0008,a,a+.0008)})});
- angles.sort(function(a,b){return a-b});var points=[];
- for(var i=0;i<angles.length;i++){var a=angles[i],dx=Math.cos(a),dy=Math.sin(a),nearest=radius;
-  for(var j=0;j<walls.length;j++){var t=raySegmentDistance(p.x,p.y,dx,dy,walls[j]);if(t>=0&&t<nearest)nearest=t}
-  points.push([p.x+dx*Math.max(0,nearest-2),p.y+dy*Math.max(0,nearest-2)]);
+ // 72 evenly spaced base rays plus three tightly spaced rays per real wall
+ // endpoint. Sorting by angle guarantees the polygon always travels forward.
+ var angles=[],step=Math.PI*2/72;
+ for(var a=0;a<Math.PI*2-1e-7;a+=step)angles.push(a);
+ walls.forEach(function(w){
+  [[w[0],w[1]],[w[2],w[3]]].forEach(function(v){
+   var a=Math.atan2(v[1]-p.y,v[0]-p.x);
+   angles.push(a-.00055,a,a+.00055);
+  });
+ });
+ angles.sort(function(a,b){return a-b});
+ var points=[],last=-Infinity;
+ for(var i=0;i<angles.length;i++){
+  var a=angles[i];if(!Number.isFinite(a)||a-last<1e-7)continue;last=a;
+  var dx=Math.cos(a),dy=Math.sin(a),nearest=radius;
+  for(var j=0;j<walls.length;j++){
+   var t=raySegmentDistance(p.x,p.y,dx,dy,walls[j]);
+   if(Number.isFinite(t)&&t>=0&&t<nearest)nearest=t;
+  }
+  var dist=Math.max(0,nearest-1.5);
+  points.push([p.x+dx*dist,p.y+dy*dist]);
  }
  return points;
 }
 function drawVision(p){
- // Build a reusable transparent overlay so the near-player light disk can be
- // punched out without erasing the world rendered underneath it.
  var vision=(C.role==='imp'?440:390)*(C.vision||1);
  if(C.sabotage&&C.sabotage.type==='lights')vision=C.role==='imp'?190:135;
- var pts=raycastVisibility(p,vision),sx=sc;
+ var sx=sc,now=Date.now(),cache=window.__johnnyVisionCache;
+ var rebuild=!cache||now-cache.at>55||Math.hypot(p.x-cache.x,p.y-cache.y)>5||
+  cache.vision!==vision||cache.role!==C.role||cache.doorSab!==!!(C.sabotage&&C.sabotage.type==='doors'&&C.sabotage.until>now);
+ if(rebuild){
+  cache={x:p.x,y:p.y,at:now,vision:vision,role:C.role,
+   doorSab:!!(C.sabotage&&C.sabotage.type==='doors'&&C.sabotage.until>now),
+   points:raycastVisibility(p,vision)};
+  window.__johnnyVisionCache=cache;
+ }
+ var pts=cache.points;
  if(!window.__johnnyVisionLayer)window.__johnnyVisionLayer=document.createElement('canvas');
  var layer=window.__johnnyVisionLayer;
  if(layer.width!==cv.width||layer.height!==cv.height){layer.width=cv.width;layer.height=cv.height}
  var mx=layer.getContext('2d');
- mx.setTransform(1,0,0,1,0,0);
- mx.clearRect(0,0,layer.width,layer.height);
+ mx.setTransform(1,0,0,1,0,0);mx.clearRect(0,0,layer.width,layer.height);
  mx.beginPath();mx.rect(0,0,layer.width,layer.height);
  if(pts.length){
   mx.moveTo((pts[0][0]-p.x)*sx+layer.width/2,(pts[0][1]-p.y)*sx+layer.height/2);
   for(var i=1;i<pts.length;i++)mx.lineTo((pts[i][0]-p.x)*sx+layer.width/2,(pts[i][1]-p.y)*sx+layer.height/2);
   mx.closePath();
  }
- mx.clip('evenodd');
- mx.fillStyle='rgba(0,0,0,1)';
- mx.fillRect(0,0,layer.width,layer.height);
- // Feather only the distant edge of the regular vision radius.
+ mx.clip('evenodd');mx.fillStyle='rgba(0,0,0,1)';mx.fillRect(0,0,layer.width,layer.height);
  mx.save();mx.setTransform(1,0,0,1,0,0);
  var inner=Math.max(12,vision*sx*.68),outer=Math.max(inner+1,vision*sx);
  var g=mx.createRadialGradient(layer.width/2,layer.height/2,inner,layer.width/2,layer.height/2,outer);
  g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(.72,'rgba(0,0,0,.08)');g.addColorStop(1,'rgba(0,0,0,.48)');
  mx.fillStyle=g;mx.fillRect(0,0,layer.width,layer.height);mx.restore();
- // Guaranteed clear circle around the crewmate/player, independent of walls.
- mx.save();mx.globalCompositeOperation='destination-out';
- mx.beginPath();mx.arc(layer.width/2,layer.height/2,82*sx,0,Math.PI*2);mx.fill();
- mx.restore();
+ // Preserve the requested clear near-player disk even when a wall is close.
+ mx.save();mx.globalCompositeOperation='destination-out';mx.beginPath();
+ mx.arc(layer.width/2,layer.height/2,82*sx,0,Math.PI*2);mx.fill();mx.restore();
  cx.save();cx.setTransform(1,0,0,1,0,0);cx.drawImage(layer,0,0);cx.restore();
 }
 function drawDoors(){
