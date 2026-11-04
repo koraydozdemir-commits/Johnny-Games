@@ -651,7 +651,7 @@ function handle(id,m){
  if(m.t==='lmove'&&C.phase==='lobby'&&P[id]){P[id].x=Math.max(365,Math.min(1235,Number(m.x)||800));P[id].y=Math.max(210,Math.min(790,Number(m.y)||560));bcast({t:'lpos',P:P});return}
  if(m.t==='kick'&&isHost&&id===me&&C.phase==='lobby'){var target=String(m.id||'');if(!target||target===me||!P[target])return;sendTo(target,{t:'reject',reason:'The host removed you from this lobby.'});var kicked=conns[target];delete P[target];delete conns[target];if(kicked)try{kicked.close()}catch(e){}bcast({t:'lobby',P:P,cfg:roomCfg});return}
  if(!HS)return;var p=HS.p[id];if(!p)return;
- if(m.t==='chat'&&(HS.phase==='play'||HS.phase==='meet')&&p.alive){var message=String(m.text||'').replace(/[\\u0000-\\u001f<>]/g,' ').trim().slice(0,120);if(message)bcast({t:'chat',id:id,text:message,at:Date.now()});return}
+ if(m.t==='chat'&&(HS.phase==='play'||HS.phase==='meet')&&p.alive){var message=String(m.text||'').replace(/[\x00-\x1f<>]/g,' ').trim().slice(0,120);if(message)bcast({t:'chat',id:id,text:message,at:Date.now()});return}
  if(m.t==='in'){p.ix=m.x;p.iy=m.y}
  else if(m.t==='do'&&HS.phase==='play'){
   var taskId=Number(m.id),stage=p.stages[taskId]||0,target=taskLocation(taskId,stage,p);
