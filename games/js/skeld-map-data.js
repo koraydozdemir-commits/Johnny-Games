@@ -41,6 +41,13 @@ const FLOORS=[["Cafeteria","cafeteria","cafeteria"],["Weapons","weapons","weapon
 const HALLS=["hallTop","hallWest","hallSouth","hallCafeteria","hallAdmin","hallEast","hallBridge"].map(key=>mapPoly(parsePath(SOURCE[key])[0]));
 const HULL=mapPoly(parsePath(SOURCE.hull)[0]);
 const WALLS=["hull","wallWest","wallEast"].flatMap(key=>parsePath(SOURCE[key]).map(mapPoly));
+/* Explicit light-occlusion tags: only these measured structural room-boundary
+   edges block vision. Hull decoration, floors, corridors and furniture are not
+   light blockers. Every edge has a stable ID for auditing. */
+const LIGHT_WALLS=WALLS.slice(1).flatMap((poly,pi)=>poly.map((a,i)=>({
+ id:(pi===0?'west-boundary-':'east-boundary-')+i,
+ kind:'structural-wall',castLight:true,a:a,b:poly[(i+1)%poly.length]
+})));
 
 const VENT_META=[
  {id:0,name:'Admin',protocol:[2.543373,-9.59182],canvas:[960,520],links:[1,2]},
@@ -139,7 +146,7 @@ const BLOCKERS=PROPS.filter(p=>!NO_COLLISION_PROPS.has(p.id)).map(p=>{
 const DEFAULT_WIRE_ROUTE=[WIRE_STATIONS[2].point,WIRE_STATIONS[5].point,WIRE_STATIONS[0].point];
 global.JohnnySkeldMapData=Object.freeze({
  version:2,world:{width:1440,height:870},transform:TRANSFORM,
- FLOORS,HALLS,HULL,WALLS,VENT_META,VENT_GROUPS,VENTS,VENT_LINKS,
+ FLOORS,HALLS,HULL,WALLS,LIGHT_WALLS,VENT_META,VENT_GROUPS,VENTS,VENT_LINKS,
  TASK_NAMES,ST,WIRE_STATIONS,DOWNLOAD_STATIONS,POWER_TARGETS,POWER_TARGET_NAMES,TBL,
  DOORWAYS,PANELS,REACTOR_PANELS,O2_PANELS,COMMS_PANEL,CAMERAS,PROPS,BLOCKERS,
  DEFAULT_WIRE_ROUTE
