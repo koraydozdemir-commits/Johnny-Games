@@ -1442,7 +1442,12 @@ function raycastVisibility(p,radius){
  walls.forEach(function(w){
   [[w[0],w[1]],[w[2],w[3]]].forEach(function(v){
    var a=Math.atan2(v[1]-p.y,v[0]-p.x);
-   angles.push(a-.00055,a,a+.00055);
+   // Normalize every endpoint ray into [0, 2π) before sorting. Mixing
+   // atan2's negative angles with 0..2π base rays made the polygon jump
+   // backwards across the -π/π seam and draw long, stray triangles.
+   var tau=Math.PI*2;
+   function wrapAngle(v){v%=tau;return v<0?v+tau:v}
+   angles.push(wrapAngle(a-.00055),wrapAngle(a),wrapAngle(a+.00055));
   });
  });
  angles.sort(function(a,b){return a-b});
