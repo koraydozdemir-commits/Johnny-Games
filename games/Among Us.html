@@ -1190,7 +1190,7 @@ setInterval(function(){
 },50);
 
 /* ---------- render ---------- */
-var DPR=1;function rs(){DPR=Math.min(window.devicePixelRatio||1,2);cv.width=Math.round(innerWidth*DPR);cv.height=Math.round(innerHeight*DPR);sc=Math.min(innerWidth,innerHeight)/620*2.05;cx.imageSmoothingEnabled=true}
+var DPR=1;function rs(){DPR=Math.min(window.devicePixelRatio||1,2);cv.width=Math.round(innerWidth*DPR);cv.height=Math.round(innerHeight*DPR);sc=Math.min(innerWidth,innerHeight)/620*2.05*1.2;cx.imageSmoothingEnabled=true}
 addEventListener('resize',rs);rs();
 function body(x,y,col,dead,size){
  cx.save();cx.translate(x,dead?y:y+Math.sin(Date.now()*.006+x*.03)*1.15);var bodyScale=size||.78;cx.scale(bodyScale,bodyScale);
@@ -1410,23 +1410,24 @@ function buildMapWalls(){
  });
  MAP_WALL_SEGMENTS=out;return out;
 }
-/* ---------- room-based visibility ---------- */
-// Rooms are the measured floor polygons. Corridors stay visible as shared
-// walkways; the room the local player occupies is the only fully lit room.
-function roomAt(x,y){
- for(var i=0;i<FLOORS.length;i++){
-  var room=FLOORS[i];
-  if(pointInPoly(x,y,room.p))return room;
- }
+/* ---------- room + corridor visibility ---------- */
+// The visibility zone is the exact room OR hallway polygon containing the player.
+// Keeping stable keys means door crossings switch visibility cleanly.
+function visibilityAreaAt(x,y){
+ for(var i=0;i<FLOORS.length;i++)if(pointInPoly(x,y,FLOORS[i].p))return{key:'room:'+i,poly:FLOORS[i].p};
+ for(var j=0;j<HALLS.length;j++)if(pointInPoly(x,y,HALLS[j]))return{key:'hall:'+j,poly:HALLS[j]};
  return null;
 }
-function drawRoomDarkness(currentRoom){
+function drawAreaDarkness(currentArea){
  cx.save();
  cx.fillStyle='rgba(0,0,0,.70)';
- FLOORS.forEach(function(room){
-  if(room===currentRoom)return;
-  polyPath(room.p);
-  cx.fill();
+ FLOORS.forEach(function(room,i){
+  if(currentArea&&currentArea.key==='room:'+i)return;
+  polyPath(room.p);cx.fill();
+ });
+ HALLS.forEach(function(hall,i){
+  if(currentArea&&currentArea.key==='hall:'+i)return;
+  polyPath(hall);cx.fill();
  });
  cx.restore();
 }
@@ -1452,7 +1453,7 @@ function drawCamera(v){
  cx.beginPath();cx.roundRect(-10,-6,20,12,4);cx.fill();cx.stroke();cx.shadowBlur=0;
  cx.fillStyle='#8fd8e2';cx.beginPath();cx.arc(3,0,3,0,Math.PI*2);cx.fill();cx.restore();
 }
-function drawSkeld(currentRoom){
+function drawSkeld(currentArea){
  cx.save();cx.fillStyle='#0d1720';cx.fillRect(0,0,W,H);
  // Hull silhouette from the measured overview. The floor plates sit inside it.
  polyPath(MAPDATA.HULL);cx.save();cx.shadowColor='#000b';cx.shadowBlur=16;
@@ -1489,10 +1490,10 @@ function drawSkeld(currentRoom){
  drawTable(TBL[0],TBL[1],30,21);
  PANELS.forEach(function(v){drawConsole(v[0],v[1],34,38,'#8ee7d7')});
  // Darken every room except the one containing the local player.
- drawRoomDarkness(currentRoom);
- C.bodies.forEach(function(b){var bodyRoom=roomAt(b.x,b.y);if(bodyRoom&&bodyRoom!==currentRoom)return;body(b.x,b.y,P[b.id]?P[b.id].col:'#999',1)});
- if(killFx&&Date.now()-killFx.at<650&&(!roomAt(killFx.x,killFx.y)||roomAt(killFx.x,killFx.y)===currentRoom)){var age=(Date.now()-killFx.at)/650;cx.save();cx.globalAlpha=1-age;cx.strokeStyle='#ff496c';cx.lineWidth=7;cx.shadowColor='#ff1744';cx.shadowBlur=18;cx.beginPath();cx.arc(killFx.x,killFx.y,18+age*62,0,Math.PI*2);cx.stroke();cx.restore()}
- Object.keys(C.pos).forEach(function(k){var q=C.pos[k];if(!P[k])return;var playerRoom=roomAt(q.x,q.y);if(k!==me&&playerRoom&&playerRoom!==currentRoom)return;if(!q.al&&!(C.pos[me]&&!C.pos[me].al))return;cx.globalAlpha=q.al?1:.45;body(q.x,q.y,P[k].col,!q.al);drawHat(q.x,q.y,P[k].hat);cx.globalAlpha=1;cx.fillStyle='#f7ffff';cx.font='bold 16px Arial';cx.textAlign='center';cx.strokeStyle='#17262b';cx.lineWidth=4;cx.strokeText(P[k].name,q.x,q.y-23);cx.fillText(P[k].name,q.x,q.y-23)});
+ drawAreaDarkness(currentArea);
+ C.bodies.forEach(function(b){var bodyArea=visibilityAreaAt(b.x,b.y);if(bodyArea&&(!currentArea||bodyArea.key!==currentArea.key))return;body(b.x,b.y,P[b.id]?P[b.id].col:'#999',1)});
+ if(killFx&&Date.now()-killFx.at<650&&(!visibilityAreaAt(killFx.x,killFx.y)||(currentArea&&visibilityAreaAt(killFx.x,killFx.y).key===currentArea.key))){var age=(Date.now()-killFx.at)/650;cx.save();cx.globalAlpha=1-age;cx.strokeStyle='#ff496c';cx.lineWidth=7;cx.shadowColor='#ff1744';cx.shadowBlur=18;cx.beginPath();cx.arc(killFx.x,killFx.y,18+age*62,0,Math.PI*2);cx.stroke();cx.restore()}
+ Object.keys(C.pos).forEach(function(k){var q=C.pos[k];if(!P[k])return;var playerArea=visibilityAreaAt(q.x,q.y);if(k!==me&&playerArea&&(!currentArea||playerArea.key!==currentArea.key))return;if(!q.al&&!(C.pos[me]&&!C.pos[me].al))return;cx.globalAlpha=q.al?1:.45;body(q.x,q.y,P[k].col,!q.al);drawHat(q.x,q.y,P[k].hat);cx.globalAlpha=1;cx.fillStyle='#f7ffff';cx.font='bold 16px Arial';cx.textAlign='center';cx.strokeStyle='#17262b';cx.lineWidth=4;cx.strokeText(P[k].name,q.x,q.y-23);cx.fillText(P[k].name,q.x,q.y-23)});
  cx.restore();
 }
 function drawMinimap(){
@@ -1514,8 +1515,8 @@ function frame(){
  var p=C.pos[me]||{x:TBL[0],y:TBL[1],al:1};
  cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#071019';cx.fillRect(0,0,cv.width,cv.height);
  cx.setTransform(sc,0,0,sc,cv.width/2-p.x*sc,cv.height/2-p.y*sc);
- var currentRoom=roomAt(p.x,p.y);
- drawSkeld(currentRoom);
+ var currentArea=visibilityAreaAt(p.x,p.y);
+ drawSkeld(currentArea);
  cx.setTransform(1,0,0,1,0,0);
  drawMinimap();
  var nearT=Math.hypot(p.x-TBL[0],p.y-TBL[1])<110,u=$('use'),t=nearTask(),nearRepair=false;
