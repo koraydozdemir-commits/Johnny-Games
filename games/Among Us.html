@@ -266,7 +266,9 @@ canvas{image-rendering:auto}
  html,body{touch-action:pan-x pan-y;overscroll-behavior:none;-webkit-text-size-adjust:100%}
  #cv{touch-action:none;-ms-touch-action:none}
  input,textarea,select,button{touch-action:manipulation}
- </style></head><body>
+ /* Johnny Games edition: meeting, voting and chat polish */
+#vote{justify-content:center;overflow-y:auto!important;gap:14px}#vote .meeting-shell{width:min(760px,100%);max-height:calc(100dvh - 28px);overflow:auto;padding:clamp(16px,3vw,28px);border:1px solid #83dfe955;border-radius:24px;background:linear-gradient(145deg,#172c43f5,#0a1424f7);box-shadow:0 28px 90px #000b;text-align:left}#vote .meeting-kicker{font-size:10px;font-weight:1000;letter-spacing:3px;color:#78e9e1}#vote #vt{font-size:clamp(23px,4vw,34px);margin:8px 0 4px!important;text-align:left}#vote .meeting-sub{color:#94a9c3;font-size:12px;margin:0 0 18px}#vote .vote-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:9px;max-height:42dvh;overflow:auto;padding:2px}#vote .vote-player{display:flex;align-items:center;gap:11px;min-height:62px;padding:10px 12px;border:1px solid #ffffff20;border-radius:14px;background:#0d1b2d;color:#eaf4ff;text-align:left;font-size:13px;transition:.15s}#vote .vote-player.selected{border-color:#72e9df;background:#143548;box-shadow:0 0 0 2px #72e9df26}#vote .vote-player:disabled{opacity:.65;cursor:default}#vote .vote-avatar{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;color:#071522;font-weight:1000;flex:none;box-shadow:inset 0 2px 5px #ffffff66}#vote .vote-meta{display:flex;flex-direction:column;gap:3px;min-width:0}#vote .vote-meta small{color:#829ab7;font-size:10px}#vote .vote-state{margin-left:auto;color:#7ce8d8;font-size:9px;font-weight:1000;letter-spacing:1px}#vote .meeting-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:15px}#vote .skip-vote{background:#273750;border:1px solid #657c9d;color:#dceaff;min-height:48px;font-size:12px}#vote .confirm-vote{background:linear-gradient(100deg,#6de8df,#8eb4ff);color:#071522;min-height:48px;font-size:12px;letter-spacing:1px}#vote .confirm-vote:disabled{opacity:.35}#vote #vtime{margin-top:14px;color:#a8c1d9;font-size:12px}#vote .vote-result{margin-top:14px;padding:12px;border:1px solid #ffffff20;border-radius:12px;background:#091525;color:#c6d9ef;font-size:12px;line-height:1.7}#chatToggle{position:fixed;left:calc(14px + env(safe-area-inset-left));bottom:calc(14px + env(safe-area-inset-bottom));z-index:12;display:none;min-width:54px;min-height:50px;padding:0 16px;border:1px solid #79e9e455;border-radius:15px;background:#0c2234ed;color:#bdfaf2;font-size:12px;font-weight:1000;box-shadow:0 8px 28px #0008}#chatPanel{position:fixed;left:calc(14px + env(safe-area-inset-left));bottom:calc(74px + env(safe-area-inset-bottom));z-index:13;display:none;width:min(350px,calc(100vw - 28px));height:min(430px,58dvh);flex-direction:column;overflow:hidden;border:1px solid #79e9e455;border-radius:18px;background:#0b1728f5;box-shadow:0 22px 70px #000b}#chatPanel.open{display:flex}.chat-head{display:flex;align-items:center;justify-content:space-between;padding:13px 15px;border-bottom:1px solid #ffffff18;color:#eaf8ff;font-size:11px;font-weight:1000;letter-spacing:2px}.chat-head button{min-height:30px;padding:0 9px;background:#233650;font-size:11px}.chat-feed{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:8px;overscroll-behavior:contain}.chat-line{padding:8px 10px;border-radius:11px;background:#14263b;color:#d9e9f8;font-size:12px;line-height:1.4;overflow-wrap:anywhere}.chat-line b{display:block;margin-bottom:3px;color:#78e9e1;font-size:10px}.chat-line.system{background:#1c2938;color:#94aac1;font-style:italic}.chat-compose{display:flex;gap:7px;padding:10px;border-top:1px solid #ffffff18}.chat-compose input{flex:1;min-width:0;width:auto;min-height:42px;height:42px;padding:0 11px;text-align:left;font-size:14px;border-radius:10px}.chat-compose button{min-height:42px;padding:0 13px;border-radius:10px;font-size:11px}@media(max-width:600px){#vote .meeting-shell{border-radius:18px;padding:16px}#vote .vote-grid{grid-template-columns:1fr 1fr;max-height:48dvh}#vote .vote-player{min-height:58px;padding:8px;font-size:11px}#vote .vote-avatar{width:29px;height:29px}#chatPanel{height:min(390px,55dvh)}#chatToggle{min-height:46px}}
+</style></head><body>
 <canvas id="cv"></canvas>
 <div id="hud"><div>Role: <span id="role"></span><div id="tl" style="font-weight:400;font-size:14px;margin-top:4px"></div></div><div>Tasks<div id="bar"><i></i></div></div></div>
 <div id="hold"><i></i></div>
@@ -318,7 +320,8 @@ canvas{image-rendering:auto}
   <div class="lobby-bottom"><div id="waitStart">WAITING FOR HOST TO START</div><button id="start" hidden>START MISSION <span>→</span></button></div>
  </div>
 </div>
-<div class="scr" id="vote" hidden><h2 id="vt" style="margin:0"></h2><div id="vopts" class="row" style="max-width:640px"></div><div id="vtime"></div></div>
+<div class="scr" id="vote" hidden><section class="meeting-shell"><div class="meeting-kicker">JOHNNY GAMES · EMERGENCY MEETING</div><h2 id="vt">Emergency meeting</h2><p class="meeting-sub">Discuss what happened, then lock in your vote. Your choice stays private until the results.</p><div id="vopts" class="vote-grid"></div><div class="meeting-actions"><button id="skipVote" class="skip-vote">SKIP VOTE</button><button id="confirmVote" class="confirm-vote" disabled>CONFIRM VOTE</button></div><div id="vtime"></div><div id="voteResult" class="vote-result" hidden></div></section></div>
+<button id="chatToggle" type="button" aria-label="Open chat">CHAT</button><section id="chatPanel" aria-label="Game chat"><header class="chat-head"><span>CREW CHAT</span><button id="chatClose" type="button">CLOSE</button></header><div id="chatFeed" class="chat-feed" aria-live="polite"><div class="chat-line system">Messages are visible to living players in this room.</div></div><form id="chatCompose" class="chat-compose"><input id="chatInput" maxlength="120" autocomplete="off" placeholder="Message your crew…" aria-label="Chat message"><button type="submit">SEND</button></form></section>
 <div class="scr" id="end" hidden><h1 id="et"></h1><div id="es" style="color:#9aa"></div><button id="again" hidden>Back to lobby</button></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -470,7 +473,7 @@ var isHost=false,peer,conns={},hostConn,me='me',connectTimer=null,connectBusy=fa
 var playerColor=COL[0],playerHat='none';
 var roomCfg={imps:1,speed:1,cooldown:12000,tasks:3,vision:1};
 var P={};            // id -> {name,col}
-var C={phase:'home',pos:{},bodies:[],done:0,total:0,role:'',tasks:[],mine:{},meet:null};
+var C={phase:'home',pos:{},bodies:[],done:0,total:0,role:'',tasks:[],mine:{},meet:null};var selectedVote=null,voteLocked=false,chatCount=0;
 var HS=null;         // host sim state
 var inp={x:0,y:0},killAt=0,ventAt=0,sabAt=0,killFx=null;
 
@@ -648,6 +651,7 @@ function handle(id,m){
  if(m.t==='lmove'&&C.phase==='lobby'&&P[id]){P[id].x=Math.max(365,Math.min(1235,Number(m.x)||800));P[id].y=Math.max(210,Math.min(790,Number(m.y)||560));bcast({t:'lpos',P:P});return}
  if(m.t==='kick'&&isHost&&id===me&&C.phase==='lobby'){var target=String(m.id||'');if(!target||target===me||!P[target])return;sendTo(target,{t:'reject',reason:'The host removed you from this lobby.'});var kicked=conns[target];delete P[target];delete conns[target];if(kicked)try{kicked.close()}catch(e){}bcast({t:'lobby',P:P,cfg:roomCfg});return}
  if(!HS)return;var p=HS.p[id];if(!p)return;
+ if(m.t==='chat'&&(HS.phase==='play'||HS.phase==='meet')&&p.alive){var message=String(m.text||'').replace(/[\\u0000-\\u001f<>]/g,' ').trim().slice(0,120);if(message)bcast({t:'chat',id:id,text:message,at:Date.now()});return}
  if(m.t==='in'){p.ix=m.x;p.iy=m.y}
  else if(m.t==='do'&&HS.phase==='play'){
   var taskId=Number(m.id),stage=p.stages[taskId]||0,target=taskLocation(taskId,stage,p);
@@ -816,7 +820,7 @@ function tally(){
  Object.keys(c).forEach(function(k){if(c[k]>tv){tv=c[k];top=k;tie=false}else if(c[k]===tv)tie=true});
  var out=(!tie&&top&&tv>skip)?top:null;
  if(out)HS.p[out].alive=false;
- bcast({t:'res',out:out,imp:out?HS.p[out].role==='imp':null});
+ bcast({t:'res',out:out,imp:out?HS.p[out].role==='imp':null,counts:c,skip:skip,total:Object.keys(HS.votes).length});
  setTimeout(function(){
   if(!HS)return;if(!checkWin())return;
   HS.bodies=[];var ids=Object.keys(HS.p),n=0;
@@ -848,7 +852,7 @@ function onMsg(m){
   if(!isHost){var entered=$('jc').value.trim().toUpperCase();$('code').textContent=entered;$('quickcode').textContent=entered;$('copycode').innerHTML='COPY CODE <span>▣</span>';}
   $('lobbyMenu').hidden=true;lobbyUI()
  }
- else if(m.t==='role'){P=m.P;C.role=m.role;C.vision=m.vision||1;C.sabotage=null;C.sabotageUntil=0;C.tasks=m.tasks;C.stages={};C.wireRoute=m.wireRoute||MAPDATA.DEFAULT_WIRE_ROUTE;C.powerTarget=m.powerTarget||POWER_TARGETS[0];C.downloadStart=m.downloadStart||ST[10];C.mine={};C.total=m.total;C.done=0;C.bodies=[];C.alive=true;C.phase='play';$('bar').firstChild.style.width='0%';
+ else if(m.t==='role'){P=m.P;C.role=m.role;$('chatToggle').style.display='block';setChatOpen(false);C.vision=m.vision||1;C.sabotage=null;C.sabotageUntil=0;C.tasks=m.tasks;C.stages={};C.wireRoute=m.wireRoute||MAPDATA.DEFAULT_WIRE_ROUTE;C.powerTarget=m.powerTarget||POWER_TARGETS[0];C.downloadStart=m.downloadStart||ST[10];C.mine={};C.total=m.total;C.done=0;C.bodies=[];C.alive=true;C.phase='play';$('bar').firstChild.style.width='0%';
   killAt=Date.now()+(m.cooldown||12000);show(null);$('hud').style.display='flex';$('btns').style.display='flex';$('role').textContent=m.role==='imp'?'SABOTEUR':'CREW';
   $('role').style.color=m.role==='imp'?'#fb7185':'#8fe3ff';taskUI()}
  else if(m.t==='lpos'){P=m.P}
@@ -866,14 +870,18 @@ function onMsg(m){
  else if(m.t==='killfx'){killFx={x:m.x,y:m.y,col:m.col,at:Date.now()};showFx('ELIMINATED','#fb7185')}
  else if(m.t==='ventfx'){showFx('VENT','#c4b5fd')}
  else if(m.t==='meet'){C.phase='meet';meetUI(m)}
- else if(m.t==='voted'){var e=$('v_'+m.id);if(e)e.style.opacity=.4}
- else if(m.t==='res'){clearInterval(C.vi);$('vt').textContent=m.out?(P[m.out].name+(m.imp?' was a SABOTEUR':' was NOT a saboteur')):'Nobody was ejected';$('vopts').innerHTML='';$('vtime').textContent=''}
- else if(m.t==='resume'){C.phase='play';show(null);killAt=Date.now()+12000;C.alive=C.pos[me]?C.pos[me].al:true}
- else if(m.t==='end'){C.phase='end';$('hud').style.display=$('btns').style.display='none';show('end');
+ else if(m.t==='voted'){var e=$('vs_'+m.id);if(e)e.textContent='VOTED';var count=document.querySelectorAll('#vote .vote-state').length,done=document.querySelectorAll('#vote .vote-state:not(:empty)').length;if($('vtime'))$('vtime').textContent=done+' / '+count+' living players have voted'}
+ else if(m.t==='res'){clearInterval(C.vi);$('vt').textContent=m.out?((P[m.out]?P[m.out].name:'A player')+(m.imp?' WAS AN IMPOSTOR':' WAS NOT AN IMPOSTOR')):'NO ONE WAS EJECTED';$('vopts').innerHTML='';$('skipVote').hidden=$('confirmVote').hidden=true;var lines=[];Object.keys(m.counts||{}).forEach(function(k){lines.push((P[k]?P[k].name:'Unknown')+' · '+m.counts[k]+' vote(s)')});if(m.skip)lines.push('Skip · '+m.skip+' vote(s)');if(!lines.length)lines.push('No votes were cast');$('voteResult').innerHTML='<b>VOTE SUMMARY</b><br>'+lines.map(esc).join('<br>');$('voteResult').hidden=false;$('vtime').textContent='Meeting concluded'}
+ else if(m.t==='chat'){appendChat(m.id,m.text,m.at)}
+ else if(m.t==='resume'){C.phase='play';show(null);$('skipVote').hidden=$('confirmVote').hidden=false;killAt=Date.now()+12000;C.alive=C.pos[me]?C.pos[me].al:true}
+ else if(m.t==='end'){C.phase='end';$('hud').style.display=$('btns').style.display='none';$('chatToggle').style.display='none';$('chatPanel').classList.remove('open');show('end');
   var win=(m.w==='crew')===(m.r[me]==='crew');$('et').textContent=win?'VICTORY':'DEFEAT';$('et').style.color=win?'#4ade80':'#fb7185';
   $('es').textContent=(m.w==='crew'?'The crew won.':'The saboteurs won.')+' Saboteur: '+Object.keys(m.r).filter(function(k){return m.r[k]==='imp'}).map(function(k){return P[k].name}).join(', ');
   $('again').hidden=!isHost}
 }
+function appendChat(id,message,at){var feed=$('chatFeed'),p=P[id]||{name:'Crew',col:'#8fa6c2'},line=document.createElement('div'),name=document.createElement('b');line.className='chat-line';name.textContent=p.name+(id===me?' · YOU':'');name.style.color=p.col;line.appendChild(name);line.appendChild(document.createTextNode(String(message||'')));feed.appendChild(line);while(feed.children.length>80)feed.removeChild(feed.firstChild);feed.scrollTop=feed.scrollHeight;chatCount++}
+function setChatOpen(open){$('chatPanel').classList.toggle('open',!!open);$('chatToggle').textContent=open?'CLOSE CHAT':'CHAT';if(open)setTimeout(function(){$('chatInput').focus({preventScroll:true})},40)}
+$('chatToggle').onclick=function(){setChatOpen(!$('chatPanel').classList.contains('open'))};$('chatClose').onclick=function(){setChatOpen(false)};$('chatCompose').addEventListener('submit',function(e){e.preventDefault();var v=$('chatInput').value.trim();if(!v)return;toHost({t:'chat',text:v});$('chatInput').value='';$('chatInput').blur()});
 function closeSabRepair(){$('sabRepairPanel').hidden=true;if(taskTimer){clearInterval(taskTimer);taskTimer=null}}
 $('repairClose').onclick=closeSabRepair;
 function finishSabRepair(type,panel,extra){toHost(Object.assign({t:'repair',type:type,panel:panel},extra||{}));closeSabRepair()}
@@ -928,14 +936,18 @@ function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;
 $('plist').addEventListener('click',function(e){var b=e.target.closest('[data-kick]');if(b&&isHost&&confirm('Kick this player from the lobby?'))toHost({t:'kick',id:b.getAttribute('data-kick')})});
 function taskUI(){$('tl').innerHTML=C.role==='imp'?'Eliminate the crew. Do not get caught.':C.tasks.map(function(i){var stage=C.stages&&C.stages[i]||0,total=taskStageCount(i),tail=total>1?' ('+(stage+1)+'/'+total+')':'';var label=i===10?(stage?'UPLOAD DATA':'DOWNLOAD DATA'):TASK_NAMES[i];return(C.mine[i]?'&#10003; ':'&#9675; ')+label+tail}).join('<br>')}
 function meetUI(m){
- show('vote');$('vt').textContent=(m.why==='body'?'Body reported by ':'Emergency meeting by ')+P[m.by].name;
+ show('vote');selectedVote=null;voteLocked=false;
+ $('vt').textContent=(m.why==='body'?'Body reported by ':'Emergency meeting by ')+(P[m.by]?P[m.by].name:'Crew');
+ $('voteResult').hidden=true;$('voteResult').textContent='';
  var amAlive=m.al.indexOf(me)>-1,o='';
- m.al.forEach(function(k){o+='<button class="chip" id="v_'+k+'" data-v="'+k+'" style="border-color:'+P[k].col+'">'+esc(P[k].name)+'</button>'});
- o+='<button class="chip" data-v="skip">Skip</button>';$('vopts').innerHTML=o;
- var bs=$('vopts').querySelectorAll('button');
- for(var i=0;i<bs.length;i++){(function(b){b.disabled=!amAlive;b.onclick=function(){toHost({t:'vote',v:b.dataset.v});for(var j=0;j<bs.length;j++)bs[j].disabled=true}})(bs[i])}
- var t=m.T;clearInterval(C.vi);$('vtime').textContent=amAlive?'Vote: '+t+'s':'You are dead. Watching.';
- C.vi=setInterval(function(){t--;if(t<0)return clearInterval(C.vi);if(amAlive)$('vtime').textContent='Vote: '+t+'s'},1000);
+ m.al.forEach(function(k){var p=P[k]||{name:'Crew',col:'#94a3b8'};o+='<button class="vote-player" id="v_'+k+'" data-v="'+k+'" style="border-left:3px solid '+p.col+'"><span class="vote-avatar" style="background:'+p.col+'">'+esc(p.name.slice(0,1).toUpperCase())+'</span><span class="vote-meta"><b>'+esc(p.name)+'</b><small>CREWMATE</small></span><span class="vote-state" id="vs_'+k+'"></span></button>'});
+ $('vopts').innerHTML=o;$('skipVote').disabled=!amAlive;$('confirmVote').disabled=true;$('confirmVote').textContent='CONFIRM VOTE';
+ $('skipVote').onclick=function(){if(amAlive&&!voteLocked){selectedVote='skip';$('confirmVote').disabled=false;document.querySelectorAll('.vote-player').forEach(function(b){b.classList.remove('selected')});$('confirmVote').textContent='CONFIRM SKIP'}};
+ var bs=$('vopts').querySelectorAll('[data-v]');
+ for(var i=0;i<bs.length;i++){(function(b){b.disabled=!amAlive;b.onclick=function(){if(voteLocked)return;selectedVote=b.dataset.v;document.querySelectorAll('.vote-player').forEach(function(x){x.classList.toggle('selected',x===b)});$('confirmVote').disabled=false;$('confirmVote').textContent='CONFIRM VOTE'}})(bs[i])}
+ $('confirmVote').onclick=function(){if(!amAlive||voteLocked||!selectedVote)return;voteLocked=true;toHost({t:'vote',v:selectedVote});$('confirmVote').disabled=true;$('skipVote').disabled=true;document.querySelectorAll('.vote-player').forEach(function(b){b.disabled=true});$('vtime').textContent='Vote submitted · waiting for the crew'};
+ var t=m.T;clearInterval(C.vi);$('vtime').textContent=amAlive?'DISCUSSION & VOTING · '+t+'s':'You are dead. You can watch the meeting.';
+ C.vi=setInterval(function(){t--;if(t<0)return clearInterval(C.vi);if(amAlive&&!voteLocked)$('vtime').textContent='DISCUSSION & VOTING · '+t+'s'},1000);
 }
 
 /* ---------- input ---------- */
@@ -1208,7 +1220,7 @@ setInterval(function(){
 },50);
 
 /* ---------- render ---------- */
-var DPR=1;function rs(){DPR=Math.min(window.devicePixelRatio||1,2);cv.width=Math.round(innerWidth*DPR);cv.height=Math.round(innerHeight*DPR);sc=Math.min(innerWidth,innerHeight)/620*2.05*1.65;cx.imageSmoothingEnabled=true}
+var DPR=1;function rs(){DPR=Math.min(window.devicePixelRatio||1,2);cv.width=Math.round(innerWidth*DPR);cv.height=Math.round(innerHeight*DPR);sc=Math.min(innerWidth,innerHeight)/620*2.05*1.65*1.8;cx.imageSmoothingEnabled=true}
 addEventListener('resize',rs);rs();
 function body(x,y,col,dead,size){
  cx.save();cx.translate(x,dead?y:y+Math.sin(Date.now()*.006+x*.03)*1.15);var bodyScale=size||.78;cx.scale(bodyScale,bodyScale);
