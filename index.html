@@ -673,8 +673,9 @@ var S={games:[],q:'',tab:'all',sort:'az',favs:store.get('jg_favs',[]),recent:sto
 
 function norm(e){
  var ext=!!e.url;
- return {name:e.name,href:ext?e.url:'play.html?g='+encodeURIComponent(e.name),ext:ext,
-  thumbs:e.thumb?[e.thumb]:EXT.map(function(x){return 'thumbnails/'+e.name+'.'+x})};
+ var game=e.game||e.name;
+ return {name:e.name,href:ext?e.url:'play.html?g='+encodeURIComponent(game),ext:ext,
+  thumbs:e.thumb?[e.thumb]:EXT.map(function(x){return 'thumbnails/'+(e.image||game)+'.'+x})};
 }
 function toggleFav(n){
  var i=S.favs.indexOf(n);
