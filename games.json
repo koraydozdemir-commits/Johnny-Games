@@ -111,9 +111,13 @@
     "name": "Krillion"
   },
   {
-    "name": "Kour.io"
+    "name": "Kour",
+    "game": "Kour.io",
+    "thumb": "thumbnails/Kour.io.png"
   },
   {
-    "name": "Veck.io"
+    "name": "Veck",
+    "game": "Veck.io",
+    "thumb": "thumbnails/Veck.io.png"
   }
 ]
