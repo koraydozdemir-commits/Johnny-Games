@@ -1410,112 +1410,25 @@ function buildMapWalls(){
  });
  MAP_WALL_SEGMENTS=out;return out;
 }
-function buildOccluders(){
- // Only structural room boundaries cast vision shadows.
- // Furniture, consoles, crates, beds and other in-room props never occlude vision.
- if(OCCLUDERS)return OCCLUDERS;
- OCCLUDERS=buildMapWalls().slice();
- return OCCLUDERS;
-}
-function raySegmentDistance(px,py,dx,dy,line){
- var sx=line[2]-line[0],sy=line[3]-line[1],qx=line[0]-px,qy=line[1]-py,den=dx*sy-dy*sx;
- if(Math.abs(den)<1e-8)return Infinity;
- var t=(qx*sy-qy*sx)/den,u=(qx*dy-qy*dx)/den;
- return t>=0&&u>=0&&u<=1?t:Infinity;
-}
-function doorwayVisionSegment(d){
- var x=d[0],y=d[1],w=d[2],h=d[3],vertical=!!d[4],angle=d[5]||0;
- var cx=x+w/2,cy=y+h/2,a,b,half=Math.max(w,h)/2+23;
- // Match the doorway opening cut from the structural wall geometry.
- if(vertical){a=[cx-half,cy];b=[cx+half,cy]}
- else{a=[cx,cy-half];b=[cx,cy+half]}
- if(angle){
-  function rotate(v){var dx=v[0]-cx,dy=v[1]-cy,c=Math.cos(angle),s=Math.sin(angle);return[cx+dx*c-dy*s,cy+dx*s+dy*c]}
-  a=rotate(a);b=rotate(b);
+/* ---------- room-based visibility ---------- */
+// Rooms are the measured floor polygons. Corridors stay visible as shared
+// walkways; the room the local player occupies is the only fully lit room.
+function roomAt(x,y){
+ for(var i=0;i<FLOORS.length;i++){
+  var room=FLOORS[i];
+  if(pointInPoly(x,y,room.p))return room;
  }
- return[a[0],a[1],b[0],b[1]];
+ return null;
 }
-function raycastVisibility(p,radius){
- var source=buildOccluders().slice(),limit=radius+24;
- // Opaque sight-lines across door openings stop vision at room thresholds.
- // They are lifted only when the player reaches that doorway, so entering
- // the room reveals it naturally. Copy the wall list to avoid cache mutation.
- DOORWAYS.forEach(function(d){
-  var cx=d[0]+d[2]/2,cy=d[1]+d[3]/2;
-  if(Math.hypot(p.x-cx,p.y-cy)>28)source.push(doorwayVisionSegment(d));
+function drawRoomDarkness(currentRoom){
+ cx.save();
+ cx.fillStyle='rgba(0,0,0,.70)';
+ FLOORS.forEach(function(room){
+  if(room===currentRoom)return;
+  polyPath(room.p);
+  cx.fill();
  });
- var walls=source.filter(function(w){
-  var x=Math.max(Math.min(w[0],w[2]),Math.min(p.x,Math.max(w[0],w[2])));
-  var y=Math.max(Math.min(w[1],w[3]),Math.min(p.y,Math.max(w[1],w[3])));
-  return Math.hypot(x-p.x,y-p.y)<limit;
- });
- if(C.sabotage&&C.sabotage.type==='doors'&&C.sabotage.until>Date.now()){
-  (C.sabotage.doors||[]).forEach(function(i){
-   var d=DOORWAYS[i];if(d){var x=d[0],y=d[1],r=x+d[2],b=y+d[3];walls.push([x,y,r,y],[r,y,r,b],[r,b,x,b],[x,b,x,y])}
-  });
- }
- // 72 evenly spaced base rays plus three tightly spaced rays per real wall
- // endpoint. Sorting by angle guarantees the polygon always travels forward.
- var angles=[],step=Math.PI*2/72;
- for(var a=0;a<Math.PI*2-1e-7;a+=step)angles.push(a);
- var tau=Math.PI*2;
- function wrapAngle(v){v%=tau;return v<0?v+tau:v}
- walls.forEach(function(w){
-  [[w[0],w[1]],[w[2],w[3]]].forEach(function(v){
-   var a=Math.atan2(v[1]-p.y,v[0]-p.x);
-   // Normalize endpoint rays before sorting to keep the polygon moving
-   // strictly forward across the 0/2π seam.
-   angles.push(wrapAngle(a-.00055),wrapAngle(a),wrapAngle(a+.00055));
-  });
- });
- angles.sort(function(a,b){return a-b});
- var points=[],last=-Infinity;
- for(var i=0;i<angles.length;i++){
-  var a=angles[i];if(!Number.isFinite(a)||a-last<1e-7)continue;last=a;
-  var dx=Math.cos(a),dy=Math.sin(a),nearest=radius;
-  for(var j=0;j<walls.length;j++){
-   var t=raySegmentDistance(p.x,p.y,dx,dy,walls[j]);
-   if(Number.isFinite(t)&&t>=0&&t<nearest)nearest=t;
-  }
-  var dist=Math.max(0,nearest-1.5);
-  points.push([p.x+dx*dist,p.y+dy*dist]);
- }
- return points;
-}
-function drawVision(p){
- var vision=(C.role==='imp'?440:390)*(C.vision||1);
- if(C.sabotage&&C.sabotage.type==='lights')vision=C.role==='imp'?190:135;
- var sx=sc,now=Date.now(),cache=window.__johnnyVisionCache;
- var rebuild=!cache||now-cache.at>55||Math.hypot(p.x-cache.x,p.y-cache.y)>5||
-  cache.vision!==vision||cache.role!==C.role||cache.doorSab!==!!(C.sabotage&&C.sabotage.type==='doors'&&C.sabotage.until>now);
- if(rebuild){
-  cache={x:p.x,y:p.y,at:now,vision:vision,role:C.role,
-   doorSab:!!(C.sabotage&&C.sabotage.type==='doors'&&C.sabotage.until>now),
-   points:raycastVisibility(p,vision)};
-  window.__johnnyVisionCache=cache;
- }
- var pts=cache.points;
- if(!window.__johnnyVisionLayer)window.__johnnyVisionLayer=document.createElement('canvas');
- var layer=window.__johnnyVisionLayer;
- if(layer.width!==cv.width||layer.height!==cv.height){layer.width=cv.width;layer.height=cv.height}
- var mx=layer.getContext('2d');
- mx.setTransform(1,0,0,1,0,0);mx.clearRect(0,0,layer.width,layer.height);
- mx.beginPath();mx.rect(0,0,layer.width,layer.height);
- if(pts.length){
-  mx.moveTo((pts[0][0]-p.x)*sx+layer.width/2,(pts[0][1]-p.y)*sx+layer.height/2);
-  for(var i=1;i<pts.length;i++)mx.lineTo((pts[i][0]-p.x)*sx+layer.width/2,(pts[i][1]-p.y)*sx+layer.height/2);
-  mx.closePath();
- }
- mx.clip('evenodd');mx.fillStyle='rgba(0,0,0,1)';mx.fillRect(0,0,layer.width,layer.height);
- mx.save();mx.setTransform(1,0,0,1,0,0);
- var inner=Math.max(12,vision*sx*.68),outer=Math.max(inner+1,vision*sx);
- var g=mx.createRadialGradient(layer.width/2,layer.height/2,inner,layer.width/2,layer.height/2,outer);
- g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(.72,'rgba(0,0,0,.08)');g.addColorStop(1,'rgba(0,0,0,.48)');
- mx.fillStyle=g;mx.fillRect(0,0,layer.width,layer.height);mx.restore();
- // Preserve the requested clear near-player disk even when a wall is close.
- mx.save();mx.globalCompositeOperation='destination-out';mx.beginPath();
- mx.arc(layer.width/2,layer.height/2,82*sx,0,Math.PI*2);mx.fill();mx.restore();
- cx.save();cx.setTransform(1,0,0,1,0,0);cx.drawImage(layer,0,0);cx.restore();
+ cx.restore();
 }
 function drawDoors(){
  DOORWAYS.forEach(function(a){
@@ -1539,7 +1452,7 @@ function drawCamera(v){
  cx.beginPath();cx.roundRect(-10,-6,20,12,4);cx.fill();cx.stroke();cx.shadowBlur=0;
  cx.fillStyle='#8fd8e2';cx.beginPath();cx.arc(3,0,3,0,Math.PI*2);cx.fill();cx.restore();
 }
-function drawSkeld(){
+function drawSkeld(currentRoom){
  cx.save();cx.fillStyle='#0d1720';cx.fillRect(0,0,W,H);
  // Hull silhouette from the measured overview. The floor plates sit inside it.
  polyPath(MAPDATA.HULL);cx.save();cx.shadowColor='#000b';cx.shadowBlur=16;
@@ -1575,9 +1488,11 @@ function drawSkeld(){
  // Cafeteria meeting table, sabotage repair panels, bodies and players.
  drawTable(TBL[0],TBL[1],30,21);
  PANELS.forEach(function(v){drawConsole(v[0],v[1],34,38,'#8ee7d7')});
- C.bodies.forEach(function(b){body(b.x,b.y,P[b.id]?P[b.id].col:'#999',1)});
- if(killFx&&Date.now()-killFx.at<650){var age=(Date.now()-killFx.at)/650;cx.save();cx.globalAlpha=1-age;cx.strokeStyle='#ff496c';cx.lineWidth=7;cx.shadowColor='#ff1744';cx.shadowBlur=18;cx.beginPath();cx.arc(killFx.x,killFx.y,18+age*62,0,Math.PI*2);cx.stroke();cx.restore()}
- Object.keys(C.pos).forEach(function(k){var q=C.pos[k];if(!P[k])return;if(!q.al&&!(C.pos[me]&&!C.pos[me].al))return;cx.globalAlpha=q.al?1:.45;body(q.x,q.y,P[k].col,!q.al);drawHat(q.x,q.y,P[k].hat);cx.globalAlpha=1;cx.fillStyle='#f7ffff';cx.font='bold 16px Arial';cx.textAlign='center';cx.strokeStyle='#17262b';cx.lineWidth=4;cx.strokeText(P[k].name,q.x,q.y-23);cx.fillText(P[k].name,q.x,q.y-23)});
+ // Darken every room except the one containing the local player.
+ drawRoomDarkness(currentRoom);
+ C.bodies.forEach(function(b){var bodyRoom=roomAt(b.x,b.y);if(bodyRoom&&bodyRoom!==currentRoom)return;body(b.x,b.y,P[b.id]?P[b.id].col:'#999',1)});
+ if(killFx&&Date.now()-killFx.at<650&&(!roomAt(killFx.x,killFx.y)||roomAt(killFx.x,killFx.y)===currentRoom)){var age=(Date.now()-killFx.at)/650;cx.save();cx.globalAlpha=1-age;cx.strokeStyle='#ff496c';cx.lineWidth=7;cx.shadowColor='#ff1744';cx.shadowBlur=18;cx.beginPath();cx.arc(killFx.x,killFx.y,18+age*62,0,Math.PI*2);cx.stroke();cx.restore()}
+ Object.keys(C.pos).forEach(function(k){var q=C.pos[k];if(!P[k])return;var playerRoom=roomAt(q.x,q.y);if(k!==me&&playerRoom&&playerRoom!==currentRoom)return;if(!q.al&&!(C.pos[me]&&!C.pos[me].al))return;cx.globalAlpha=q.al?1:.45;body(q.x,q.y,P[k].col,!q.al);drawHat(q.x,q.y,P[k].hat);cx.globalAlpha=1;cx.fillStyle='#f7ffff';cx.font='bold 16px Arial';cx.textAlign='center';cx.strokeStyle='#17262b';cx.lineWidth=4;cx.strokeText(P[k].name,q.x,q.y-23);cx.fillText(P[k].name,q.x,q.y-23)});
  cx.restore();
 }
 function drawMinimap(){
@@ -1599,9 +1514,9 @@ function frame(){
  var p=C.pos[me]||{x:TBL[0],y:TBL[1],al:1};
  cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#071019';cx.fillRect(0,0,cv.width,cv.height);
  cx.setTransform(sc,0,0,sc,cv.width/2-p.x*sc,cv.height/2-p.y*sc);
- drawSkeld();
+ var currentRoom=roomAt(p.x,p.y);
+ drawSkeld(currentRoom);
  cx.setTransform(1,0,0,1,0,0);
- if(p.al)drawVision(p);
  drawMinimap();
  var nearT=Math.hypot(p.x-TBL[0],p.y-TBL[1])<110,u=$('use'),t=nearTask(),nearRepair=false;
  if(p.al&&C.sabotage&&C.sabotage.type!=='doors'&&C.sabotage.until>Date.now()&&C.role==='crew'){var locs=C.sabotage.type==='lights'?PANELS:(C.sabotage.type==='reactor'?REACTOR_PANELS:(C.sabotage.type==='o2'?O2_PANELS:[COMMS_PANEL]));nearRepair=locs.some(function(v,i){return !(C.repairProgress&&C.repairProgress[C.sabotage.type]&&C.repairProgress[C.sabotage.type][i])&&Math.hypot(p.x-v[0],p.y-v[1])<94})}
