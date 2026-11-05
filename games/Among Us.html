@@ -268,6 +268,27 @@ canvas{image-rendering:auto}
  input,textarea,select,button{touch-action:manipulation}
  /* Johnny Games edition: meeting, voting and chat polish */
 #vote{justify-content:center;overflow-y:auto!important;gap:14px}#vote .meeting-shell{width:min(760px,100%);max-height:calc(100dvh - 28px);overflow:auto;padding:clamp(16px,3vw,28px);border:1px solid #83dfe955;border-radius:24px;background:linear-gradient(145deg,#172c43f5,#0a1424f7);box-shadow:0 28px 90px #000b;text-align:left}#vote .meeting-kicker{font-size:10px;font-weight:1000;letter-spacing:3px;color:#78e9e1}#vote #vt{font-size:clamp(23px,4vw,34px);margin:8px 0 4px!important;text-align:left}#vote .meeting-sub{color:#94a9c3;font-size:12px;margin:0 0 18px}#vote .vote-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:9px;max-height:42dvh;overflow:auto;padding:2px}#vote .vote-player{display:flex;align-items:center;gap:11px;min-height:62px;padding:10px 12px;border:1px solid #ffffff20;border-radius:14px;background:#0d1b2d;color:#eaf4ff;text-align:left;font-size:13px;transition:.15s}#vote .vote-player.selected{border-color:#72e9df;background:#143548;box-shadow:0 0 0 2px #72e9df26}#vote .vote-player:disabled{opacity:.65;cursor:default}#vote .vote-avatar{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;color:#071522;font-weight:1000;flex:none;box-shadow:inset 0 2px 5px #ffffff66}#vote .vote-meta{display:flex;flex-direction:column;gap:3px;min-width:0}#vote .vote-meta small{color:#829ab7;font-size:10px}#vote .vote-state{margin-left:auto;color:#7ce8d8;font-size:9px;font-weight:1000;letter-spacing:1px}#vote .meeting-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:15px}#vote .skip-vote{background:#273750;border:1px solid #657c9d;color:#dceaff;min-height:48px;font-size:12px}#vote .confirm-vote{background:linear-gradient(100deg,#6de8df,#8eb4ff);color:#071522;min-height:48px;font-size:12px;letter-spacing:1px}#vote .confirm-vote:disabled{opacity:.35}#vote #vtime{margin-top:14px;color:#a8c1d9;font-size:12px}#vote .vote-result{margin-top:14px;padding:12px;border:1px solid #ffffff20;border-radius:12px;background:#091525;color:#c6d9ef;font-size:12px;line-height:1.7}#chatToggle{position:fixed;left:calc(14px + env(safe-area-inset-left));bottom:calc(14px + env(safe-area-inset-bottom));z-index:12;display:none;min-width:54px;min-height:50px;padding:0 16px;border:1px solid #79e9e455;border-radius:15px;background:#0c2234ed;color:#bdfaf2;font-size:12px;font-weight:1000;box-shadow:0 8px 28px #0008}#chatPanel{position:fixed;left:calc(14px + env(safe-area-inset-left));bottom:calc(74px + env(safe-area-inset-bottom));z-index:13;display:none;width:min(350px,calc(100vw - 28px));height:min(430px,58dvh);flex-direction:column;overflow:hidden;border:1px solid #79e9e455;border-radius:18px;background:#0b1728f5;box-shadow:0 22px 70px #000b}#chatPanel.open{display:flex}.chat-head{display:flex;align-items:center;justify-content:space-between;padding:13px 15px;border-bottom:1px solid #ffffff18;color:#eaf8ff;font-size:11px;font-weight:1000;letter-spacing:2px}.chat-head button{min-height:30px;padding:0 9px;background:#233650;font-size:11px}.chat-feed{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:8px;overscroll-behavior:contain}.chat-line{padding:8px 10px;border-radius:11px;background:#14263b;color:#d9e9f8;font-size:12px;line-height:1.4;overflow-wrap:anywhere}.chat-line b{display:block;margin-bottom:3px;color:#78e9e1;font-size:10px}.chat-line.system{background:#1c2938;color:#94aac1;font-style:italic}.chat-compose{display:flex;gap:7px;padding:10px;border-top:1px solid #ffffff18}.chat-compose input{flex:1;min-width:0;width:auto;min-height:42px;height:42px;padding:0 11px;text-align:left;font-size:14px;border-radius:10px}.chat-compose button{min-height:42px;padding:0 13px;border-radius:10px;font-size:11px}@media(max-width:600px){#vote .meeting-shell{border-radius:18px;padding:16px}#vote .vote-grid{grid-template-columns:1fr 1fr;max-height:48dvh}#vote .vote-player{min-height:58px;padding:8px;font-size:11px}#vote .vote-avatar{width:29px;height:29px}#chatPanel{height:min(390px,55dvh)}#chatToggle{min-height:46px}}
+
+/* SABOTAGE SYSTEMS OVERHAUL */
+#sabpanel{background:radial-gradient(ellipse at 50% 20%,#2a1c38f5,#030711f7 76%);backdrop-filter:blur(18px)}
+.sab-shell{width:min(620px,100%);gap:13px;border-color:#ff718b55;background:linear-gradient(145deg,#1d263b,#091321 70%);box-shadow:0 35px 120px #000e,0 0 55px #ff526b13,inset 0 1px #ffffff24}
+.sab-top h2{letter-spacing:2px;text-shadow:0 5px 24px #ff536b38}
+.sab-map{background:linear-gradient(145deg,#07111f,#0d1c2c);border-color:#91b8d333}
+.sab-deck{height:126px}
+.sab-room{font-size:9px;letter-spacing:1.2px;font-weight:1000}
+.sab-option{min-height:76px!important;border:1px solid #8ba9c333!important;background:linear-gradient(110deg,#172b40,#0d1c2c)!important;border-radius:15px!important;display:grid!important;grid-template-columns:43px minmax(0,1fr) 20px!important;gap:12px!important;padding:10px 13px!important;text-align:left!important;align-items:center!important}
+.sab-option:active{transform:scale(.985)!important}
+.sab-option:hover{border-color:#ff829766!important;box-shadow:0 8px 25px #0005,0 0 20px #ff647f12}
+.sab-icon{width:40px;height:40px;display:grid;place-items:center;border:1px solid #ff829744;border-radius:12px;background:linear-gradient(145deg,#542b43,#29223c);color:#ff9bad;font-size:19px;font-weight:1000}
+.sab-copy{display:flex;flex-direction:column;gap:4px;min-width:0}
+.sab-copy b{font-size:12px;letter-spacing:1.2px;color:#f2f6ff}
+.sab-copy small{font-size:10px;line-height:1.35;color:#a9bad0}
+.sab-copy em{font-size:8px;font-style:normal;font-weight:1000;letter-spacing:1.6px;color:#ff9bad}
+.sab-arrow{font-size:24px;color:#8ba8c8}
+.sab-foot{position:sticky;bottom:-1px;background:#0b1725;padding-top:8px}
+#sab:disabled{filter:grayscale(.8);opacity:.4}
+@media(max-height:720px){.sab-shell{max-height:calc(100dvh - 14px);padding:13px;gap:9px}.sab-deck{height:90px}.sab-option{min-height:62px!important;padding:7px 10px!important}.sab-icon{width:34px;height:34px}.sab-copy small{font-size:9px}}
+@media(max-width:430px){#sabpanel{padding:8px}.sab-shell{max-height:calc(100dvh - 16px);border-radius:19px}.sab-top p{font-size:11px}.sab-option{grid-template-columns:36px minmax(0,1fr) 14px!important;gap:9px!important}.sab-icon{width:34px;height:34px}.sab-copy b{font-size:11px}.sab-copy small{font-size:9px}}
 </style></head><body>
 <canvas id="cv"></canvas>
 <div id="hud"><div>Role: <span id="role"></span><div id="tl" style="font-weight:400;font-size:14px;margin-top:4px"></div></div><div>Tasks<div id="bar"><i></i></div></div></div>
@@ -676,10 +697,10 @@ function handle(id,m){
  }
  else if(m.t==='sab'&&HS.phase==='play'&&p.alive&&p.role==='imp'&&Date.now()>p.scd&&!HS.sabotage){
   var type=['lights','reactor','o2','comms','doors'].indexOf(m.type)>-1?m.type:'lights';
-  var duration=(type==='reactor'||type==='o2')?30000:(type==='doors'?10000:3600000);
+  var duration=(type==='reactor'||type==='o2')?35000:(type==='doors'?14000:35000);
   var doorSet=type==='doors'?[0,2,3,4,5,6,13,14,15].sort(function(){return Math.random()-.5}).slice(0,2):[];
   HS.sabotage={type:type,until:Date.now()+duration,repairs:{},code:type==='o2'?String(Math.floor(10000+Math.random()*90000)):null,target:type==='comms'?Math.floor(25+Math.random()*50):null,doors:doorSet};
-  HS.sabotageUntil=HS.sabotage.until;p.scd=Date.now()+28000;
+  HS.sabotageUntil=HS.sabotage.until;p.scd=Date.now()+25000;
   bcast({t:'sabotage',type:type,until:HS.sabotage.until,code:HS.sabotage.code,target:HS.sabotage.target,doors:doorSet});
   sendTo(id,{t:'sabcd',until:p.scd});
  }
@@ -863,8 +884,8 @@ function onMsg(m){
  else if(m.t==='cd'){killAt=m.until||Date.now()+12000}
  else if(m.t==='ventcd'){ventAt=m.until||Date.now()+6500}
  else if(m.t==='sabcd'){sabAt=m.until||Date.now()+28000}
- else if(m.t==='sabotage'){C.sabotage=m;C.sabotageUntil=m.until||Date.now()+16000;C.repairs={};C.repairProgress={};showFx(m.type==='lights'?'LIGHTS SABOTAGED':m.type==='reactor'?'REACTOR MELTDOWN':m.type==='o2'?'OXYGEN DEPLETED':m.type==='comms'?'COMMUNICATIONS DOWN':'DOORS SEALED','#ff8a9c')}
- else if(m.t==='repairProgress'){C.repairProgress=C.repairProgress||{};C.repairProgress[m.type]=C.repairProgress[m.type]||{};C.repairProgress[m.type][m.panel]=1}
+ else if(m.t==='sabotage'){C.sabotage=m;C.sabotageUntil=m.until||Date.now()+35000;C.repairs={};C.repairProgress={};showFx(m.type==='lights'?'LIGHTS OUT':m.type==='reactor'?'REACTOR MELTDOWN':m.type==='o2'?'OXYGEN CRITICAL':m.type==='comms'?'COMMS JAMMED':'DOORS SEALED','#ff647f')}
+ else if(m.t==='repairProgress'){C.repairProgress=C.repairProgress||{};C.repairProgress[m.type]=C.repairProgress[m.type]||{};C.repairProgress[m.type][m.panel]=1;showFx('REPAIR LINKED','#8ff8e8')}
  else if(m.t==='sabotageClear'){C.sabotage=null;C.sabotageUntil=0;C.repairProgress={};showFx('SYSTEM RESTORED','#86efac')}
  else if(m.t==='repaired'){C.sabotage=null;C.sabotageUntil=0;C.repairProgress={};showFx('SYSTEM RESTORED','#86efac')}
  else if(m.t==='killfx'){killFx={x:m.x,y:m.y,col:m.col,at:Date.now()};showFx('ELIMINATED','#fb7185')}
@@ -1517,7 +1538,7 @@ function drawSkeld(currentArea){
  CAMERAS.forEach(drawCamera);
  // Task markers are shown only for this player's assigned unfinished tasks.
  ST.forEach(function(v,i){
-  if(!v||C.tasks.indexOf(i)===-1)return;
+  if(!v||C.tasks.indexOf(i)===-1||(C.sabotage&&C.sabotage.type==='comms'&&C.sabotage.until>Date.now()))return;
   var done=!!C.mine[i],loc=!done?taskLocation(i,C.stages&&C.stages[i]||0):v;
   if(!loc)return;
   var pulse=.5+.5*Math.sin(Date.now()*.004+i);
@@ -1530,6 +1551,8 @@ function drawSkeld(currentArea){
  PANELS.forEach(function(v){drawConsole(v[0],v[1],34,38,'#8ee7d7')});
  // Darken every room except the one containing the local player.
  drawAreaDarkness(currentArea);
+ // Electrical blackout: crew vision collapses to a tight, soft-edged emergency radius.
+ if(C.role==='crew'&&C.sabotage&&C.sabotage.type==='lights'&&C.sabotage.until>Date.now()&&C.pos[me]){var lp=C.pos[me],lg=cx.createRadialGradient(lp.x,lp.y,34,lp.x,lp.y,205);lg.addColorStop(0,'rgba(0,0,0,.08)');lg.addColorStop(.55,'rgba(0,0,0,.58)');lg.addColorStop(1,'rgba(0,0,0,.94)');cx.save();cx.fillStyle=lg;cx.fillRect(0,0,W,H);cx.restore()}
  C.bodies.forEach(function(b){var bodyArea=visibilityAreaAt(b.x,b.y);if(bodyArea&&(!currentArea||bodyArea.key!==currentArea.key))return;body(b.x,b.y,P[b.id]?P[b.id].col:'#999',1)});
  if(killFx&&Date.now()-killFx.at<650&&(!visibilityAreaAt(killFx.x,killFx.y)||(currentArea&&visibilityAreaAt(killFx.x,killFx.y).key===currentArea.key))){var age=(Date.now()-killFx.at)/650;cx.save();cx.globalAlpha=1-age;cx.strokeStyle='#ff496c';cx.lineWidth=7;cx.shadowColor='#ff1744';cx.shadowBlur=18;cx.beginPath();cx.arc(killFx.x,killFx.y,18+age*62,0,Math.PI*2);cx.stroke();cx.restore()}
  Object.keys(C.pos).forEach(function(k){var q=C.pos[k];if(!P[k])return;var playerArea=visibilityAreaAt(q.x,q.y);if(k!==me&&playerArea&&(!currentArea||playerArea.key!==currentArea.key))return;if(!q.al&&!(C.pos[me]&&!C.pos[me].al))return;cx.globalAlpha=q.al?1:.45;body(q.x,q.y,P[k].col,!q.al);drawHat(q.x,q.y,P[k].hat);cx.globalAlpha=1;cx.fillStyle='#f7ffff';cx.font='bold 16px Arial';cx.textAlign='center';cx.strokeStyle='#17262b';cx.lineWidth=4;cx.strokeText(P[k].name,q.x,q.y-23);cx.fillText(P[k].name,q.x,q.y-23)});
@@ -1563,7 +1586,7 @@ function frame(){
  u.disabled=(!p.al&&C.role!=='crew')||(t<0&&!nearT&&!nearRepair);u.textContent=nearRepair?'REPAIR':(t>-1?'TASK':(nearT?'MEETING':'USE'));
  var nb=C.bodies.some(function(b){return Math.hypot(p.x-b.x,p.y-b.y)<110});$('rep').disabled=!p.al||!nb;
  var k=$('kill');k.style.display=C.role==='imp'?'block':'none';var vb=$('vent');vb.style.display=C.role==='imp'?'block':'none';var sb=$('sab');sb.style.display=C.role==='imp'?'block':'none';var vd=Math.max(0,Math.ceil((ventAt-Date.now())/1000)),sd=Math.max(0,Math.ceil((sabAt-Date.now())/1000));vb.textContent=vd?'VENT '+vd:'VENT';vb.disabled=!p.al||vd>0||!VENTS.some(function(v){return Math.hypot(p.x-v[0],p.y-v[1])<62});sb.textContent=sd?'SAB '+sd:'SABOTAGE';sb.disabled=!p.al||sd>0||C.sabotageUntil>Date.now();var cd=Math.max(0,Math.ceil((killAt-Date.now())/1000));k.textContent=cd>0?'KILL '+cd:'KILL';k.disabled=!p.al||cd>0;
- if(C.sabotageUntil>Date.now()&&C.role!=='imp'){cx.fillStyle='rgba(0,0,0,.24)';cx.fillRect(0,0,cv.width,cv.height);cx.fillStyle='#fda4af';cx.font='bold 14px Arial';cx.textAlign='center';cx.fillText('LIGHTS SABOTAGED · REPAIR BOTH PANELS',cv.width/2,cv.height-28)}
+ if(C.sabotage&&C.sabotage.until>Date.now()&&C.role!=='imp'){var st=C.sabotage.type,remaining=Math.max(0,Math.ceil((C.sabotage.until-Date.now())/1000)),labels={lights:'LIGHTS OUT · RESTORE POWER',reactor:'REACTOR MELTDOWN · STABILISE BOTH SCANNERS',o2:'OXYGEN FAILURE · ENTER THE PIN AT BOTH TERMINALS',comms:'COMMUNICATIONS JAMMED · RECALIBRATE THE SIGNAL',doors:'SECURITY LOCKDOWN · WAIT FOR DOORS TO RELEASE'};cx.fillStyle='rgba(0,0,0,.26)';cx.fillRect(0,0,cv.width,cv.height);cx.fillStyle='#ff9bad';cx.font='900 '+Math.max(11,Math.min(14,innerWidth/28))+'px Arial';cx.textAlign='center';cx.fillText((labels[st]||'SHIP SYSTEM FAILURE')+' · '+remaining+'s',cv.width/2,cv.height-28)}
  if(joy&&joy.cx!=null){cx.fillStyle='rgba(255,255,255,.12)';cx.beginPath();cx.arc(joy.x*DPR,joy.y*DPR,60*DPR,0,7);cx.fill();cx.fillStyle='rgba(255,255,255,.35)';cx.beginPath();cx.arc(joy.cx*DPR,joy.cy*DPR,24*DPR,0,7);cx.fill()}
 }
 frame();
