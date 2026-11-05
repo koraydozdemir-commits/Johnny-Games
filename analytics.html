@@ -127,9 +127,9 @@ function load(){
    var extra={},favs=[];
    try{extra=JSON.parse(localStorage.getItem('jg_extra_v1')||'{}')||{};}catch(e){}
    try{favs=JSON.parse(localStorage.getItem('jg_favs')||'[]')||[];}catch(e){}
-   var localFavorites={};favs.forEach(function(name){localFavorites[name]={thisBrowser:true};});
+   var localFavorites={};favs.forEach(function(name){localFavorites[name]={'this-browser':true};});
    var localPlays={};Object.keys(extra.plays||{}).forEach(function(name){var count=Math.max(0,Number(extra.plays[name])||0);if(count)localPlays[name]={};for(var i=0;i<Math.min(count,500);i++)localPlays[name]['local-'+i]=true;});
-   rows(document.getElementById('favorites'),localFavorites,'plays');
+   rows(document.getElementById('favorites'),localFavorites,'favorites');
    rows(document.getElementById('plays'),localPlays,'plays');
    var note=document.querySelector('.privacy');
    if(note)note.textContent='Site-wide rankings are temporarily unavailable. Showing this browser’s locally saved favorites and play counts instead; these are not combined with other visitors’ data.';
