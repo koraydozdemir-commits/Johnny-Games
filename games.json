@@ -3,7 +3,8 @@
     "name": "A Small World Cup"
   },
   {
-    "name": "Minecraft"
+    "name": "Minecraft",
+    "url": "https://eaglercraft.com/play"
   },
   {
     "name": "Zombie Rush"
@@ -119,5 +120,8 @@
     "name": "Veck",
     "game": "Veck.io",
     "thumb": "thumbnails/Veck.png"
+  },
+  {
+    "name": "Mini Golf Classic"
   }
 ]
