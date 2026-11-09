@@ -754,7 +754,7 @@ window.addEventListener('pageshow',function(){S.recent=store.get('jg_recent',[])
 fetch('games.json').then(function(r){return r.json()}).then(function(d){S.games=d.map(norm);render()})
  .catch(function(){$('grid').innerHTML='<p class="empty">Could not load games.json.</p>'});
 document.getElementById('rnd').addEventListener('click',function(){
- var g=S.games.filter(function(x){return!x.ext});if(g.length){var pick=g[Math.random()*g.length|0];if(window.trackPlay)window.trackPlay(pick.name);location.href=pick.href}});
+ var g=S.games.filter(function(x){return!x.ext});if(g.length){var pick=g[Math.random()*g.length|0];if(pick.ext&&window.trackPlay)window.trackPlay(pick.name);location.href=pick.href}});
 // ---- Johnny Lounge chat ----
 var DB='https://johnny-chat-aabd6-default-rtdb.europe-west1.firebasedatabase.app/';
 var BAD=/\b(fuck|shit|bitch|cunt|nigg\w*|fag\w*|retard\w*|rape|slut|whore)\b/gi,last=0,timer=0,adminMode=false,pollBusy=false;
@@ -819,7 +819,7 @@ $('cform').addEventListener('submit',function(e){
 <script>
 (function(){
 'use strict';
-var ANALYTICS_API='https://wnxauvllhjklhpjksvuz.supabase.co/functions/v1/site-analytics';
+var ANALYTICS_API='https://johnny-games-proxy.onrender.com/api/analytics';
 function sendAnalytics(event){fetch(ANALYTICS_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(event),keepalive:true,mode:'cors'}).catch(function(){});}
 var analyticsVisitor='';
 try{analyticsVisitor=localStorage.getItem('jg_analytics_visitor')||''}catch(e){}
@@ -871,10 +871,10 @@ document.getElementById('jg-feature').addEventListener('click',function(){
  var name=card.querySelector('p')&&card.querySelector('p').textContent.trim();
  if(!name)return;
  // Navigate directly instead of triggering the carousel's click interception.
- if(window.trackPlay)window.trackPlay(name);window.location.assign('play.html?g='+encodeURIComponent(name));
+ window.location.assign('play.html?g='+encodeURIComponent(name));
 });
 document.addEventListener('click',function(e){if(e.target.closest('#jg-dialog [data-rate]')){var n=body.querySelector('h2').textContent;state.ratings[n]=Number(e.target.closest('[data-rate]').dataset.rate);save();show(n,'<p>Thanks! Your rating is saved on this device.</p><p>'+('★'.repeat(state.ratings[n]))+'</p>')}});
-document.addEventListener('click',function(e){var a=e.target.closest('#grid .card a');if(!a||!window.jgCarouselPlay)return;window.jgCarouselPlay=false;var n=a.querySelector('p')?.textContent;if(n){trackPlay(n);state.plays[n]=(state.plays[n]||0)+1;var d=new Date().toDateString();if(state.day!==d){state.today=0;state.day=d}state.today++;var h=JSON.parse(localStorage.getItem('jg_recent')||'[]');h=[n].concat(h.filter(function(x){return x!==n})).slice(0,30);localStorage.setItem('jg_recent',JSON.stringify(h));save();setTimeout(apply,0)}},true);
+document.addEventListener('click',function(e){var a=e.target.closest('#grid .card a');if(!a||!window.jgCarouselPlay)return;window.jgCarouselPlay=false;var n=a.querySelector('p')?.textContent;if(n){if(a.target)trackPlay(n);state.plays[n]=(state.plays[n]||0)+1;var d=new Date().toDateString();if(state.day!==d){state.today=0;state.day=d}state.today++;var h=JSON.parse(localStorage.getItem('jg_recent')||'[]');h=[n].concat(h.filter(function(x){return x!==n})).slice(0,30);localStorage.setItem('jg_recent',JSON.stringify(h));save();setTimeout(apply,0)}},true);
 document.getElementById('jg-settings').addEventListener('click',function(){
  show('Settings & saved data','<p>Appearance</p><button id="jg-theme" type="button">Toggle light/dark theme</button><p>Manage your local profile and progress</p><button id="jg-export" type="button">Export saved data</button><label><p>Import saved data (JSON)</p><input id="jg-import" type="file" accept="application/json"></label><p><button id="jg-reset" type="button">Reset local Johnny Games data</button></p><small>Your settings and progress stay in this browser unless you export them.</small>');
 });
