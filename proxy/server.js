@@ -149,6 +149,32 @@ app.get("/frog/uv.config.js", (_, response) => {
 app.use("/frog", express.static(uvPath, { fallthrough: false, immutable: true, maxAge: "1h" }));
 app.use(express.static(publicDirectory, { index: "index.html", maxAge: "5m" }));
 
+// Expire chat messages on the server so cleanup does not depend on an open chat tab.
+const CHAT_RETENTION_MS = 6 * 60 * 60 * 1000;
+async function cleanupExpiredChat() {
+  if (!analyticsDb) return;
+  try {
+    const chatRef = analyticsDb.ref("chat");
+    const snapshot = await chatRef.get();
+    if (!snapshot.exists()) return;
+    const now = Date.now();
+    const expired = {};
+    snapshot.forEach((child) => {
+      const message = child.val();
+      const timestamp = Number(message && message.t) || 0;
+      if (timestamp > 0 && now - timestamp > CHAT_RETENTION_MS) {
+        expired[child.key] = null;
+      }
+    });
+    if (Object.keys(expired).length) await chatRef.update(expired);
+  } catch (error) {
+    console.error("Chat expiry sweep failed:", error && error.message ? error.message : "unknown error");
+  }
+}
+const chatCleanupTimer = setInterval(cleanupExpiredChat, 5 * 60 * 1000);
+chatCleanupTimer.unref();
+void cleanupExpiredChat();
+
 const server = createServer();
 
 server.on("request", (request, response) => {
