@@ -91,7 +91,8 @@
     "name": "Hill Climb Racing"
   },
   {
-    "name": "Online Mini Golf"
+    "name": "Online Mini Golf",
+    "game": "Mini Golf Classic"
   },
   {
     "name": "Adventure Capitalist"
@@ -120,8 +121,5 @@
     "name": "Veck",
     "game": "Veck.io",
     "thumb": "thumbnails/Veck.png"
-  },
-  {
-    "name": "Mini Golf Classic"
   }
 ]
