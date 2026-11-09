@@ -1,5 +1,5 @@
 'use strict';
-var CACHE='johnny-games-shell-v11';
+var CACHE='johnny-games-shell-v12';
 var CORE=['./','./index.html','./play.html','./analytics.html','./games.json','./manifest.webmanifest','./images/Banner.png','./images/Wallpaper.jpg'];
 var MAX_CACHE_BYTES=2*1024*1024;
 function cacheable(request,response,url){
