@@ -4,6 +4,7 @@ import { createBareServer } from "@tomphttp/bare-server-node";
 import { uvPath } from "@titaniumnetwork-dev/ultraviolet";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { cert, initializeApp } from "firebase-admin/app";
 import { getDatabase } from "firebase-admin/database";
 
@@ -12,6 +13,7 @@ const port = Number.parseInt(process.env.PORT || "3000", 10);
 const publicDirectory = join(directory, "public");
 const databaseUrl = process.env.FIREBASE_DATABASE_URL ||
   "https://johnny-chat-aabd6-default-rtdb.europe-west1.firebasedatabase.app/";
+const adminPasswordHash = process.env.ADMIN_PASSWORD_SHA256 || "";
 const allowedAnalyticsOrigins = new Set([
   "https://www.johnnystudy.online",
   "https://johnnystudy.online"
@@ -23,7 +25,7 @@ const bare = createBareServer("/bare/");
 const app = express();
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
-app.use(express.json({ limit: "2kb" }));
+app.use(express.json({ limit: "8mb" }));
 app.use((_, response, next) => {
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("Referrer-Policy", "no-referrer");
@@ -61,6 +63,70 @@ function analyticsCors(request, response, next) {
   response.setHeader("Cache-Control", "no-store");
   next();
 }
+
+
+function apiCors(request, response, next) {
+  const origin = request.get("Origin");
+  if (!allowedAnalyticsOrigins.has(origin)) return response.sendStatus(403);
+  response.setHeader("Access-Control-Allow-Origin", origin);
+  response.setHeader("Vary", "Origin");
+  response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  response.setHeader("Cache-Control", "no-store");
+  next();
+}
+function passwordMatches(password) {
+  if (!adminPasswordHash || typeof password !== "string" || password.length < 8 || password.length > 256) return false;
+  const actual = createHash("sha256").update(password, "utf8").digest();
+  let expected;
+  try { expected = Buffer.from(adminPasswordHash, "hex"); } catch { return false; }
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
+function requireAdmin(request, response, next) {
+  const header = request.get("Authorization") || "";
+  const password = header.startsWith("Bearer ") ? header.slice(7) : "";
+  if (!passwordMatches(password)) return response.sendStatus(401);
+  next();
+}
+app.options("/api/admin/verify", apiCors, (_, response) => response.sendStatus(204));
+app.post("/api/admin/verify", apiCors, (request, response) => {
+  if (!adminPasswordHash) return response.status(503).json({ error: "Admin authentication is not configured on the proxy." });
+  if (!passwordMatches(request.body && request.body.password)) return response.sendStatus(401);
+  response.sendStatus(204);
+});
+app.options("/api/chat/:key", apiCors, (_, response) => response.sendStatus(204));
+app.delete("/api/chat/:key", apiCors, requireAdmin, async (request, response) => {
+  if (!analyticsDb) return response.status(503).json({ error: "Firebase service account is not configured." });
+  const key = request.params.key;
+  if (!/^[A-Za-z0-9_-]{8,64}$/.test(key)) return response.sendStatus(400);
+  try {
+    await analyticsDb.ref("chat").child(key).remove();
+    response.sendStatus(204);
+  } catch {
+    response.status(503).json({ error: "The chat message could not be deleted." });
+  }
+});
+app.options("/api/ads", apiCors, (_, response) => response.sendStatus(204));
+app.get("/api/ads", apiCors, async (_, response) => {
+  if (!analyticsDb) return response.status(503).json({ error: "Firebase service account is not configured." });
+  try {
+    const snapshot = await analyticsDb.ref("ads").get();
+    response.json(snapshot.exists() ? snapshot.val() : {});
+  } catch {
+    response.status(503).json({ error: "Advertisement settings could not be loaded." });
+  }
+});
+app.put("/api/ads", apiCors, requireAdmin, async (request, response) => {
+  if (!analyticsDb) return response.status(503).json({ error: "Firebase service account is not configured." });
+  const data = request.body;
+  if (!data || typeof data !== "object" || Array.isArray(data)) return response.sendStatus(400);
+  try {
+    await analyticsDb.ref("ads").set(data);
+    response.sendStatus(204);
+  } catch {
+    response.status(503).json({ error: "Advertisement settings could not be saved." });
+  }
+});
 
 const rateWindows = new Map();
 function limitAnalytics(request, response, next) {
