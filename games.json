@@ -3,23 +3,13 @@
     "name": "A Small World Cup"
   },
   {
-    "name": "Minecraft",
-    "url": "https://eaglercraft.com/play"
-  },
-  {
-    "name": "Zombie Rush"
-  },
-  {
-    "name": "Football Manager"
-  },
-  {
-    "name": "Cut The Rope"
+    "name": "Adventure Capitalist"
   },
   {
     "name": "Age of War"
   },
   {
-    "name": "Penalty Shooters"
+    "name": "Among Us"
   },
   {
     "name": "Angry Birds"
@@ -31,10 +21,19 @@
     "name": "Bloons Tower Defense"
   },
   {
+    "name": "Burrito Bison Revenge"
+  },
+  {
     "name": "Burrito Bison"
   },
   {
+    "name": "Cookie Clicker"
+  },
+  {
     "name": "Cover Orange"
+  },
+  {
+    "name": "Cut The Rope"
   },
   {
     "name": "Drift Boss"
@@ -46,6 +45,9 @@
     "name": "Five Nights At Johnny's"
   },
   {
+    "name": "Football Manager"
+  },
+  {
     "name": "Fruit Ninja"
   },
   {
@@ -55,22 +57,54 @@
     "name": "Getting Over It"
   },
   {
-    "name": "Among Us"
+    "name": "Grow A Garden"
+  },
+  {
+    "name": "Hill Climb Racing"
   },
   {
     "name": "Johnny Obby"
   },
   {
+    "name": "Kour"
+  },
+  {
+    "name": "Krillion"
+  },
+  {
+    "name": "Minecraft",
+    "url": "https://eaglercraft.com/play"
+  },
+  {
+    "name": "Online Mini Golf",
+    "game": "Mini Golf Classic"
+  },
+  {
     "name": "Monkey Mart"
   },
   {
+    "name": "Online Mini Golf"
+  },
+  {
+    "name": "Penalty Shooters"
+  },
+  {
     "name": "Plants vs Zombies"
+  },
+  {
+    "name": "Pou"
   },
   {
     "name": "Retro Bowl"
   },
   {
     "name": "Rocket League"
+  },
+  {
+    "name": "Sort the Court"
+  },
+  {
+    "name": "Spore"
   },
   {
     "name": "Steal a Brainrot"
@@ -82,44 +116,9 @@
     "name": "Subway Surfers"
   },
   {
-    "name": "Cookie Clicker"
+    "name": "Veck"
   },
   {
-    "name": "Grow A Garden"
-  },
-  {
-    "name": "Hill Climb Racing"
-  },
-  {
-    "name": "Online Mini Golf",
-    "game": "Mini Golf Classic"
-  },
-  {
-    "name": "Adventure Capitalist"
-  },
-  {
-    "name": "Burrito Bison Revenge"
-  },
-  {
-    "name": "Pou"
-  },
-  {
-    "name": "Sort the Court"
-  },
-  {
-    "name": "Spore"
-  },
-  {
-    "name": "Krillion"
-  },
-  {
-    "name": "Kour",
-    "game": "Kour.io",
-    "thumb": "thumbnails/Kour.png"
-  },
-  {
-    "name": "Veck",
-    "game": "Veck.io",
-    "thumb": "thumbnails/Veck.png"
+    "name": "Zombie Rush"
   }
 ]
