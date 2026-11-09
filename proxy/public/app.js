@@ -2,6 +2,8 @@ const address = document.getElementById("address");
 const frame = document.getElementById("site");
 const status = document.getElementById("status");
 const uvConfig = window["__uv$config"];
+const launchParams = new URLSearchParams(window.location.search);
+const launchTarget = launchParams.get("url");
 if (!uvConfig) {
   status.textContent = "Proxy files did not load. Reload this page and try again.";
   address.disabled = true;
@@ -68,6 +70,12 @@ async function navigate(value) {
   } catch (error) {
     status.textContent = error.message || "This address could not be opened.";
   }
+}
+
+// Allow Johnny Games to open a selected external game through this proxy.
+if (launchTarget) {
+  address.value = launchTarget;
+  void navigate(launchTarget);
 }
 
 function waitForActiveWorker(registration, timeoutMs = 15000) {
