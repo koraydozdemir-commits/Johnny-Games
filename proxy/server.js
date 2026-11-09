@@ -94,6 +94,42 @@ app.post("/api/admin/verify", apiCors, (request, response) => {
   if (!passwordMatches(request.body && request.body.password)) return response.sendStatus(401);
   response.sendStatus(204);
 });
+const chatRateWindows = new Map();
+function limitChat(request, response, next) {
+  const now = Date.now();
+  const key = request.ip || "unknown";
+  let window = chatRateWindows.get(key);
+  if (!window || now - window.start >= 60_000) {
+    window = { start: now, count: 0 };
+    chatRateWindows.set(key, window);
+  }
+  window.count += 1;
+  if (window.count > 20) return response.status(429).json({ error: "Chat rate limit reached. Try again shortly." });
+  next();
+}
+app.options("/api/chat", apiCors, (_, response) => response.sendStatus(204));
+app.get("/api/chat", apiCors, async (_, response) => {
+  if (!analyticsDb) return response.status(503).json({ error: "Firebase service account is not configured." });
+  try {
+    const snapshot = await analyticsDb.ref("chat").orderByKey().limitToLast(100).get();
+    response.json(snapshot.exists() ? snapshot.val() : {});
+  } catch {
+    response.status(503).json({ error: "Chat messages could not be loaded." });
+  }
+});
+app.post("/api/chat", apiCors, limitChat, async (request, response) => {
+  if (!analyticsDb) return response.status(503).json({ error: "Firebase service account is not configured." });
+  const body = request.body || {};
+  const name = typeof body.n === "string" ? body.n.trim().slice(0, 12) : "";
+  const message = typeof body.m === "string" ? body.m.trim().slice(0, 200) : "";
+  if (!name || !/[a-z0-9]/i.test(name) || !message) return response.status(400).json({ error: "Invalid chat message." });
+  try {
+    await analyticsDb.ref("chat").push().set({ n: name, m: message, t: Date.now() });
+    response.sendStatus(204);
+  } catch {
+    response.status(503).json({ error: "Chat message could not be sent." });
+  }
+});
 app.options("/api/chat/:key", apiCors, (_, response) => response.sendStatus(204));
 app.delete("/api/chat/:key", apiCors, requireAdmin, async (request, response) => {
   if (!analyticsDb) return response.status(503).json({ error: "Firebase service account is not configured." });
