@@ -77,11 +77,12 @@ var store={
  get:function(k,d){try{var v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},
  set:function(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 };
-var ANALYTICS_API='https://johnny-games-proxy.onrender.com/api/analytics';
+var ANALYTICS_API='https://wnxauvllhjklhpjksvuz.supabase.co/functions/v1/site-analytics';
+var ANALYTICS_KEY='sb_publishable_kTrhj6QAHhLLrdva03Neuw_21MKNymV';
 var visitor='';
 try{visitor=localStorage.getItem('jg_analytics_visitor')||''}catch(e){}
 if(!visitor){visitor=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'v'+Date.now().toString(36)+Math.random().toString(36).slice(2);try{localStorage.setItem('jg_analytics_visitor',visitor)}catch(e){}}
-function sendAnalytics(event){try{fetch(ANALYTICS_API,{method:'POST',mode:'cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(event),keepalive:true}).catch(function(){});}catch(e){}}
+function sendAnalytics(event){try{fetch(ANALYTICS_API,{method:'POST',mode:'cors',headers:{'Content-Type':'application/json','apikey':ANALYTICS_KEY},body:JSON.stringify(event),keepalive:true}).catch(function(){});}catch(e){}}
 var name=new URLSearchParams(location.search).get('g')||'';
 // Only plain game names, no path tricks.
 if(!name||/[\/\\]|\.\./.test(name)){
