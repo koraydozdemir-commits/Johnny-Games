@@ -85,7 +85,8 @@ main{padding:30px 0 60px}
 <p class="privacy">Favorites use a random ID saved in this browser so adding or removing a favorite updates that browser’s count. Play events store only the game and launch time. No names are collected.</p></main>
 <script>
 (function(){
-var API='https://johnny-games-proxy.onrender.com/api/analytics';
+var API='https://wnxauvllhjklhpjksvuz.supabase.co/functions/v1/site-analytics';
+var API_KEY='sb_publishable_kTrhj6QAHhLLrdva03Neuw_21MKNymV';
 function rows(el,data,metric){
  var entries=Object.keys(data||{}).map(function(name){
   var raw=data[name]||{};
@@ -115,7 +116,7 @@ function message(el,text,withRetry){
 }
 function load(){
  ['favorites','plays'].forEach(function(id){message(document.getElementById(id),'Loading rankings…',false)});
- fetch(API,{method:'GET',mode:'cors',cache:'no-store'})
+ fetch(API,{method:'GET',mode:'cors',cache:'no-store',headers:{'apikey':API_KEY}})
   .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
   .then(function(data){
    if(!data||typeof data!=='object')throw new Error('Invalid response');
