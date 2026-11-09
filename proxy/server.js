@@ -13,7 +13,7 @@ const port = Number.parseInt(process.env.PORT || "3000", 10);
 const publicDirectory = join(directory, "public");
 const databaseUrl = process.env.FIREBASE_DATABASE_URL ||
   "https://johnny-chat-aabd6-default-rtdb.europe-west1.firebasedatabase.app/";
-const adminPasswordHash = process.env.ADMIN_PASSWORD_SHA256 || "";
+const adminPasswordHash = process.env.ADMIN_PASSWORD_SHA256 || "f4461a76b7768559644883b2eaa2edf610780d3864ed8e1d418c02d76a1279b6";
 const allowedAnalyticsOrigins = new Set([
   "https://www.johnnystudy.online",
   "https://johnnystudy.online"
