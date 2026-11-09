@@ -3,68 +3,92 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="theme-color" content="#182b38">
-<title>Minecraft · Johnny Games</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#111820">
+<title>Minecraft Classic · Johnny Games</title>
 <style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#172a37;color:#fff;font-family:system-ui,-apple-system,Arial;touch-action:none}canvas{display:block;width:100%;height:100%}#game{position:fixed;inset:0}#hud{position:fixed;inset:0;pointer-events:none}.top{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.panel{background:#101923d9;border:1px solid #ffffff28;border-radius:12px;padding:9px 12px;box-shadow:0 5px 20px #0005;backdrop-filter:blur(8px)}.brand{font-weight:900;letter-spacing:.04em}.sub{font-size:11px;color:#c2d1d8}.actions{display:flex;gap:7px;pointer-events:auto}.actions button,.modal button{border:1px solid #ffffff35;background:#172735;color:white;border-radius:9px;padding:9px 12px;font-weight:750}.actions button:active,.modal button:active{transform:scale(.96)}#cross{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:25px;text-shadow:0 1px 4px #000;opacity:.8}#hotbar{position:absolute;bottom:max(12px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:flex;gap:5px;pointer-events:auto;background:#101923b9;padding:6px;border:1px solid #ffffff35;border-radius:12px}.slot{width:48px;height:48px;border:2px solid #ffffff44;border-radius:7px;background:#273746d9;color:white;display:grid;place-items:center;font-size:10px;position:relative}.slot.selected{border:3px solid #fff;box-shadow:0 0 0 2px #e8c76b}.swatch{width:22px;height:22px;border:1px solid #fff5;box-shadow:inset -4px -4px #0002}.slot small{position:absolute;right:3px;bottom:1px;color:#fff;font-size:9px}.hint{position:absolute;bottom:82px;left:50%;transform:translateX(-50%);font-size:11px;color:#fff;background:#101923a8;padding:6px 10px;border-radius:8px;white-space:nowrap}.touch{display:none;position:absolute;bottom:105px;left:18px;width:124px;height:124px;border-radius:50%;background:#ffffff19;border:1px solid #ffffff4a;pointer-events:auto}.stick{position:absolute;left:39px;top:39px;width:46px;height:46px;border-radius:50%;background:#ffffff70;border:2px solid #fff9}.touchBtns{display:none;position:absolute;right:15px;bottom:105px;gap:9px;pointer-events:auto;flex-direction:column;align-items:flex-end}.touchBtns button{width:62px;height:52px;border-radius:14px;border:1px solid #fff8;background:#152635c9;color:white;font-weight:900}.touchBtns .pair{display:flex;gap:8px}.modal{position:fixed;inset:0;display:grid;place-items:center;background:#0009;z-index:5;padding:18px}.dialog{width:min(440px,100%);background:#142331;border:1px solid #ffffff35;border-radius:18px;padding:22px;box-shadow:0 20px 70px #0009}.dialog h1{margin:0 0 6px;font-size:25px}.dialog p{color:#c4d0d8;font-size:13px;line-height:1.5}.dialog .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}.dialog button.primary{background:#4f8d58;border-color:#76b77c}.dialog button{flex:1;min-width:110px;padding:12px}.mode{display:flex;gap:8px;margin-top:12px}.mode button.active{outline:2px solid #e8c76b}.notice{position:absolute;top:78px;left:50%;transform:translateX(-50%);background:#101923d9;border:1px solid #fff3;border-radius:9px;padding:8px 12px;font-size:12px;opacity:0;transition:opacity .2s}.notice.show{opacity:1}#loading{position:fixed;inset:0;display:grid;place-items:center;background:#182b38;z-index:10;font-weight:800}.#err{color:#ffd1d1}@media(pointer:coarse),(max-width:800px){.touch,.touchBtns{display:flex}.hint{display:none}.slot{width:38px;height:43px}.swatch{width:19px;height:19px}.top{top:max(8px,env(safe-area-inset-top));left:8px;right:8px}.actions button{padding:8px}.brand{font-size:13px}.sub{font-size:10px}}@media(max-width:420px){.slot{width:32px;height:39px}.slot small{font-size:8px}.panel{padding:7px 9px}.actions{gap:4px}}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111820;color:#fff;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overscroll-behavior:none;touch-action:none}
+#stage{position:fixed;inset:0;background:#111820;display:flex;align-items:center;justify-content:center}
+#canvas{display:block;width:100%;height:100%;border:0;padding:0;background:#000;outline:0;touch-action:none}
+#status{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;max-width:min(90vw,520px);padding:16px 20px;border:1px solid #ffffff2b;border-radius:14px;background:#111820ed;text-align:center;box-shadow:0 14px 50px #0009;font-size:14px;line-height:1.5}
+#status strong{display:block;font-size:18px;margin-bottom:6px}
+#status small{display:block;color:#b8c5ce;margin-top:7px}
+#status.hidden{display:none}
+#logmsg{position:fixed;left:10px;bottom:8px;z-index:4;color:#fff;background:#111820b8;padding:5px 8px;border-radius:7px;font-size:11px;max-width:90vw;pointer-events:none}
+#home{position:fixed;right:10px;top:10px;z-index:8;border:1px solid #ffffff40;background:#111820d9;color:#fff;border-radius:10px;padding:9px 12px;font-weight:700;text-decoration:none;font-size:13px;backdrop-filter:blur(8px)}
+@media(orientation:landscape){#home{top:max(10px,env(safe-area-inset-top))}}
 </style>
 </head>
 <body>
-<div id="loading">GENERATING YOUR WORLD…</div><div id="game"></div>
-<div id="hud">
- <div class="top"><div class="panel"><div class="brand">JOHNNY CRAFT</div><div class="sub" id="coords">Loading world</div></div><div class="actions"><button id="save">Save</button><button id="mode">Survival</button><button id="menu">☰</button></div></div>
- <div id="cross">+</div><div class="notice" id="notice"></div>
- <div class="hint">WASD move · Mouse look · Left click mine · Right click place · 1–7 select</div>
- <div id="hotbar"></div>
- <div class="touch" id="joy"><div class="stick" id="stick"></div></div>
- <div class="touchBtns"><div class="pair"><button id="jump">JUMP</button><button id="mine">MINE</button></div><div class="pair"><button id="place">PLACE</button><button id="lookreset">↻</button></div></div>
-</div>
-<div class="modal" id="welcome"><div class="dialog"><h1>Welcome to Johnny Craft</h1><p>A little block-built world, right here on Johnny Games. Explore, dig, build and make the place yours. Your world saves in this browser.</p><div class="mode"><button id="creative" class="active">Creative</button><button id="survival">Survival</button></div><div class="row"><button class="primary" id="start">Create world</button><button id="continue" style="display:none">Continue saved world</button></div><p>Touch: left pad to move, drag the world to look, and use the action buttons. Desktop: click the world to lock the mouse.</p></div></div>
-<script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-const $=id=>document.getElementById(id), game=$('game');
-const renderer=new THREE.WebGLRenderer({antialias:false,powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.5));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.shadowMap.enabled=false;game.appendChild(renderer.domElement);
-const scene=new THREE.Scene();scene.background=new THREE.Color(0x8bc9ed);scene.fog=new THREE.Fog(0x8bc9ed,24,62);
-const camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,.1,100);camera.rotation.order='YXZ';
-scene.add(new THREE.HemisphereLight(0xd8efff,0x5d6046,2));
-const sun=new THREE.DirectionalLight(0xfff1d2,2.2);sun.position.set(-18,30,12);scene.add(sun);
-const mats={grass:0x63a84b,dirt:0x8a5a36,stone:0x858b91,wood:0x8c6037,leaves:0x347c3e,sand:0xd8c27a,water:0x398fbd,brick:0x9b5140,glass:0x9ed9df,planks:0xb58a50};
-const names=Object.keys(mats),colors=Object.values(mats);
-const geo=new THREE.BoxGeometry(1,1,1);const materials=colors.map(c=>new THREE.MeshLambertMaterial({color:c}));const blocks=new Map();let meshes=[];
-const key=(x,y,z)=>x+','+y+','+z;
-function put(x,y,z,t){blocks.set(key(x,y,z),t)}
-function del(x,y,z){blocks.delete(key(x,y,z))}
-function has(x,y,z){return blocks.has(key(x,y,z))}
-function terrain(x,z){return Math.floor(2+Math.sin(x*.21)*1.1+Math.cos(z*.18)*1.1+Math.sin((x+z)*.11)*.8)}
-let seed=7391;function rand(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296}
-function makeWorld(){blocks.clear();seed=7391;for(let x=-20;x<=20;x++)for(let z=-20;z<=20;z++){let h=terrain(x,z);for(let y=-2;y<=h;y++){const cave=y<h-2&&Math.abs(Math.sin(x*.31+y*.47)*Math.cos(z*.27-y*.19))>.94;if(!cave)put(x,y,z,y===h?'grass':y>h-3?'dirt':'stone');}if(h<=1&&rand()>.35)for(let y=h+1;y<=2;y++)put(x,y,z,'water');if(rand()>.975&&Math.abs(x)+Math.abs(z)>5){for(let y=h+1;y<=h+4;y++)put(x,y,z,'wood');for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)for(let dy=2;dy<=5;dy++)if(Math.abs(dx)+Math.abs(dz)+(dy===5?1:0)<5&&!has(x+dx,h+dy,z+dz))put(x+dx,h+dy,z+dz,'leaves');}}rebuild();}
-function rebuild(){for(const m of meshes)scene.remove(m);meshes=[];for(let i=0;i<names.length;i++){const arr=[];for(const [k,t] of blocks)if(t===names[i])arr.push(k.split(',').map(Number));if(!arr.length)continue;const mesh=new THREE.InstancedMesh(geo,materials[i],arr.length);const o=new THREE.Object3D();arr.forEach((p,j)=>{o.position.set(p[0],p[1],p[2]);o.updateMatrix();mesh.setMatrixAt(j,o.matrix)});mesh.instanceMatrix.needsUpdate=true;mesh.userData.positions=arr;mesh.userData.type=names[i];scene.add(mesh);meshes.push(mesh)}}
-const player={x:0,y:terrain(0,0)+2.01,z:0,yaw:0,pitch:0,vy:0,onGround:false};let mode='creative',selected=0,inventory=['grass','dirt','stone','wood','leaves','sand','brick'],counts={grass:48,dirt:48,stone:48,wood:24,leaves:24,sand:24,brick:24};let keys={},joy={x:0,y:0},drag=null,locked=false,last=performance.now(),saveTimer=0;
-const saved=localStorage.getItem('johnnycraft_world_v1');if(saved){$('continue').style.display='block'}
-function toast(s){const n=$('notice');n.textContent=s;n.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>n.classList.remove('show'),1700)}
-function drawBar(){const b=$('hotbar');b.innerHTML='';inventory.forEach((t,i)=>{const d=document.createElement('button');d.className='slot'+(i===selected?' selected':'');d.innerHTML='<span class="swatch" style="background:#'+mats[t].toString(16).padStart(6,'0')+'"></span><small>'+(mode==='survival'?counts[t]:'∞')+'</small>';d.title=t;d.onclick=()=>{selected=i;drawBar()};b.appendChild(d)})}
-function save(){const data={blocks:[...blocks],player:{x:player.x,y:player.y,z:player.z,yaw:player.yaw,pitch:player.pitch},mode,counts};try{localStorage.setItem('johnnycraft_world_v1',JSON.stringify(data));toast('World saved on this device')}catch(e){toast('Save failed: browser storage is full')}}
-function load(){try{const d=JSON.parse(localStorage.getItem('johnnycraft_world_v1'));if(!d||!Array.isArray(d.blocks))return false;blocks.clear();d.blocks.forEach(([k,v])=>blocks.set(k,v));Object.assign(player,d.player||{});mode=d.mode||'creative';counts=Object.assign(counts,d.counts||{});rebuild();return true}catch(e){return false}}
-function updateMode(){ $('mode').textContent=mode==='creative'?'Creative':'Survival';drawBar()}
-function start(useSave){if(useSave){if(!load())makeWorld()}else makeWorld();mode=$('survival').classList.contains('active')?'survival':'creative';if(!useSave){player.x=0;player.z=0;player.y=terrain(0,0)+1.02;player.yaw=0;player.pitch=0}updateMode();$('welcome').style.display='none';$('loading').style.display='none';}
-$('creative').onclick=()=>{$('creative').classList.add('active');$('survival').classList.remove('active')};$('survival').onclick=()=>{$('survival').classList.add('active');$('creative').classList.remove('active')};$('start').onclick=()=>start(false);$('continue').onclick=()=>start(true);$('save').onclick=save;$('mode').onclick=()=>{mode=mode==='creative'?'survival':'creative';updateMode();toast(mode==='creative'?'Creative mode':'Survival mode')};
-$('menu').onclick=()=>{$('welcome').style.display='grid';$('start').textContent='New world';$('continue').style.display=localStorage.getItem('johnnycraft_world_v1')?'block':'none'};
-function blockAtHit(){ray.setFromCamera(new THREE.Vector2(0,0),camera);return ray.intersectObjects(meshes,false)[0]}
-const ray=new THREE.Raycaster();ray.far=6;
-function actionMine(){const hit=blockAtHit();if(!hit)return;const p=hit.object.userData.positions[hit.instanceId];const k=key(...p),type=blocks.get(k);if(!type)return;del(...p);if(mode==='survival')counts[type]=(counts[type]||0)+1;rebuild();drawBar()}
-function actionPlace(){const hit=blockAtHit();if(!hit)return;const p=hit.object.userData.positions[hit.instanceId],n=hit.face.normal;const q=[Math.round(p[0]+n.x),Math.round(p[1]+n.y),Math.round(p[2]+n.z)];if(has(...q))return;if(Math.abs(q[0]-player.x)<.8&&Math.abs(q[2]-player.z)<.8&&q[1]>=player.y-1&&q[1]<=player.y+1)return;const type=inventory[selected];if(mode==='survival'&&counts[type]<=0){toast('No '+type+' blocks left');return}put(...q,type);if(mode==='survival')counts[type]--;rebuild();drawBar()}
-renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());renderer.domElement.addEventListener('pointerdown',e=>{if($('welcome').style.display!=='none')return;if(e.pointerType==='mouse'){if(!locked){renderer.domElement.requestPointerLock?.();return}if(e.button===0)actionMine();if(e.button===2)actionPlace()}else{drag={x:e.clientX,y:e.clientY};renderer.domElement.setPointerCapture(e.pointerId)}});renderer.domElement.addEventListener('pointermove',e=>{if(e.pointerType==='mouse'&&locked){player.yaw-=e.movementX*.0025;player.pitch=Math.max(-1.45,Math.min(1.45,player.pitch-e.movementY*.0025))}else if(drag){player.yaw-=(e.clientX-drag.x)*.006;player.pitch=Math.max(-1.35,Math.min(1.35,player.pitch-(e.clientY-drag.y)*.006));drag={x:e.clientX,y:e.clientY}}});renderer.domElement.addEventListener('pointerup',()=>{drag=null});document.addEventListener('pointerlockchange',()=>locked=document.pointerLockElement===renderer.domElement);
-document.addEventListener('keydown',e=>{keys[e.code]=true;if(/^Digit[1-7]$/.test(e.code)){selected=Number(e.code.slice(5))-1;drawBar()}if(e.code==='Space'&&!e.repeat)jump()});document.addEventListener('keyup',e=>keys[e.code]=false);
-function jump(){if(player.onGround||mode==='creative'){player.vy=mode==='creative'?5.2:7.2;player.onGround=false}}
-$('jump').onclick=jump;$('mine').onclick=actionMine;$('place').onclick=actionPlace;$('lookreset').onclick=()=>{player.yaw=0;player.pitch=0};
-const joyEl=$('joy'),stick=$('stick');function joyMove(e){const r=joyEl.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;let dx=e.clientX-cx,dy=e.clientY-cy,l=Math.hypot(dx,dy),m=38;if(l>m){dx=dx/l*m;dy=dy/l*m}joy.x=dx/m;joy.y=dy/m;stick.style.transform='translate('+dx+'px,'+dy+'px)'}joyEl.addEventListener('pointerdown',e=>{joyEl.setPointerCapture(e.pointerId);joyMove(e)});joyEl.addEventListener('pointermove',e=>{if(e.buttons)joyMove(e)});joyEl.addEventListener('pointerup',()=>{joy.x=joy.y=0;stick.style.transform=''});
-function solidAt(x,y,z){return has(Math.floor(x),Math.floor(y),Math.floor(z))&&blocks.get(key(Math.floor(x),Math.floor(y),Math.floor(z)))!=='water'}
-function tick(dt){const forward=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-joy.y;const side=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0)+joy.x;const speed=mode==='creative'?7:4.5;const len=Math.hypot(forward,side)||1;const dx=(-Math.sin(player.yaw)*forward+Math.cos(player.yaw)*side)/len*speed*dt,dz=(-Math.cos(player.yaw)*forward-Math.sin(player.yaw)*side)/len*speed*dt;
-if(!solidAt(player.x+dx,player.y-.7,player.z))player.x+=dx;if(!solidAt(player.x,player.y-.7,player.z+dz))player.z+=dz;
-if(mode==='creative'&&(keys.Space||keys.ShiftLeft)){player.y+=(keys.Space?1:-1)*speed*dt}else{player.vy-=19*dt;const ny=player.y+player.vy*dt;if(player.vy<=0&&solidAt(player.x,ny-1.7,player.z)){player.y=Math.floor(ny-1.7)+2.01;player.vy=0;player.onGround=true}else{player.y=ny;player.onGround=false}if(player.y<-8){player.y=terrain(Math.round(player.x),Math.round(player.z))+2.01;player.vy=0}}
-camera.position.set(player.x,player.y,player.z);camera.rotation.set(player.pitch,player.yaw,0);$('coords').textContent='X '+Math.floor(player.x)+' · Y '+Math.floor(player.y)+' · Z '+Math.floor(player.z);saveTimer+=dt;if(saveTimer>35){saveTimer=0;try{const d={blocks:[...blocks],player:{x:player.x,y:player.y,z:player.z,yaw:player.yaw,pitch:player.pitch},mode,counts};localStorage.setItem('johnnycraft_world_v1',JSON.stringify(d))}catch(e){}}}
-function animate(now){requestAnimationFrame(animate);const dt=Math.min(.04,(now-last)/1000);last=now;if($('welcome').style.display==='none')tick(dt);renderer.render(scene,camera)}makeWorld();drawBar();requestAnimationFrame(animate);
-addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.5))});
+<div id="stage"><canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas></div>
+<div id="status"><strong>Loading Minecraft Classic…</strong>Starting the ClassiCube browser client.<small>On iPad, rotate to landscape for the best controls. First load may take a little while.</small></div>
+<div id="logmsg" aria-live="polite">Preparing game…</div>
+<a id="home" href="../index.html">← Johnny Games</a>
+<script>
+(function(){
+  'use strict';
+  var status=document.getElementById('status');
+  var log=document.getElementById('logmsg');
+  var canvas=document.getElementById('canvas');
+  function setStatus(message){
+    log.textContent=String(message||'');
+    if(/all downloads complete|running|ready/i.test(String(message||''))) status.classList.add('hidden');
+  }
+  function fail(message){
+    status.classList.remove('hidden');
+    status.innerHTML='<strong>Could not start Minecraft Classic</strong><span>'+String(message||'The browser client failed to load.')+'</span><small>Refresh the page or try again in Safari with a stable connection.</small>';
+  }
+  // The upstream webclient expects its stock texture pack at /static/default.zip.
+  // Rewrite only that one asset request to the project's published texture pack.
+  var texturePack='https://classicube.net/static/default.zip';
+  var nativeOpen=XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open=function(method,url){
+    if(typeof url==='string' && /(^|\/)static\/default\.zip(?:[?#].*)?$/.test(url)) url=texturePack;
+    return nativeOpen.apply(this,[method,url].concat([].slice.call(arguments,2)));
+  };
+  if(window.fetch){
+    var nativeFetch=window.fetch.bind(window);
+    window.fetch=function(input,init){
+      var url=typeof input==='string'?input:(input&&input.url)||'';
+      if(/(^|\/)static\/default\.zip(?:[?#].*)?$/.test(url)) input=texturePack;
+      return nativeFetch(input,init);
+    };
+  }
+  window.Module={
+    preRun:[],
+    postRun:[],
+    arguments:['JohnnyGames'],
+    print:function(){var s=Array.prototype.slice.call(arguments).join(' ');console.log(s);},
+    printErr:function(){var s=Array.prototype.slice.call(arguments).join(' ');console.error(s);},
+    canvas:canvas,
+    setStatus:setStatus,
+    totalDependencies:0,
+    monitorRunDependencies:function(left){
+      this.totalDependencies=Math.max(this.totalDependencies,left);
+      setStatus(left?'Preparing game… ('+(this.totalDependencies-left)+'/'+this.totalDependencies+')':'All downloads complete.');
+    }
+  };
+  window.addEventListener('error',function(event){
+    if(event && event.message) fail(event.message);
+  });
+  window.addEventListener('unhandledrejection',function(event){
+    fail(event.reason&&event.reason.message?event.reason.message:'A game resource failed to load.');
+  });
+  function resize(){
+    var dpr=Math.min(window.devicePixelRatio||1,2);
+    canvas.width=Math.max(1,Math.floor(canvas.clientWidth*dpr));
+    canvas.height=Math.max(1,Math.floor(canvas.clientHeight*dpr));
+  }
+  window.addEventListener('resize',resize,{passive:true});
+  resize();
+  var script=document.createElement('script');
+  script.src='https://cs.classicube.net/client/latest/ClassiCube.js';
+  script.async=true;
+  script.onerror=function(){fail('The ClassiCube client could not be downloaded. Check your connection and refresh.');};
+  document.head.appendChild(script);
+})();
 </script>
-</body></html>
+</body>
+</html>
