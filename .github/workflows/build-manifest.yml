@@ -1,0 +1,31 @@
+name: Rebuild game manifest
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'games/**'
+      - 'thumbnails/**'
+      - 'games.json'
+      - 'generate-manifest.js'
+      - '.github/workflows/build-manifest.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Generate games.json
+        run: node generate-manifest.js
+      - name: Commit updated manifest
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: auto-update games.json"
+          file_pattern: games.json
