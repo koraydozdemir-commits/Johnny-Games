@@ -765,7 +765,7 @@ function removeMessage(key){return fetch(ADMIN_API+'/chat/'+encodeURIComponent(k
 function keyTime(k){var chars='-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz',t=0;if(!k||k.length<8)return 0;for(var i=0;i<8;i++){var n=chars.indexOf(k.charAt(i));if(n<0)return 0;t=t*64+n}return t}
 function poll(){
  if(pollBusy)return;pollBusy=true;
- fetch(ADMIN_API+'/chat',{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('Chat unavailable');return r.json()}).then(function(d){
+ fetch(ADMIN_API+'/chat',{cache:'no-store'}).then(function(r){if(!r.ok)return r.json().catch(function(){return{}}).then(function(d){throw new Error(d.error||('Chat service returned HTTP '+r.status))});return r.json()}).then(function(d){
   if(!d){cm.innerHTML='';setStatus('No messages yet — start the conversation!');return}
   var keys=Object.keys(d).sort(),now=Date.now(),a=[];
   keys.forEach(function(k){var m=d[k];if(!m||!m.n||!m.m)return;var ts=Number(m.t)||keyTime(k);
@@ -783,7 +783,7 @@ function poll(){
   });
   setStatus((adminMode?'ADMIN MODE · ':'')+a.length+' recent message'+(a.length===1?'':'s')+' · messages expire after 6 hours');
   if(cm.scrollHeight-cm.scrollTop-cm.clientHeight<100)cm.scrollTop=cm.scrollHeight;
- }).catch(function(){setStatus('Chat could not connect. Try again in a moment.')}).finally(function(){pollBusy=false})
+ }).catch(function(error){setStatus(error&&error.message?error.message:'Chat could not connect. Check the proxy service and try again.')}).finally(function(){pollBusy=false})
 }
 function openChat(){ch.classList.add('on');cb.setAttribute('aria-expanded','true');poll();clearInterval(timer);timer=setInterval(poll,5000);setTimeout(function(){$('cin').focus()},50)}
 function closeChat(){ch.classList.remove('on');cb.setAttribute('aria-expanded','false');clearInterval(timer);timer=0}
