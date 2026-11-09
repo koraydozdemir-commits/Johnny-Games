@@ -1,42 +1,123 @@
 [
-  {"name":"A Small World Cup"},
-  {"name":"Adventure Capitalist"},
-  {"name":"Age of War"},
-  {"name":"Among Us"},
-  {"name":"Angry Birds"},
-  {"name":"Bad Piggies"},
-  {"name":"Bloons Tower Defense"},
-  {"name":"Burrito Bison Revenge"},
-  {"name":"Burrito Bison"},
-  {"name":"Cookie Clicker"},
-  {"name":"Cover Orange"},
-  {"name":"Cut The Rope"},
-  {"name":"Drift Boss"},
-  {"name":"Drive Mad"},
-  {"name":"Five Nights At Johnny's"},
-  {"name":"Football Manager"},
-  {"name":"Fruit Ninja"},
-  {"name":"Geometry Dash"},
-  {"name":"Getting Over It"},
-  {"name":"Grow A Garden"},
-  {"name":"Hill Climb Racing"},
-  {"name":"Johnny Obby"},
-  {"name":"Kour"},
-  {"name":"Krillion"},
-  {"name":"Minecraft"},
-  {"name":"Online Mini Golf","game":"Mini Golf Classic"},
-  {"name":"Monkey Mart"},
-  {"name":"Online Mini Golf"},
-  {"name":"Penalty Shooters"},
-  {"name":"Plants vs Zombies"},
-  {"name":"Pou"},
-  {"name":"Retro Bowl"},
-  {"name":"Rocket League"},
-  {"name":"Sort the Court"},
-  {"name":"Spore"},
-  {"name":"Steal a Brainrot"},
-  {"name":"Stickman Hook"},
-  {"name":"Subway Surfers"},
-  {"name":"Veck"},
-  {"name":"Zombie Rush"}
+  {
+    "name": "A Small World Cup"
+  },
+  {
+    "name": "Adventure Capitalist"
+  },
+  {
+    "name": "Age of War"
+  },
+  {
+    "name": "Among Us"
+  },
+  {
+    "name": "Angry Birds"
+  },
+  {
+    "name": "Bad Piggies"
+  },
+  {
+    "name": "Bloons Tower Defense"
+  },
+  {
+    "name": "Burrito Bison Revenge"
+  },
+  {
+    "name": "Burrito Bison"
+  },
+  {
+    "name": "Cookie Clicker"
+  },
+  {
+    "name": "Cover Orange"
+  },
+  {
+    "name": "Cut The Rope"
+  },
+  {
+    "name": "Drift Boss"
+  },
+  {
+    "name": "Drive Mad"
+  },
+  {
+    "name": "Five Nights At Johnny's"
+  },
+  {
+    "name": "Football Manager"
+  },
+  {
+    "name": "Fruit Ninja"
+  },
+  {
+    "name": "Geometry Dash"
+  },
+  {
+    "name": "Getting Over It"
+  },
+  {
+    "name": "Grow A Garden"
+  },
+  {
+    "name": "Hill Climb Racing"
+  },
+  {
+    "name": "Johnny Obby"
+  },
+  {
+    "name": "Kour"
+  },
+  {
+    "name": "Krillion"
+  },
+  {
+    "name": "Minecraft"
+  },
+  {
+    "name": "Online Mini Golf",
+    "game": "Mini Golf Classic"
+  },
+  {
+    "name": "Monkey Mart"
+  },
+  {
+    "name": "Online Mini Golf"
+  },
+  {
+    "name": "Penalty Shooters"
+  },
+  {
+    "name": "Plants vs Zombies"
+  },
+  {
+    "name": "Pou"
+  },
+  {
+    "name": "Retro Bowl"
+  },
+  {
+    "name": "Rocket League"
+  },
+  {
+    "name": "Sort the Court"
+  },
+  {
+    "name": "Spore"
+  },
+  {
+    "name": "Steal a Brainrot"
+  },
+  {
+    "name": "Stickman Hook"
+  },
+  {
+    "name": "Subway Surfers"
+  },
+  {
+    "name": "Veck"
+  },
+  {
+    "name": "Zombie Rush"
+  }
 ]
