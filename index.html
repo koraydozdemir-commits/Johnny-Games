@@ -770,11 +770,11 @@ function removeMessage(key){return fetch(DB+'/chat/'+encodeURIComponent(key)+'.j
 function keyTime(k){var chars='-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz',t=0;if(!k||k.length<8)return 0;for(var i=0;i<8;i++){var n=chars.indexOf(k.charAt(i));if(n<0)return 0;t=t*64+n}return t}
 function poll(){
  if(pollBusy)return;pollBusy=true;
- fetch(DB+'/chat.json').then(function(r){if(!r.ok)throw new Error('Chat unavailable');return r.json()}).then(function(d){
+ fetch(DB+'/chat.json?orderBy=%22%24key%22&limitToLast=100').then(function(r){if(!r.ok)throw new Error('Chat unavailable');return r.json()}).then(function(d){
   if(!d){cm.innerHTML='';setStatus('No messages yet — start the conversation!');return}
-  var keys=Object.keys(d).sort(),now=Date.now(),a=[],expired=[];
+  var keys=Object.keys(d).sort(),now=Date.now(),a=[];
   keys.forEach(function(k){var m=d[k];if(!m||!m.n||!m.m)return;var ts=Number(m.t)||keyTime(k);
-   if(ts&&now-ts>SIX_HOURS){expired.push(k);return}a.push({key:k,m:m,ts:ts});
+   if(ts&&now-ts>SIX_HOURS)return;a.push({key:k,m:m,ts:ts});
   });
   cm.innerHTML='';
   a.forEach(function(item){
@@ -787,7 +787,6 @@ function poll(){
    e.appendChild(head);e.appendChild(body);cm.appendChild(e);
   });
   setStatus((adminMode?'ADMIN MODE · ':'')+a.length+' recent message'+(a.length===1?'':'s')+' · messages expire after 6 hours');
-  if(expired.length)expired.slice(0,20).forEach(function(k){removeMessage(k).catch(function(){})});
   if(cm.scrollHeight-cm.scrollTop-cm.clientHeight<100)cm.scrollTop=cm.scrollHeight;
  }).catch(function(){setStatus('Chat could not connect. Try again in a moment.')}).finally(function(){pollBusy=false})
 }
