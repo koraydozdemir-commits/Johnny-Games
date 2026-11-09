@@ -759,14 +759,14 @@ document.getElementById('rnd').addEventListener('click',function(){
 var DB='https://johnny-chat-aabd6-default-rtdb.europe-west1.firebasedatabase.app/';
 var BAD=/\b(fuck|shit|bitch|cunt|nigg\w*|fag\w*|retard\w*|rape|slut|whore)\b/gi,last=0,timer=0,adminMode=false,pollBusy=false;
 var cb=$('cbtn'),ch=$('chat'),cm=$('cmsgs'),status=$('cstatus'),adminBtn=$('adminBtn');
-var SIX_HOURS=6*60*60*1000;
+var SIX_HOURS=6*60*60*1000,ADMIN_API='https://johnny-games-proxy.onrender.com/api',adminPassword='';
 // SHA-256 avoids storing the code in plain text, but client-side admin checks are NOT secure.
 // Anyone with access to the public site source can bypass them; secure moderation needs a trusted backend.
 var ADMIN_HASH='77d177e7a78a85a54a468d4338640374deff4a8fbe212d2ef5d174b4eabb0079';
 function setStatus(t){status.textContent=t}
 function digestHex(s){return crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)).then(function(buf){return Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,'0')}).join('')})}
 function timeLabel(t){var now=Date.now(),diff=Math.max(0,now-t);if(diff<60000)return 'just now';if(diff<3600000)return Math.floor(diff/60000)+'m ago';if(diff<86400000)return Math.floor(diff/3600000)+'h ago';return new Date(t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}
-function removeMessage(key){return fetch(DB+'/chat/'+encodeURIComponent(key)+'.json',{method:'DELETE'}).then(function(r){if(!r.ok)throw new Error('delete denied')})}
+function removeMessage(key){return fetch(ADMIN_API+'/chat/'+encodeURIComponent(key),{method:'DELETE',headers:{'Authorization':'Bearer '+adminPassword}}).then(function(r){if(!r.ok)throw new Error('delete denied')})}
 function keyTime(k){var chars='-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz',t=0;if(!k||k.length<8)return 0;for(var i=0;i<8;i++){var n=chars.indexOf(k.charAt(i));if(n<0)return 0;t=t*64+n}return t}
 function poll(){
  if(pollBusy)return;pollBusy=true;
@@ -796,10 +796,11 @@ cb.setAttribute('aria-expanded','false');cb.onclick=function(){if(ch.classList.c
 $('chatclose').onclick=closeChat;
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&ch.classList.contains('on'))closeChat();if(e.key==='/'&&!/input|textarea/i.test(document.activeElement.tagName)&&!e.ctrlKey&&!e.metaKey){e.preventDefault();$('q').focus()}});
 adminBtn.onclick=function(){
- if(adminMode){adminMode=false;adminBtn.textContent='Admin login';poll();return}
- var code=prompt('Enter the chat admin code:');if(code===null)return;
- if(!window.crypto||!crypto.subtle){alert('Admin login needs a modern secure browser.');return}
- digestHex(code).then(function(hash){if(hash===ADMIN_HASH){adminMode=true;adminBtn.textContent='Admin: ON';poll();alert('Admin mode enabled for this page.')}else{alert('Incorrect admin code.')}}).catch(function(){alert('Could not verify the code in this browser.')});
+ if(adminMode){adminMode=false;adminPassword='';window.JG_ADMIN_PASSWORD='';adminBtn.textContent='Admin login';poll();return}
+ var code=prompt('Enter the Johnny Games admin password:');if(code===null)return;
+ fetch(ADMIN_API+'/admin/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:code})})
+  .then(function(r){if(!r.ok)throw new Error(r.status===503?'Admin password is not configured on the proxy.':'Incorrect admin password.');adminPassword=code;window.JG_ADMIN_PASSWORD=code;adminMode=true;adminBtn.textContent='Admin: ON';poll();alert('Admin mode enabled for this page.')})
+  .catch(function(e){alert(e.message||'Admin login could not be verified.')});
 };
 $('cform').addEventListener('submit',function(e){
  e.preventDefault();var t=$('cin').value.trim();if(!t||Date.now()-last<1800)return;
@@ -941,13 +942,9 @@ function render(data){
 }
 fetch(DB+'ads.json').then(function(r){if(!r.ok)throw new Error('load failed');return r.json()}).then(render).catch(function(){banner.style.display='none'});
 function resizeImage(file,maxW,maxH,quality){return new Promise(function(resolve,reject){if(!file)return resolve('');var reader=new FileReader();reader.onerror=reject;reader.onload=function(){var im=new Image();im.onerror=reject;im.onload=function(){var scale=Math.min(1,maxW/im.width,maxH/im.height),w=Math.round(im.width*scale),h=Math.round(im.height*scale),canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;canvas.getContext('2d').drawImage(im,0,0,w,h);resolve(canvas.toDataURL('image/jpeg',quality))};im.src=reader.result};reader.readAsDataURL(file)})}
-function readExisting(){return fetch(DB+'ads.json').then(function(r){return r.json()}).then(function(v){return v||{}})}
-function write(data){return fetch(DB+'ads.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(function(r){if(!r.ok)throw new Error('Database rejected the save (check Firebase write permissions).');return r.json()})}
-function adminAuth(){
- var code=prompt('Enter the Johnny Games admin code:');if(code===null)return;
- var hash='77d177e7a78a85a54a468d4338640374deff4a8fbe212d2ef5d174b4eabb0079';
- crypto.subtle.digest('SHA-256',new TextEncoder().encode(code)).then(function(buf){var got=Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,'0')}).join('');if(got!==hash){alert('Incorrect admin code.');return}openManager()}).catch(function(){alert('Admin login requires a modern secure browser.')});
-}
+function readExisting(){return fetch('https://johnny-games-proxy.onrender.com/api/ads',{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('Could not load ad settings.');return r.json()}).then(function(v){return v||{}})}
+function write(data){var password=window.JG_ADMIN_PASSWORD||'';if(!password)return Promise.reject(new Error('Sign in as admin before saving ads.'));return fetch('https://johnny-games-proxy.onrender.com/api/ads',{method:'PUT',headers:{'Content-Type':'application/json','Authorization':'Bearer '+password},body:JSON.stringify(data)}).then(function(r){if(!r.ok)throw new Error(r.status===401?'Admin session expired. Sign in again.':'The proxy rejected the save.');return null})}
+function adminAuth(){if(!window.JG_ADMIN_PASSWORD){alert('Please sign in through the chat admin button first.');return}openManager()}
 function openManager(){
  readExisting().then(function(d){document.getElementById('jg-banner-url').value=d.banner&&d.banner.url||'';document.getElementById('jg-popup-url').value=d.popup&&d.popup.url||'';admin.classList.add('on')}).catch(function(){admin.classList.add('on')});
 }
