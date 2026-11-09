@@ -1,13 +1,13 @@
 'use strict';
-var CACHE='johnny-games-shell-v10';
+var CACHE='johnny-games-shell-v11';
 var CORE=['./','./index.html','./play.html','./analytics.html','./games.json','./manifest.webmanifest','./images/Banner.png','./images/Wallpaper.jpg'];
 var MAX_CACHE_BYTES=2*1024*1024;
 function cacheable(request,response,url){
  if(!response||!response.ok||response.type!=='basic'||request.method!=='GET')return false;
  if(url.origin!==location.origin)return false;
- if(/\\/(?:games|thumbnails)\\//i.test(url.pathname))return false;
+ if(url.pathname.indexOf('/games/')!==-1||url.pathname.indexOf('/thumbnails/')!==-1)return false;
  var type=(response.headers.get('content-type')||'').toLowerCase();
- if(!/(text\\/html|javascript|text\\/css|application\\/json|image\\/)/.test(type))return false;
+ if(!(type.indexOf('text/html')===0||type.indexOf('javascript')!==-1||type.indexOf('text/css')===0||type.indexOf('application/json')===0||type.indexOf('image/')===0))return false;
  var size=Number(response.headers.get('content-length')||0);
  return !size||size<=MAX_CACHE_BYTES;
 }
