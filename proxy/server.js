@@ -34,6 +34,7 @@ app.use((_, response, next) => {
 });
 
 let analyticsDb = null;
+let adminDb = null;
 try {
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (serviceAccountJson) {
@@ -47,6 +48,12 @@ try {
       }
     }, "johnny-analytics-api");
     analyticsDb = getDatabase(firebaseApp);
+    // Separate privileged connection for chat and ad records; analytics keeps its restricted auth override.
+    const adminApp = initializeApp({
+      credential: cert(serviceAccount),
+      databaseURL: databaseUrl
+    }, "johnny-admin-api");
+    adminDb = getDatabase(adminApp);
   }
 } catch {
   // Keep the proxy online if analytics credentials are missing or malformed.
@@ -109,22 +116,22 @@ function limitChat(request, response, next) {
 }
 app.options("/api/chat", apiCors, (_, response) => response.sendStatus(204));
 app.get("/api/chat", apiCors, async (_, response) => {
-  if (!analyticsDb) return response.status(503).json({ error: "Firebase service account is not configured." });
+  if (!adminDb) return response.status(503).json({ error: "Firebase service account is not configured." });
   try {
-    const snapshot = await analyticsDb.ref("chat").orderByKey().limitToLast(100).get();
+    const snapshot = await adminDb.ref("chat").orderByKey().limitToLast(100).get();
     response.json(snapshot.exists() ? snapshot.val() : {});
   } catch {
     response.status(503).json({ error: "Chat messages could not be loaded." });
   }
 });
 app.post("/api/chat", apiCors, limitChat, async (request, response) => {
-  if (!analyticsDb) return response.status(503).json({ error: "Firebase service account is not configured." });
+  if (!adminDb) return response.status(503).json({ error: "Firebase service account is not configured." });
   const body = request.body || {};
   const name = typeof body.n === "string" ? body.n.trim().slice(0, 12) : "";
   const message = typeof body.m === "string" ? body.m.trim().slice(0, 200) : "";
   if (!name || !/[a-z0-9]/i.test(name) || !message) return response.status(400).json({ error: "Invalid chat message." });
   try {
-    await analyticsDb.ref("chat").push().set({ n: name, m: message, t: Date.now() });
+    await adminDb.ref("chat").push().set({ n: name, m: message, t: Date.now() });
     response.sendStatus(204);
   } catch {
     response.status(503).json({ error: "Chat message could not be sent." });
@@ -132,11 +139,11 @@ app.post("/api/chat", apiCors, limitChat, async (request, response) => {
 });
 app.options("/api/chat/:key", apiCors, (_, response) => response.sendStatus(204));
 app.delete("/api/chat/:key", apiCors, requireAdmin, async (request, response) => {
-  if (!analyticsDb) return response.status(503).json({ error: "Firebase service account is not configured." });
+  if (!adminDb) return response.status(503).json({ error: "Firebase service account is not configured." });
   const key = request.params.key;
   if (!/^[A-Za-z0-9_-]{8,64}$/.test(key)) return response.sendStatus(400);
   try {
-    await analyticsDb.ref("chat").child(key).remove();
+    await adminDb.ref("chat").child(key).remove();
     response.sendStatus(204);
   } catch {
     response.status(503).json({ error: "The chat message could not be deleted." });
@@ -144,20 +151,20 @@ app.delete("/api/chat/:key", apiCors, requireAdmin, async (request, response) =>
 });
 app.options("/api/ads", apiCors, (_, response) => response.sendStatus(204));
 app.get("/api/ads", apiCors, async (_, response) => {
-  if (!analyticsDb) return response.status(503).json({ error: "Firebase service account is not configured." });
+  if (!adminDb) return response.status(503).json({ error: "Firebase service account is not configured." });
   try {
-    const snapshot = await analyticsDb.ref("ads").get();
+    const snapshot = await adminDb.ref("ads").get();
     response.json(snapshot.exists() ? snapshot.val() : {});
   } catch {
     response.status(503).json({ error: "Advertisement settings could not be loaded." });
   }
 });
 app.put("/api/ads", apiCors, requireAdmin, async (request, response) => {
-  if (!analyticsDb) return response.status(503).json({ error: "Firebase service account is not configured." });
+  if (!adminDb) return response.status(503).json({ error: "Firebase service account is not configured." });
   const data = request.body;
   if (!data || typeof data !== "object" || Array.isArray(data)) return response.sendStatus(400);
   try {
-    await analyticsDb.ref("ads").set(data);
+    await adminDb.ref("ads").set(data);
     response.sendStatus(204);
   } catch {
     response.status(503).json({ error: "Advertisement settings could not be saved." });
@@ -242,7 +249,7 @@ app.post("/api/analytics", analyticsCors, limitAnalytics, async (request, respon
 
 app.get("/health", (_, response) => {
   response.setHeader("Cache-Control", "no-store");
-  response.json({ ok: true, service: "johnny-games-frogies-proxy", analytics: Boolean(analyticsDb) });
+  response.json({ ok: true, service: "johnny-games-frogies-proxy", analytics: Boolean(analyticsDb), adminApi: Boolean(adminDb) });
 });
 
 app.get("/frog/uv.config.js", (_, response) => {
@@ -254,9 +261,9 @@ app.use(express.static(publicDirectory, { index: "index.html", maxAge: "5m" }));
 // Expire chat messages on the server so cleanup does not depend on an open chat tab.
 const CHAT_RETENTION_MS = 6 * 60 * 60 * 1000;
 async function cleanupExpiredChat() {
-  if (!analyticsDb) return;
+  if (!adminDb) return;
   try {
-    const chatRef = analyticsDb.ref("chat");
+    const chatRef = adminDb.ref("chat");
     const snapshot = await chatRef.get();
     if (!snapshot.exists()) return;
     const now = Date.now();
