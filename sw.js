@@ -35,7 +35,7 @@ self.addEventListener('fetch',function(event){
  event.respondWith((async function(){
   var cache=await caches.open(CACHE);
   try{
-   var response=await fetch(request);
+   var response=await fetch(request,{cache:'no-store'});
    await putIfSmall(cache,request,response,url);
    return response;
   }catch(error){
