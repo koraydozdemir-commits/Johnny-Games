@@ -35,10 +35,18 @@ app.use((_, response, next) => {
 
 let analyticsDb = null;
 let adminDb = null;
+let firebaseStatus = process.env.FIREBASE_SERVICE_ACCOUNT_JSON ? "invalid" : "missing";
 try {
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (serviceAccountJson) {
     const serviceAccount = JSON.parse(serviceAccountJson);
+    // Render environment variables commonly store PEM newlines escaped as \\n.
+    if (typeof serviceAccount.private_key === "string") {
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\\\n/g, "\\n");
+    }
+    if (!serviceAccount.project_id || !serviceAccount.client_email || !serviceAccount.private_key) {
+      throw new Error("Service account JSON is missing project_id, client_email, or private_key.");
+    }
     const firebaseApp = initializeApp({
       credential: cert(serviceAccount),
       databaseURL: databaseUrl,
@@ -54,10 +62,14 @@ try {
       databaseURL: databaseUrl
     }, "johnny-admin-api");
     adminDb = getDatabase(adminApp);
+    firebaseStatus = "ready";
   }
-} catch {
-  // Keep the proxy online if analytics credentials are missing or malformed.
-  console.error("Analytics backend unavailable: check its Render environment settings.");
+} catch (error) {
+  analyticsDb = null;
+  adminDb = null;
+  firebaseStatus = "invalid";
+  // Never log the service-account JSON or private key.
+  console.error("Firebase initialization failed:", error && error.message ? error.message : "unknown error");
 }
 
 function analyticsCors(request, response, next) {
@@ -116,7 +128,7 @@ function limitChat(request, response, next) {
 }
 app.options("/api/chat", apiCors, (_, response) => response.sendStatus(204));
 app.get("/api/chat", apiCors, async (_, response) => {
-  if (!adminDb) return response.status(503).json({ error: "Firebase service account is not configured." });
+  if (!adminDb) return response.status(503).json({ error: firebaseStatus === "missing" ? "Chat is offline: the Firebase service-account secret is missing from the proxy environment." : "Chat is offline: the Firebase service-account secret is invalid. Check the proxy logs for the safe initialization error." });
   try {
     const snapshot = await adminDb.ref("chat").orderByKey().limitToLast(100).get();
     response.json(snapshot.exists() ? snapshot.val() : {});
@@ -125,7 +137,7 @@ app.get("/api/chat", apiCors, async (_, response) => {
   }
 });
 app.post("/api/chat", apiCors, limitChat, async (request, response) => {
-  if (!adminDb) return response.status(503).json({ error: "Firebase service account is not configured." });
+  if (!adminDb) return response.status(503).json({ error: firebaseStatus === "missing" ? "Chat is offline: the Firebase service-account secret is missing from the proxy environment." : "Chat is offline: the Firebase service-account secret is invalid. Check the proxy logs for the safe initialization error." });
   const body = request.body || {};
   const name = typeof body.n === "string" ? body.n.trim().slice(0, 12) : "";
   const message = typeof body.m === "string" ? body.m.trim().slice(0, 200) : "";
@@ -139,7 +151,7 @@ app.post("/api/chat", apiCors, limitChat, async (request, response) => {
 });
 app.options("/api/chat/:key", apiCors, (_, response) => response.sendStatus(204));
 app.delete("/api/chat/:key", apiCors, requireAdmin, async (request, response) => {
-  if (!adminDb) return response.status(503).json({ error: "Firebase service account is not configured." });
+  if (!adminDb) return response.status(503).json({ error: firebaseStatus === "missing" ? "Chat is offline: the Firebase service-account secret is missing from the proxy environment." : "Chat is offline: the Firebase service-account secret is invalid. Check the proxy logs for the safe initialization error." });
   const key = request.params.key;
   if (!/^[A-Za-z0-9_-]{8,64}$/.test(key)) return response.sendStatus(400);
   try {
@@ -151,7 +163,7 @@ app.delete("/api/chat/:key", apiCors, requireAdmin, async (request, response) =>
 });
 app.options("/api/ads", apiCors, (_, response) => response.sendStatus(204));
 app.get("/api/ads", apiCors, async (_, response) => {
-  if (!adminDb) return response.status(503).json({ error: "Firebase service account is not configured." });
+  if (!adminDb) return response.status(503).json({ error: firebaseStatus === "missing" ? "Chat is offline: the Firebase service-account secret is missing from the proxy environment." : "Chat is offline: the Firebase service-account secret is invalid. Check the proxy logs for the safe initialization error." });
   try {
     const snapshot = await adminDb.ref("ads").get();
     response.json(snapshot.exists() ? snapshot.val() : {});
@@ -160,7 +172,7 @@ app.get("/api/ads", apiCors, async (_, response) => {
   }
 });
 app.put("/api/ads", apiCors, requireAdmin, async (request, response) => {
-  if (!adminDb) return response.status(503).json({ error: "Firebase service account is not configured." });
+  if (!adminDb) return response.status(503).json({ error: firebaseStatus === "missing" ? "Chat is offline: the Firebase service-account secret is missing from the proxy environment." : "Chat is offline: the Firebase service-account secret is invalid. Check the proxy logs for the safe initialization error." });
   const data = request.body;
   if (!data || typeof data !== "object" || Array.isArray(data)) return response.sendStatus(400);
   try {
@@ -249,7 +261,7 @@ app.post("/api/analytics", analyticsCors, limitAnalytics, async (request, respon
 
 app.get("/health", (_, response) => {
   response.setHeader("Cache-Control", "no-store");
-  response.json({ ok: true, service: "johnny-games-frogies-proxy", analytics: Boolean(analyticsDb), adminApi: Boolean(adminDb), adminAuth: Boolean(adminPasswordHash) });
+  response.json({ ok: true, service: "johnny-games-frogies-proxy", analytics: Boolean(analyticsDb), adminApi: Boolean(adminDb), adminAuth: Boolean(adminPasswordHash), firebase: firebaseStatus });
 });
 
 app.get("/frog/uv.config.js", (_, response) => {
