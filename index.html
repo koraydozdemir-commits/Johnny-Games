@@ -777,7 +777,7 @@ function poll(){
    var head=document.createElement('div');head.className='msg-head';
    var b=document.createElement('b');b.textContent=String(m.n).slice(0,12);head.appendChild(b);
    var stamp=document.createElement('span');stamp.className='stamp';stamp.textContent=item.ts?timeLabel(item.ts):'older message';head.appendChild(stamp);
-   if(adminMode){var del=document.createElement('button');del.className='del';del.type='button';del.textContent='Delete';del.setAttribute('aria-label','Delete message from '+String(m.n).slice(0,12));del.onclick=function(){if(!confirm('Delete this message?'))return;del.disabled=true;removeMessage(item.key).then(poll).catch(function(){setStatus('Delete failed. Firebase rules may block moderation.');del.disabled=false})};head.appendChild(del)}
+   if(adminMode){var del=document.createElement('button');del.className='del';del.type='button';del.textContent='Delete';del.setAttribute('aria-label','Delete message from '+String(m.n).slice(0,12));del.onclick=function(){if(!confirm('Delete this message?'))return;del.disabled=true;removeMessage(item.key).then(poll).catch(function(){setStatus('Delete failed. Check the proxy admin credentials and try again.');del.disabled=false})};head.appendChild(del)}
    var body=document.createElement('div');body.className='msg-body';body.textContent=String(m.m).slice(0,200).replace(BAD,'***');
    e.appendChild(head);e.appendChild(body);cm.appendChild(e);
   });
