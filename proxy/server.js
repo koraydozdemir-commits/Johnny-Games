@@ -249,7 +249,7 @@ app.post("/api/analytics", analyticsCors, limitAnalytics, async (request, respon
 
 app.get("/health", (_, response) => {
   response.setHeader("Cache-Control", "no-store");
-  response.json({ ok: true, service: "johnny-games-frogies-proxy", analytics: Boolean(analyticsDb), adminApi: Boolean(adminDb) });
+  response.json({ ok: true, service: "johnny-games-frogies-proxy", analytics: Boolean(analyticsDb), adminApi: Boolean(adminDb), adminAuth: Boolean(adminPasswordHash) });
 });
 
 app.get("/frog/uv.config.js", (_, response) => {
