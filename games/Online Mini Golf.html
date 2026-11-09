@@ -12,8 +12,7 @@ html,body{margin:0;min-height:100%;background:#071817;color:var(--ink);font-fami
 body{min-height:100svh;display:grid;place-items:center;padding:20px}
 main{width:min(720px,100%);text-align:center}
 .logo{width:76px;height:76px;margin:0 auto 18px;display:grid;place-items:center;border-radius:24px;background:var(--lime);color:#172219;font-size:42px;box-shadow:0 12px 45px #c8f36a22}
-h1{font-size:clamp(28px,7vw,48px);letter-spacing:-1.8px;margin:0}
-h1 span{color:var(--lime)}
+h1{font-size:clamp(28px,7vw,48px);letter-spacing:-1.8px;margin:0}h1 span{color:var(--lime)}
 .sub{color:var(--muted);font-size:14px;margin:10px auto 24px;line-height:1.6;max-width:500px}
 .panel{border:1px solid var(--line);border-radius:22px;background:#102725;padding:clamp(20px,5vw,34px);box-shadow:0 22px 80px #0005}
 .online{display:inline-flex;align-items:center;gap:7px;color:#d8f5a1;font-size:11px;font-weight:850;letter-spacing:1.5px;margin-bottom:14px}
@@ -36,9 +35,9 @@ footer{margin-top:18px;color:#789287;font-size:11px}
  <div class="sub">Challenge your friends in real-time multiplayer mini golf.</div>
  <section class="panel">
   <div class="online"><span class="dot"></span> ONLINE MULTIPLAYER</div>
-  <p>Play Penguin Mini Golf on Foony. Create a private room, share its invite link with your friends, and compete together. It runs in your browser and supports phones, tablets and computers.</p>
-  <a class="launch" href="https://foony.com/games/mini-golf" target="_top" rel="noopener">PLAY ONLINE WITH FRIENDS <span aria-hidden="true">↗</span></a>
-  <span class="small">Opens the live multiplayer game directly. This avoids the embedded-frame loading issue that was stopping the game from appearing inside Johnny Games.</span>
+  <p>Play Penguin Mini Golf with friends in a private room. The game is opened inside Johnny Games' secure browser proxy, so you stay in the Johnny Games experience instead of navigating directly to the game website.</p>
+  <a class="launch" href="https://johnny-games-proxy.onrender.com/?url=https%3A%2F%2Ffoony.com%2Fgames%2Fmini-golf" target="_blank" rel="noopener">PLAY ONLINE WITH FRIENDS <span aria-hidden="true">↗</span></a>
+  <span class="small">Opens through the Johnny Games proxy. Create a room in the game and share its invite link with your friends.</span>
   <div class="steps"><span class="step">1. Create a room</span><span class="step">2. Share the room link</span><span class="step">3. Play together</span></div>
  </section>
  <footer>Johnny Games · Online Mini Golf</footer>
