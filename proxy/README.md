@@ -25,7 +25,7 @@ only to individual analytics records; do not add public `.write: true` rules.
    variable `FIREBASE_SERVICE_ACCOUNT_JSON`. Set
    `FIREBASE_DATABASE_URL` to the Realtime Database URL if it differs from the
    default in `server.js`.
-3. Add these two branches inside the existing top-level `rules` object in
+4. Add these two branches inside the existing top-level `rules` object in
    Firebase Realtime Database Rules, preserving the current `chat` rules, then
    publish:
 
@@ -73,3 +73,10 @@ without exposing any credential details. It should return
 The Johnny Games browser screen is a separate wrapper. Its service and
 Ultraviolet assets are served from this Render service so the browser and
 proxy share the same origin.
+
+
+## Protected admin writes and chat expiry
+
+The browser no longer writes ad configuration or deletes chat messages directly to Firebase. Those operations go through authenticated `/api/ads` and `/api/chat/:key` endpoints. The proxy verifies the supplied password against the `ADMIN_PASSWORD_SHA256` Render secret before allowing writes. Public ad reads use `/api/ads`. Chat messages are pruned by the proxy every five minutes after the six-hour retention period, so cleanup continues even when nobody has the chat open. The client only polls the newest 100 messages.
+
+The proxy requires both `FIREBASE_SERVICE_ACCOUNT_JSON` and `ADMIN_PASSWORD_SHA256` for these functions. Until both secrets are configured in Render, protected admin operations will return an explicit configuration error rather than attempting browser-side Firebase writes.
