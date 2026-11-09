@@ -756,7 +756,6 @@ fetch('games.json').then(function(r){return r.json()}).then(function(d){S.games=
 document.getElementById('rnd').addEventListener('click',function(){
  var g=S.games.filter(function(x){return!x.ext});if(g.length){var pick=g[Math.random()*g.length|0];if(pick.ext&&window.trackPlay)window.trackPlay(pick.name);location.href=pick.href}});
 // ---- Johnny Lounge chat ----
-var DB='https://johnny-chat-aabd6-default-rtdb.europe-west1.firebasedatabase.app/';
 var BAD=/\b(fuck|shit|bitch|cunt|nigg\w*|fag\w*|retard\w*|rape|slut|whore)\b/gi,last=0,timer=0,adminMode=false,pollBusy=false;
 var cb=$('cbtn'),ch=$('chat'),cm=$('cmsgs'),status=$('cstatus'),adminBtn=$('adminBtn');
 var SIX_HOURS=6*60*60*1000,ADMIN_API='https://johnny-games-proxy.onrender.com/api',adminPassword='';
@@ -766,7 +765,7 @@ function removeMessage(key){return fetch(ADMIN_API+'/chat/'+encodeURIComponent(k
 function keyTime(k){var chars='-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz',t=0;if(!k||k.length<8)return 0;for(var i=0;i<8;i++){var n=chars.indexOf(k.charAt(i));if(n<0)return 0;t=t*64+n}return t}
 function poll(){
  if(pollBusy)return;pollBusy=true;
- fetch(DB+'/chat.json?orderBy=%22%24key%22&limitToLast=100').then(function(r){if(!r.ok)throw new Error('Chat unavailable');return r.json()}).then(function(d){
+ fetch(ADMIN_API+'/chat',{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('Chat unavailable');return r.json()}).then(function(d){
   if(!d){cm.innerHTML='';setStatus('No messages yet — start the conversation!');return}
   var keys=Object.keys(d).sort(),now=Date.now(),a=[];
   keys.forEach(function(k){var m=d[k];if(!m||!m.n||!m.m)return;var ts=Number(m.t)||keyTime(k);
@@ -804,7 +803,7 @@ $('cform').addEventListener('submit',function(e){
  if(!n){n=(prompt('Choose a chat name (max 12 characters)')||'').trim().slice(0,12).replace(BAD,'***');if(!n)return;store.set('jg_name',n)}
  if(!/[a-z0-9]/i.test(n)){alert('Please choose a chat name with at least one letter or number.');return}
  last=Date.now();$('cin').value='';
- fetch(DB+'/chat.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({n:n,m:t.slice(0,200),t:Date.now()})}).then(function(r){if(!r.ok)throw new Error('send failed');poll()}).catch(function(){setStatus('Message could not be sent. Please try again.');$('cin').value=t});
+ fetch(ADMIN_API+'/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({n:n,m:t.slice(0,200)})}).then(function(r){if(!r.ok)throw new Error('send failed');poll()}).catch(function(){setStatus('Message could not be sent. Please try again.');$('cin').value=t});
 });
 
 })();
@@ -914,7 +913,6 @@ build()
 <script>
 (function(){
 'use strict';
-var DB='https://johnny-chat-aabd6-default-rtdb.europe-west1.firebasedatabase.app/';
 var KEY='jg_ad_popup_last',FREQ=6*60*60*1000;
 var banner=document.getElementById('jg-banner-ad');
 var popup=document.createElement('div');popup.id='jg-popup-ad';popup.setAttribute('role','dialog');popup.setAttribute('aria-modal','true');popup.setAttribute('aria-label','Sponsored advertisement');
