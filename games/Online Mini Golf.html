@@ -8,39 +8,40 @@
 <style>
 :root{color-scheme:dark;--lime:#c8f36a;--ink:#f7f8f3;--muted:#b4c9bf;--line:#284741}
 *{box-sizing:border-box}
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071817;color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,sans-serif}
-body{height:100dvh;min-height:0;display:flex;flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
-header{flex:none;display:flex;align-items:center;gap:12px;padding:8px 13px;background:#0b201f;border-bottom:1px solid var(--line);min-height:56px}
-.logo{width:38px;height:38px;flex:none;display:grid;place-items:center;background:var(--lime);color:#172219;border-radius:12px;font-size:22px}
-.brand{flex:1;min-width:0}h1{font-size:clamp(17px,3vw,22px);margin:0;letter-spacing:-.5px}.sub{font-size:11px;color:var(--muted);margin-top:2px}
-.actions{display:flex;gap:7px;align-items:center}
-a.btn,button.btn{appearance:none;border:0;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;font:800 12px system-ui;padding:10px 12px;border-radius:10px;background:var(--lime);color:#172219;cursor:pointer;white-space:nowrap}
-a.btn.secondary,button.btn.secondary{background:#203d38;color:#eff8f0;border:1px solid #36564d}
-main{flex:1;min-height:0;display:flex;padding:7px;background:#071817}
-.framewrap{position:relative;flex:1;min-width:0;min-height:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#102725}
-iframe{display:block;width:100%;height:100%;border:0;background:#071817}
-footer{flex:none;display:flex;justify-content:center;align-items:center;padding:5px 10px calc(5px + env(safe-area-inset-bottom));background:#0b201f;color:var(--muted);font-size:11px;text-align:center}
-@media(max-width:560px){header{padding:6px 8px;gap:7px;min-height:49px}.logo{width:32px;height:32px;font-size:19px}.sub{display:none}.actions{gap:5px}.actions .btn{font-size:10px;padding:9px 8px}main{padding:3px}.framewrap{border-radius:7px}footer{font-size:10px}}
-@media(max-height:430px){header{min-height:40px;padding:3px 7px}.logo{width:28px;height:28px}.sub{display:none}main{padding:2px}footer{display:none}}
+html,body{margin:0;min-height:100%;background:#071817;color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+body{min-height:100svh;display:grid;place-items:center;padding:20px}
+main{width:min(720px,100%);text-align:center}
+.logo{width:76px;height:76px;margin:0 auto 18px;display:grid;place-items:center;border-radius:24px;background:var(--lime);color:#172219;font-size:42px;box-shadow:0 12px 45px #c8f36a22}
+h1{font-size:clamp(28px,7vw,48px);letter-spacing:-1.8px;margin:0}
+h1 span{color:var(--lime)}
+.sub{color:var(--muted);font-size:14px;margin:10px auto 24px;line-height:1.6;max-width:500px}
+.panel{border:1px solid var(--line);border-radius:22px;background:#102725;padding:clamp(20px,5vw,34px);box-shadow:0 22px 80px #0005}
+.online{display:inline-flex;align-items:center;gap:7px;color:#d8f5a1;font-size:11px;font-weight:850;letter-spacing:1.5px;margin-bottom:14px}
+.dot{width:8px;height:8px;border-radius:50%;background:#a8e65a;box-shadow:0 0 12px #a8e65a}
+p{color:#c0d0c6;font-size:14px;line-height:1.65;margin:0 auto 22px;max-width:500px}
+a{display:inline-flex;justify-content:center;align-items:center;gap:9px;text-decoration:none;font-weight:900}
+.launch{width:100%;max-width:430px;background:var(--lime);color:#172219;border-radius:14px;padding:17px 20px;font-size:16px;box-shadow:0 8px 28px #c8f36a20}
+.launch:active{transform:translateY(1px)}
+.small{display:block;color:#9fb5a9;font-size:11px;margin-top:14px;line-height:1.5}
+.steps{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:20px}
+.step{background:#0b201f;border:1px solid #284741;border-radius:12px;padding:10px 13px;color:#b9cbbf;font-size:12px}
+footer{margin-top:18px;color:#789287;font-size:11px}
+@media(max-width:480px){body{padding:12px}.panel{padding:22px 16px}.logo{width:64px;height:64px;font-size:36px}}
 </style>
 </head>
 <body>
-<header>
- <div class="logo" aria-hidden="true">⛳</div>
- <div class="brand"><h1>ONLINE MINI GOLF</h1><div class="sub">Johnny Games · Built-in browser course</div></div>
- <nav class="actions" aria-label="Game actions">
-  <a class="btn secondary" href="Mini%20Golf%20Classic.html" target="_blank" rel="noopener">OPEN GAME ↗</a>
-  <button class="btn" id="fullscreen" type="button">FULLSCREEN ⛶</button>
- </nav>
-</header>
 <main>
- <section class="framewrap" aria-label="Johnny Games mini golf">
-  <iframe id="game" title="Johnny Games Mini Golf" src="Mini%20Golf%20Classic.html" allow="fullscreen; autoplay; gamepad" allowfullscreen loading="eager"></iframe>
+ <div class="logo" aria-hidden="true">⛳</div>
+ <h1>ONLINE MINI <span>GOLF</span></h1>
+ <div class="sub">Challenge your friends in real-time multiplayer mini golf.</div>
+ <section class="panel">
+  <div class="online"><span class="dot"></span> ONLINE MULTIPLAYER</div>
+  <p>Play Penguin Mini Golf on Foony. Create a private room, share its invite link with your friends, and compete together. It runs in your browser and supports phones, tablets and computers.</p>
+  <a class="launch" href="https://foony.com/games/mini-golf" target="_top" rel="noopener">PLAY ONLINE WITH FRIENDS <span aria-hidden="true">↗</span></a>
+  <span class="small">Opens the live multiplayer game directly. This avoids the embedded-frame loading issue that was stopping the game from appearing inside Johnny Games.</span>
+  <div class="steps"><span class="step">1. Create a room</span><span class="step">2. Share the room link</span><span class="step">3. Play together</span></div>
  </section>
+ <footer>Johnny Games · Online Mini Golf</footer>
 </main>
-<footer>This version runs directly from Johnny Games — no third-party game embed required.</footer>
-<script>
-(()=>{const frame=document.getElementById('game'),button=document.getElementById('fullscreen');button.addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await frame.requestFullscreen();}catch(_){window.open('Mini%20Golf%20Classic.html','_blank','noopener');}});})();
-</script>
 </body>
 </html>
