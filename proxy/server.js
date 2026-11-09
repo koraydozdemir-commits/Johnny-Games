@@ -42,7 +42,7 @@ try {
     const serviceAccount = JSON.parse(serviceAccountJson);
     // Render environment variables commonly store PEM newlines escaped as \\n.
     if (typeof serviceAccount.private_key === "string") {
-      serviceAccount.private_key = serviceAccount.private_key.replace(/\\\\n/g, "\\n");
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
     }
     if (!serviceAccount.project_id || !serviceAccount.client_email || !serviceAccount.private_key) {
       throw new Error("Service account JSON is missing project_id, client_email, or private_key.");
