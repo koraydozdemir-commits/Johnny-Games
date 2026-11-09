@@ -793,7 +793,7 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'&&ch.classLis
 adminBtn.onclick=function(){
  if(adminMode){adminMode=false;adminPassword='';window.JG_ADMIN_PASSWORD='';adminBtn.textContent='Admin login';poll();return}
  var code=prompt('Enter the Johnny Games admin password:');if(code===null)return;
- fetch(ADMIN_API+'/admin/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:code})})
+ fetch(ADMIN_API+'/admin/verify',{method:'POST',headers:{'Content-Type':'application/json','apikey':ANALYTICS_KEY},body:JSON.stringify({password:code})})
   .then(function(r){if(!r.ok)throw new Error(r.status===503?'Admin password is not configured on the proxy.':'Incorrect admin password.');adminPassword=code;window.JG_ADMIN_PASSWORD=code;adminMode=true;adminBtn.textContent='Admin: ON';poll();alert('Admin mode enabled for this page.')})
   .catch(function(e){alert(e.message||'Admin login could not be verified.')});
 };
@@ -814,7 +814,8 @@ $('cform').addEventListener('submit',function(e){
 <script>
 (function(){
 'use strict';
-var ANALYTICS_API='https://johnny-games-proxy.onrender.com/api/analytics';
+var ANALYTICS_API='https://wnxauvllhjklhpjksvuz.supabase.co/functions/v1/site-analytics';
+var ANALYTICS_KEY='sb_publishable_kTrhj6QAHhLLrdva03Neuw_21MKNymV';
 function sendAnalytics(event){fetch(ANALYTICS_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(event),keepalive:true,mode:'cors'}).catch(function(){});}
 var analyticsVisitor='';
 try{analyticsVisitor=localStorage.getItem('jg_analytics_visitor')||''}catch(e){}
