@@ -77,7 +77,7 @@ var store={
  get:function(k,d){try{var v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},
  set:function(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 };
-var ANALYTICS_API='https://wnxauvllhjklhpjksvuz.supabase.co/functions/v1/site-analytics';
+var ANALYTICS_API='https://johnny-games-proxy.onrender.com/api/analytics';
 var visitor='';
 try{visitor=localStorage.getItem('jg_analytics_visitor')||''}catch(e){}
 if(!visitor){visitor=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'v'+Date.now().toString(36)+Math.random().toString(36).slice(2);try{localStorage.setItem('jg_analytics_visitor',visitor)}catch(e){}}
@@ -101,9 +101,9 @@ function load(){
  f.setAttribute('allow','fullscreen; autoplay; gamepad; accelerometer; gyroscope');
  f.setAttribute('allowfullscreen','');
  w.appendChild(f);
- sendAnalytics({type:'play',game:name});
 }
 load();
+sendAnalytics({type:'play',game:name,visitor:visitor});
 
 // Recently played
 var rec=store.get('jg_recent',[]).filter(function(n){return n!==name});
