@@ -631,6 +631,13 @@ body.jg-light #cbtn{background:rgba(255,255,255,.92);color:#302849;border-color:
 #jg-ad-admin .jg-ad-row{border-top:1px solid #ffffff20;margin-top:16px;padding-top:12px}
 @media(max-width:600px){#jg-banner-ad img{max-height:84px}#jg-ad-admin .jg-ad-admin-card{padding:15px}}
 
+
+/* Temporary browser availability notice */
+#jg-browser-warning{display:flex;align-items:center;gap:12px;width:min(980px,100%);margin:0 auto;padding:14px 18px;border:1px solid rgba(255,190,92,.48);border-radius:14px;background:linear-gradient(110deg,rgba(80,48,17,.86),rgba(40,30,24,.88));box-shadow:0 12px 32px rgba(0,0,0,.22);color:#fff4df}
+#jg-browser-warning .warning-icon{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:10px;background:rgba(255,188,77,.17);color:#ffd184;font-size:19px;font-weight:900}
+#jg-browser-warning strong{display:block;color:#ffe0a8;font-size:13px;letter-spacing:.02em}
+#jg-browser-warning span{display:block;margin-top:2px;color:#e7d9c2;font-size:12px}
+@media(max-width:760px){#jg-browser-warning{gap:10px;padding:12px 13px}#jg-browser-warning strong{font-size:12px}#jg-browser-warning span{font-size:11px}}
 </style>
 <link rel="manifest" href="manifest.webmanifest"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head>
 <body>
@@ -658,6 +665,7 @@ body.jg-light #cbtn{background:rgba(255,255,255,.92);color:#302849;border-color:
    <div class="hero-actions"><button class="hero-action secondary console-random" id="rnd" type="button">🎲 &nbsp; SURPRISE ME</button></div>
   </div>
  </div>
+ <div id="jg-browser-warning" role="status" aria-live="polite"><span class="warning-icon" aria-hidden="true">!</span><div><strong>Browser temporarily unavailable</strong><span>The browser is currently down. I will try to get it back up shortly.</span></div></div>
  <div id="jg-banner-ad" aria-label="Sponsored advertisement"></div>
  <div class="bar">
   <label class="search-shell"><span>⌕</span><input id="q" type="search" placeholder="Search the library..." aria-label="Search games" autocomplete="off"></label>
