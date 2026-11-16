@@ -3519,7 +3519,7 @@ function updateAI(dt, time) {
       u.hitCooldown = Math.max(0, (u.hitCooldown || 0) - dt);
       const impactDistance = distance2D(e.position, player.position);
       if (impactDistance < u.size + state.scale && u.hitCooldown <= 0) {
-        hurt(70, "The macro-predator struck!");
+        hurt(WORLD_TUNING.epicDamage, "The macro-predator struck!");
         spawnBurst(player.position.x, player.position.y, 0xff6f86, 18);
         const shove = new THREE.Vector2(player.position.x - e.position.x, player.position.y - e.position.y);
         if (shove.length() < 0.01) shove.set(1, 0);
@@ -3961,6 +3961,202 @@ function createVent() {
   g.userData = { timer: 4, active: false };
   hazardGroup.add(g);
   vents.push({ mesh: g, timer: 4, active: false });
+  while (vents.length > WORLD_TUNING.maxVents(state.tier)) {
+    const oldest = vents.shift();
+    disposeTree(oldest.mesh);
+  }
+}
+
+/* ---- World population -------------------------------------------------
+   Every count lives in WORLD_TUNING so the balance can be tuned in one place.
+   Index 0 is tier 1. Culling by sight radius (updateVisibility) keeps the
+   number of drawn objects low even when the larger tiers hold more entities. */
+const WORLD_TUNING = {
+  foodParticles: [38, 54, 74, 96],
+  meatChunks: [3, 5, 7, 9],
+  npcs: [9, 12, 15, 17],
+  clouds: [0, 2, 3, 4],
+  currents: [2, 3, 4, 5],
+  meteors: [2, 2, 3, 3],
+  maxLiveMeteors: [3, 4, 5, 5],
+  maxVents: (tier) => 3 + tier,
+  plantShare: { plant: 0.7, meat: 0.38, omni: 0.55 },
+  epicLifetime: 48,
+  epicDamage: 50,
+};
+const tierIndex = () => Math.min(3, Math.max(0, state.tier - 1));
+const randomInWorld = (margin = 1.2) => ({
+  x: (Math.random() - 0.5) * 2 * (23 * worldSize - margin),
+  y: (Math.random() - 0.5) * 2 * (14 * worldSize - margin),
+});
+
+function clearWorldEntities() {
+  state.worldGeneration++;
+  for (const list of [food, enemies, meteors, hazards, currents, floatingMeat]) {
+    list.forEach((o) => disposeTree(o));
+    list.length = 0;
+  }
+  vents.forEach((v) => disposeTree(v.mesh));
+  vents.length = 0;
+  particles.forEach((o) => disposeTree(o));
+  particles.length = 0;
+  epics.length = 0;
+  worldSprites.forEach((sprite) => sprite.img.remove());
+  worldSprites = [];
+  state.mate = null;
+  state.mateSignal = false;
+  $("#mateCue").classList.remove("show");
+}
+
+function createCurrent() {
+  const g = new THREE.Group();
+  const heading = Math.random() * Math.PI * 2;
+  for (let i = 0; i < 5; i++) {
+    const points = [];
+    for (let j = 0; j < 10; j++) {
+      const t = j / 9;
+      points.push(new THREE.Vector3((t - 0.5) * 6, (i - 2) * 0.55 + Math.sin(t * 5 + i) * 0.18, -0.35));
+    }
+    g.add(tube(points, 0.022, 0x9fe4ff, { transparent: true, opacity: 0.13, depthWrite: false }));
+  }
+  const pos = randomInWorld(3);
+  g.position.set(pos.x, pos.y, 0);
+  g.rotation.z = heading;
+  const strength = 0.9 + Math.random() * 0.7;
+  g.userData = { phase: Math.random() * 6, force: new THREE.Vector2(Math.cos(heading), Math.sin(heading)).multiplyScalar(strength), baseHeading: heading };
+  currentGroup.add(g);
+  currents.push(g);
+  return g;
+}
+
+function createToxicCloud() {
+  const g = new THREE.Group();
+  const puffs = 7;
+  for (let i = 0; i < puffs; i++) {
+    const puff = new THREE.Mesh(
+      new THREE.SphereGeometry(0.35 + Math.random() * 0.35, 14, 10),
+      new THREE.MeshBasicMaterial({ color: i % 2 ? 0x8cf67a : 0xb4e85a, transparent: true, opacity: 0.1 + Math.random() * 0.08, depthWrite: false }),
+    );
+    const a = (i / puffs) * Math.PI * 2;
+    puff.position.set(Math.cos(a) * 0.55, Math.sin(a) * 0.4, 0);
+    g.add(puff);
+  }
+  const pos = randomInWorld(3);
+  if (Math.hypot(pos.x, pos.y) < 6) pos.x += pos.x < 0 ? -6 : 6;
+  g.position.set(pos.x, pos.y, -0.05);
+  g.userData = { phase: Math.random() * 6, radius: 1.5 + Math.random() * 0.5 };
+  hazardGroup.add(g);
+  hazards.push(g);
+  return g;
+}
+
+function spawnWorld() {
+  clearWorldEntities();
+  const i = tierIndex(),
+    diet = stats().diet,
+    plantShare = WORLD_TUNING.plantShare[diet] ?? 0.55;
+  for (let n = 0; n < WORLD_TUNING.foodParticles[i]; n++) {
+    const p = randomInWorld();
+    addFood(Math.random() < plantShare ? "plant" : "meat", p.x, p.y, "particle");
+  }
+  for (let n = 0; n < WORLD_TUNING.meatChunks[i]; n++) {
+    const p = randomInWorld();
+    addFood("meat", p.x, p.y, "chunk");
+  }
+  for (let n = 0; n < WORLD_TUNING.npcs[i]; n++) {
+    const p = randomInWorld(2);
+    // Keep the arrival area calm: no NPC may spawn right on top of the player.
+    if (Math.hypot(p.x - player.position.x, p.y - player.position.y) < 6) p.x += p.x < player.position.x ? -7 : 7;
+    makeNPC({ x: THREE.MathUtils.clamp(p.x, -22 * worldSize, 22 * worldSize), y: p.y });
+  }
+  for (let n = 0; n < WORLD_TUNING.currents[i]; n++) createCurrent();
+  for (let n = 0; n < WORLD_TUNING.clouds[i]; n++) createToxicCloud();
+  for (let n = 0; n < WORLD_TUNING.meteors[i]; n++) spawnMeteor();
+  state.eliteTimer = Math.min(state.eliteTimer, 28 + Math.random() * 14);
+  updateVisibility();
+}
+
+function createMeteorMesh() {
+  const g = new THREE.Group();
+  const core = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(0.3, 0),
+    material(0xffd56d, 0.12, { emissive: 0xffb43c, emissiveIntensity: 0.9, metalness: 0.2 }),
+  );
+  core.scale.set(1, 0.85, 0.8);
+  g.add(core);
+  const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.2, 0), material(0xfff3c4, 0.1, { emissive: 0xffe08a, emissiveIntensity: 0.7 }));
+  shard.position.set(0.22, 0.2, 0.1);
+  g.add(shard);
+  const glow = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: softGlowTexture, color: 0xffd36a, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending }),
+  );
+  glow.scale.set(1.9, 1.9, 1);
+  g.add(glow);
+  return g;
+}
+
+function spawnMeteor() {
+  const live = meteors.filter((m) => m.userData.alive);
+  if (live.length >= WORLD_TUNING.maxLiveMeteors[tierIndex()]) return null;
+  const m = createMeteorMesh();
+  // Prefer a spot the player can reach in a few seconds but not on top of them.
+  let spot = randomInWorld(1.5);
+  for (let tries = 0; tries < 6; tries++) {
+    const d = Math.hypot(spot.x - player.position.x, spot.y - player.position.y);
+    if (d > 5 && d < 15 * Math.max(1, worldSize * 0.7)) break;
+    spot = randomInWorld(1.5);
+  }
+  m.position.set(spot.x, spot.y, 0.25);
+  m.userData = { alive: true, life: 70, phase: Math.random() * 6 };
+  meteorGroup.add(m);
+  meteors.push(m);
+  return m;
+}
+
+function spawnEpic() {
+  if (enemies.some((e) => e.userData.alive && e.userData.epic)) return null;
+  const size = 2.5 + state.tier * 0.35;
+  const e = makeNPC({ size, alpha: true, diet: "meat", color: 0x9a3b73, nucleusColor: 0x40163a, x: 0, y: 0 });
+  const u = e.userData;
+  u.epic = true;
+  u.alpha = false;
+  u.elite = true;
+  u.health = u.maxHealth = 60;
+  u.hitCooldown = 0;
+  const heading = Math.random() < 0.5 ? 0 : Math.PI;
+  const speed = 1.1 + Math.random() * 0.5;
+  u.velocity.set(Math.cos(heading) * speed, Math.sin(heading) * speed * 0.15);
+  e.rotation.z = Math.atan2(u.velocity.y, u.velocity.x);
+  e.position.set(player.position.x - Math.cos(heading) * cameraZoom * 1.1, player.position.y + (Math.random() - 0.5) * cameraZoom * 0.6, 0.2);
+  epics.push(e);
+  spawnFloatLabel(player.position.x, player.position.y + 1.4, "SOMETHING HUGE IS COMING", 0xff9aa9);
+  const generation = state.worldGeneration;
+  setTimeout(() => {
+    if (generation !== state.worldGeneration || !u.alive) return;
+    u.alive = false;
+    disposeTree(e);
+    enemies = enemies.filter((o) => o !== e);
+    epics.splice(epics.indexOf(e), 1);
+  }, WORLD_TUNING.epicLifetime * 1000);
+  return e;
+}
+
+/** Reward for a meteor fragment or an elite kill: unlock one new part. Returns its definition or null. */
+function meteorUnlock() {
+  const locked = defs.filter((d) => !unlocked.has(d.id));
+  if (!locked.length) {
+    state.dna += 3;
+    spawnFloatLabel(player.position.x, player.position.y + 0.8, "+3 DNA", 0xffe7a2);
+    return null;
+  }
+  const affordable = locked.filter((d) => d.unlock <= 5 + (state.tier - 1) * 4);
+  const pool = affordable.length ? affordable : locked;
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  unlocked.add(pick.id);
+  playSfx("unlock");
+  toast("New part discovered: " + pick.name);
+  renderCatalog();
+  return pick;
 }
 function animateCell(time) {
   const speed = velocity.length(),
