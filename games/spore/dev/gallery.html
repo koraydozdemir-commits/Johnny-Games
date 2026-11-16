@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Spore gfx gallery (dev)</title>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<style>html,body{margin:0;background:#12396a;overflow:hidden}canvas{display:block}</style></head>
+<body><canvas id="c"></canvas>
+<script type="module">
+import * as THREE from "three";
+import { buildCellBody, setQuality, snapPartsToSurface } from "../gfx/body.js";
+import { timeUniform } from "../gfx/materials.js";
+import { starterCellRecord } from "../cell-format.js";
+import { PART_DEFS } from "../part-defs.js";
+import { createPartModel } from "../gfx/part-models.js";
+
+const q = new URLSearchParams(location.search);
+setQuality(q.get("quality") || "high");
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color("#12396a");
+const aspect = innerWidth / innerHeight, H = 9;
+const camera = new THREE.OrthographicCamera(-H * aspect / 2, H * aspect / 2, H / 2, -H / 2, 0.1, 100);
+camera.position.set(0, 0, 30);
+scene.add(new THREE.HemisphereLight(0xc8f2ff, 0x14234d, 1.8));
+const key = new THREE.DirectionalLight(0xffefcf, 2.2); key.position.set(-5, 7, 12); scene.add(key);
+const rim = new THREE.PointLight(0x51cfff, 40, 35); rim.position.set(4, 2, 10); scene.add(rim);
+
+const rigs = [];
+const rec = snapPartsToSurface(starterCellRecord(), { faceOutward: true });
+const player = buildCellBody(rec, { role: "player" });
+player.root.position.set(-4, 1.6, 0); player.root.scale.setScalar(1.6); scene.add(player.root); rigs.push(player.rig);
+window.__gallery = { THREE, scene, renderer, rigs, player };
+
+const row = new THREE.Group(); scene.add(row);
+PART_DEFS.forEach((d, i) => {
+  const m = createPartModel(d.id, { bodyColor: 0x3be0d8, quality: q.get("quality") || "high" });
+  m.group.scale.setScalar(2.2);
+  m.group.position.set(-5.6 + (i % 6) * 2.1, i < 6 ? -2.2 : -3.9, 0);
+  row.add(m.group);
+});
+function frame(t) {
+  timeUniform.value = t / 1000;
+  rigs.forEach((r) => r.update(0.016, t / 1000, { speed: 1.2 }));
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script></body></html>
