@@ -1,11 +1,12 @@
 /**
  * Land species. Each nest belongs to one species generated from a seed, so the island's cast is the
- * same every time for a given save. Deeper rings grow bigger, tougher creatures with better parts.
+ * same every time for a given save. A species' look comes from its seed and evolution; its level
+ * (1..5) sets its size, health and how good it is at what it does, and follows the player's brain.
  * Herbivores are cool greens and blues, carnivores warm reds and oranges, omnivores golds and teals,
  * so diet reads at a glance just as in the cell stage.
  */
 import { makeRng } from "../cell-format.js";
-import { validateCreature } from "./format.js";
+import { armPairsOf, creaturePartIds, validateCreature } from "./format.js";
 import { abilitiesOf, creaturePart } from "./parts.js";
 
 const PALETTES = {
@@ -27,18 +28,41 @@ const PALETTES = {
 const PATTERNS = ["speckle", "stripes", "spots", "gradient"];
 const MOUTHS = { plant: ["beak", "fluteBeak", "trunk"], meat: ["jaws", "tuskMaw", "mandibles"], omni: ["snout", "crusher", "sawBeak"] };
 const EXTRAS = {
-  plant: ["graspers", "frill", "plumeTail", "shell", "wings", "horns", "sail", "crest", "fanFins", "fanTail", "antlers", "glowOrbs", "rattleTail", "doeEyes", "ears", "plates", "knobs", "arm"],
+  plant: ["graspers", "frill", "plumeTail", "shell", "wings", "horns", "sail", "crest", "fanFins", "fanTail", "antlers", "glowOrbs", "rattleTail", "doeEyes", "ears", "plates", "knobs", "paw"],
   meat: ["claws", "pincers", "spines", "horns", "tailClub", "venomSac", "quills", "bladeArms", "stinger", "acidGland", "bugEyes", "plates", "antennae"],
-  omni: ["claws", "graspers", "frill", "spines", "plumeTail", "tailClub", "tentacles", "quills", "crest", "stinger", "glowOrbs", "stalkEyes", "antennae", "knobs", "arm"],
+  omni: ["claws", "graspers", "frill", "spines", "plumeTail", "tailClub", "tentacles", "quills", "crest", "stinger", "glowOrbs", "stalkEyes", "antennae", "knobs", "paw"],
 };
 const FEET = { plant: ["pads", "hooves", "webbed", "stompers"], meat: ["talons", "pads", "stompers"], omni: ["pads", "hooves", "talons", "webbed"] };
 const SYLLABLES = ["ka", "ro", "mi", "zu", "tel", "vor", "nax", "pli", "dun", "sha", "gre", "bo", "lun", "tik", "ar", "quo", "fen", "dra"];
 
-/** Body scale by ring: beach creatures are about your size, the volcano's are giants. */
-export const RING_SCALE = [0, 0.9, 1.15, 1.45, 1.85, 2.4];
+/** Body scale by level: a level-1 creature is about your hatchling's size. */
+export const LEVEL_SCALE = [0, 0.95, 1.08, 1.22, 1.36, 1.5];
 
-/** A species for a nest. diet: plant | meat | omni. ring: 1..5. */
-export function generateSpecies(seed, diet, ring) {
+/**
+ * A species' strengths at a level, keeping its look. Social moves it is best at are trained up to its
+ * level, meat eaters bite harder, and it grows. Rogues are a third bigger and much tougher.
+ * @param {object} sp a species from generateSpecies, evolveSpecies or generateRogue
+ * @param {number} level 1..5
+ */
+export function atLevel(sp, level) {
+  level = Math.max(1, Math.min(5, Math.round(level)));
+  const abilities = abilitiesOf(creaturePartIds(sp.record), sp.record.legs.length, armPairsOf(sp.record));
+  const social = ["sing", "dance", "charm", "pose"].map((k) => ({ k, v: abilities[k] })).sort((a, b) => b.v - a.v);
+  social.slice(0, 2).forEach(({ k }) => (abilities[k] = Math.min(5, Math.max(abilities[k], level))));
+  if (sp.diet !== "plant") abilities.bite = Math.min(5, Math.max(abilities.bite, Math.ceil(level * 0.8)));
+  if (sp.rogue) abilities.bite = Math.min(5, Math.max(abilities.bite, level + 1));
+  let scale = LEVEL_SCALE[level] * (sp.sizeJitter || 1);
+  let maxHealth = Math.round((40 + level * 22 + abilities.health * 12) * scale);
+  if (sp.rogue) {
+    scale *= 1.3;
+    maxHealth = Math.round(maxHealth * 2.4);
+  }
+  return { ...sp, level, abilities, favourite: social.slice(0, 3).map((s) => s.k), scale, maxHealth };
+}
+
+/** A species for a nest. diet: plant | meat | omni. level: 1..5 (higher grows more parts). */
+export function generateSpecies(seed, diet, level) {
+  const ring = Math.max(1, Math.min(5, level)); // how many parts it starts with
   const rng = makeRng(seed >>> 0);
   const pick = (list) => list[Math.floor(rng() * list.length)];
   const name = (() => {
@@ -61,13 +85,19 @@ export function generateSpecies(seed, diet, ring) {
   const mouth = MOUTHS[diet][ring >= 5 && rng() < 0.6 ? 2 : better && rng() < 0.6 ? 1 : 0];
   const parts = [
     { id: mouth, t: 1, angle: 0 },
-    { id: rng() < 0.25 + ring * 0.08 ? "stalkEyes" : "eyes", t: 0.86, angle: 0.6 + rng() * 0.4 },
+    { id: rng() < 0.25 + ring * 0.08 ? "stalkEyes" : "eyes", t: 0.91, angle: 0.5 + rng() * 0.3 },
   ];
   const extras = [...EXTRAS[diet]].sort(() => rng() - 0.5).slice(0, 1 + Math.floor(ring / 2) + (rng() < 0.4 ? 1 : 0));
+  const arms = [];
   for (const id of extras) {
     const slot = creaturePart(id).slot;
     if (slot === "eye") {
       parts[1].id = id;
+      continue;
+    }
+    if (slot === "hand") {
+      // Hands come with a pair of arms to carry them, up on the chest.
+      if (!arms.length) arms.push(newArm(rng, id));
       continue;
     }
     parts.push({ id, t: slot === "back" ? 0.35 + rng() * 0.3 : 0.45 + rng() * 0.3, angle: slot === "back" ? 0 : Math.PI / 2 - 0.2 });
@@ -80,36 +110,30 @@ export function generateSpecies(seed, diet, ring) {
     legs,
     foot: pick(FEET[diet]),
     parts,
+    arms,
   });
-  const abilities = abilitiesOf([...record.parts.map((p) => p.id), record.foot], pairs);
-  // Deeper species have trained abilities: at least their ring's level in what they do best.
-  const social = ["sing", "dance", "charm", "pose"].map((k) => ({ k, v: abilities[k] })).sort((a, b) => b.v - a.v);
-  social.slice(0, 2).forEach(({ k }) => (abilities[k] = Math.min(5, Math.max(abilities[k], ring))));
-  if (diet !== "plant") abilities.bite = Math.min(5, Math.max(abilities.bite, ring));
-  const scale = RING_SCALE[ring] * (0.9 + rng() * 0.2);
-  return {
-    id: "sp" + seed,
-    name,
-    diet,
+  const sizeJitter = 0.9 + rng() * 0.2;
+  return atLevel(
+    {
+      id: "sp" + seed,
+      name,
+      diet,
+      record,
+      sizeJitter,
+      members: 3 + Math.min(3, Math.floor(rng() * 2) + Math.floor(ring / 2)),
+      // Carnivores attack on sight; omnivores turn hostile if you linger; herbivores flee or fight back.
+      temper: diet === "meat" ? "hostile" : diet === "omni" ? "wary" : "skittish",
+    },
     ring,
-    record,
-    scale,
-    abilities,
-    /** The social moves this species asks for in a social round, best first. */
-    favourite: social.slice(0, 3).map((s) => s.k),
-    maxHealth: Math.round((50 + ring * 30 + abilities.health * 15) * scale),
-    members: 3 + Math.min(3, Math.floor(rng() * 2) + Math.floor(ring / 2)),
-    // Carnivores attack on sight; omnivores turn hostile if you linger; herbivores flee or fight back.
-    temper: diet === "meat" ? "hostile" : diet === "omni" ? "wary" : "skittish",
-  };
+  );
 }
 
-/** An epic creature: one huge, very strong individual with no nest. */
-export function generateEpic(seed, ring) {
-  const sp = generateSpecies(seed, "meat", Math.min(5, ring));
+/** An epic creature: one huge, very strong individual with no nest. level 4 or 5. */
+export function generateEpic(seed, level) {
+  const sp = generateSpecies(seed, "meat", Math.min(5, level));
   sp.name = "Great " + sp.name;
-  sp.scale = 4 + (ring - 4) * 0.6;
-  sp.maxHealth = 1600;
+  sp.scale = 4 + (level - 4) * 0.6;
+  sp.maxHealth = 1200;
   sp.abilities.bite = 5;
   sp.members = 1;
   sp.epic = true;
@@ -117,42 +141,40 @@ export function generateEpic(seed, ring) {
 }
 
 /** Rare parts only rogues carry: beating one is the surest way to get them. */
+/** A pair of arms on the front of the chest, with a little variety in reach and pose. */
+function newArm(rng, hand) {
+  return { t: 0.74 + rng() * 0.08, angle: 1.55 + rng() * 0.35, length: 0.8 + rng() * 0.5, bend: (rng() - 0.5) * 0.8, hand };
+}
+/** Put a hand on a record: on its arms if it has some, else on a new pair. */
+function giveHand(record, rng, hand) {
+  record.arms ||= [];
+  if (record.arms.length) record.arms[0].hand = hand;
+  else record.arms.push(newArm(rng, hand));
+}
 export const ROGUE_PARTS = ["bladeArms", "acidGland", "wings", "antlers", "sail", "glowOrbs", "stinger", "fanTail"];
 /**
  * A rogue: a lone, extra-tough wanderer with no nest that carries one rare part. Always hostile.
  * @param {number} seed
- * @param {number} ring 1..5, where it roams
+ * @param {number} level 1..5 (use atLevel to move it to another level later)
  */
-export function generateRogue(seed, ring) {
+export function generateRogue(seed, level) {
   const diet = seed % 3 === 0 ? "omni" : "meat";
-  const sp = generateSpecies(seed, diet, ring);
+  const sp = generateSpecies(seed, diet, level);
   const rng = makeRng((seed ^ 0x5f3759df) >>> 0);
   const rare = ROGUE_PARTS[Math.floor(rng() * ROGUE_PARTS.length)];
   const record = JSON.parse(JSON.stringify(sp.record));
   const slot = creaturePart(rare).slot;
-  if (slot === "tail") record.parts = record.parts.filter((p) => creaturePart(p.id)?.slot !== "tail");
-  const [t, angle] = SLOT_SPOT[slot] || [0.5, 0];
-  record.parts.push({ id: rare, t, angle });
+  if (slot === "hand") giveHand(record, rng, rare);
+  else {
+    if (slot === "tail") record.parts = record.parts.filter((p) => creaturePart(p.id)?.slot !== "tail");
+    const [t, angle] = SLOT_SPOT[slot] || [0.5, 0];
+    record.parts.push({ id: rare, t, angle });
+  }
   record.colors = { base: 0x5b4f66, belly: 0xa89aa8, pattern: 0x1d1622, accent: 0xff5a3c };
-  const valid = validateCreature(record);
-  const abilities = abilitiesOf([...valid.parts.map((p) => p.id), valid.foot], valid.legs.length);
-  abilities.bite = Math.min(5, Math.max(abilities.bite, ring + 1));
-  return {
-    ...sp,
-    id: "rogue" + seed,
-    name: "Rogue " + sp.name,
-    record: valid,
-    abilities,
-    scale: sp.scale * 1.3,
-    maxHealth: Math.round(sp.maxHealth * 2.4),
-    members: 1,
-    temper: "hostile",
-    rogue: true,
-    rare,
-  };
+  return atLevel({ ...sp, id: "rogue" + seed, name: "Rogue " + sp.name, record: validateCreature(record), members: 1, temper: "hostile", rogue: true, rare }, sp.level);
 }
 
-const SLOT_SPOT = { side: [0.55, Math.PI / 2 - 0.2], back: [0.45, 0], tail: [0, 0], eye: [0.86, 0.8], mouth: [1, 0] };
+const SLOT_SPOT = { side: [0.55, Math.PI / 2 - 0.2], back: [0.45, 0], tail: [0, 0], eye: [0.91, 0.62], mouth: [1, 0] };
 const hashId = (id) => [...String(id)].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, 7);
 
 /**
@@ -166,40 +188,34 @@ export function evolveSpecies(sp) {
   const generation = (sp.generation || 1) + 1;
   const rng = makeRng((hashId(sp.id) + generation * 7919) >>> 0);
   const record = JSON.parse(JSON.stringify(sp.record));
-  const owned = new Set(record.parts.map((p) => p.id));
+  const owned = new Set(creaturePartIds(validateCreature(record)));
   // Every second generation the mouth improves, if there is a better one for this diet.
   const better = MOUTHS[sp.diet][1];
   if (generation % 2 === 0 && better && !owned.has(better)) {
     record.parts = record.parts.map((p) => (creaturePart(p.id)?.slot === "mouth" ? { ...p, id: better } : p));
   } else {
-    const pool = [...EXTRAS[sp.diet], "stalkEyes"].filter((id) => !owned.has(id));
+    // A species with arms already has hands; it won't trade them for different ones.
+    const pool = [...EXTRAS[sp.diet], "stalkEyes"].filter((id) => !owned.has(id) && !(creaturePart(id).slot === "hand" && record.arms?.length));
     if (pool.length) {
       const id = pool[Math.floor(rng() * pool.length)];
       const slot = creaturePart(id).slot;
-      if (slot === "eye") record.parts = record.parts.filter((p) => creaturePart(p.id)?.slot !== "eye");
-      if (slot === "tail") record.parts = record.parts.filter((p) => creaturePart(p.id)?.slot !== "tail");
-      const [t, angle] = SLOT_SPOT[slot] || [0.5, 0];
-      record.parts.push({ id, t: t + (rng() - 0.5) * 0.12, angle });
+      if (slot === "hand") giveHand(record, rng, id);
+      else {
+        if (slot === "eye") record.parts = record.parts.filter((p) => creaturePart(p.id)?.slot !== "eye");
+        if (slot === "tail") record.parts = record.parts.filter((p) => creaturePart(p.id)?.slot !== "tail");
+        const [t, angle] = SLOT_SPOT[slot] || [0.5, 0];
+        record.parts.push({ id, t: t + (rng() - 0.5) * 0.12, angle });
+      }
     }
   }
   if (generation === 3 && record.legs.length < 3 && rng() < 0.5) record.legs.push({ t: 0.5, length: record.legs[0]?.length || 1 });
   record.spine = record.spine.map((n) => ({ ...n, r: n.r * 1.04 }));
-  const valid = validateCreature(record);
-  const abilities = abilitiesOf([...valid.parts.map((p) => p.id), valid.foot], valid.legs.length);
-  const trained = Math.min(5, sp.ring + Math.floor((generation - 1) / 2));
-  const social = ["sing", "dance", "charm", "pose"].map((k) => ({ k, v: abilities[k] })).sort((a, b) => b.v - a.v);
-  social.slice(0, 2).forEach(({ k }) => (abilities[k] = Math.min(5, Math.max(abilities[k], trained))));
-  if (sp.diet !== "plant") abilities.bite = Math.min(5, Math.max(abilities.bite, trained));
-  return {
-    ...sp,
-    record: valid,
-    abilities,
-    favourite: social.slice(0, 3).map((s) => s.k),
-    scale: sp.scale * 1.06,
-    maxHealth: Math.round(sp.maxHealth * 1.15),
-    generation,
-  };
+  // Each generation looks a little bigger; its strengths come from its level.
+  return atLevel({ ...sp, record: validateCreature(record), sizeJitter: (sp.sizeJitter || 1) * 1.03, generation }, sp.level || 1);
 }
 
-/** The level a species asks for in a social move: its own level, capped by ring and generation. */
-export const socialNeed = (sp, move) => Math.min(5, sp.ring + Math.floor(((sp.generation || 1) - 1) / 2), Math.max(1, sp.abilities[move] || 1));
+/**
+ * The level a species asks for in a social move: one below its own level (so a creature of your
+ * level is a fair match), never more than it can do itself, and at least 1.
+ */
+export const socialNeed = (sp, move) => Math.max(1, Math.min(5, (sp.level || 1) - 1, sp.abilities[move] || 1));

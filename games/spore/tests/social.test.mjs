@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RELATIONS, RELATION_INFO, relationDelta, relationOf } from "../creature/relations.js";
 import { ROGUE_PARTS, generateRogue, generateSpecies } from "../creature/species.js";
-import { ARM_PARTS, abilitiesOf, creaturePart, elbowOf } from "../creature/parts.js";
+import { abilitiesOf, creaturePart } from "../creature/parts.js";
 import { validateCreature } from "../creature/format.js";
 import { SLOT_COUNT, activeSlot, clearSlot, gameKeys, markSaved, slotSummary, switchSlot } from "../slots.js";
 import { loadSettings, saveSettings, timeAgo } from "../settings.js";
@@ -87,15 +87,6 @@ test("sneak, jump and glide come from parts", () => {
   assert.ok(sneaky.sneak >= 2);
   assert.ok(sneaky.glide >= 1);
   assert.equal(abilitiesOf(["jaws"], 0).jump, 0, "no legs, no jump");
-});
-
-test("bending an arm moves its elbow", () => {
-  assert.deepEqual(ARM_PARTS, ["arm", "claws", "graspers"]);
-  const [x0, y0] = elbowOf(0),
-    [, yUp] = elbowOf(1),
-    [, yDown] = elbowOf(-1);
-  assert.ok(Math.abs(Math.hypot(x0, y0) - 0.22) < 1e-9, "the upper arm keeps its length");
-  assert.ok(yUp > y0 && y0 > yDown);
 });
 
 /** A minimal Storage. */

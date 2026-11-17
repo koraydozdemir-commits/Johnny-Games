@@ -8,17 +8,21 @@
  *   legs:  [{ t, length, bend }] one mirrored pair per entry, t = 0 tail .. 1 head,
  *          bend -1..1 pushes the knee forward or back
  *   foot:  part id used on every leg
- *   parts: [{ id, t, angle, scale, roll, bend }] angle around the body: 0 top, +-PI/2 flanks, PI belly;
- *          off-midline parts mirror. roll turns a part about its own axis; bend flexes jointed arms.
+ *   arms:  [{ t, angle, length, bend, hand }] one mirrored pair per entry, jointed like legs (shoulder,
+ *          elbow, wrist); angle around the body as for parts; hand = a grasper or foot part id, or null
+ *   parts: [{ id, t, angle, scale, roll }] angle around the body: 0 top, +-PI/2 flanks, PI belly;
+ *          off-midline parts mirror. roll turns a part about its own axis.
  * }
  * Pure data: no THREE, no DOM.
  */
-import { STARTER_CREATURE_PARTS, creaturePart } from "./parts.js";
+import { LEGACY_ARM_HANDS, STARTER_CREATURE_PARTS, creaturePart, fitsArm } from "./parts.js";
 
 export const CREATURE_FORMAT = "johnny-spore-creature";
 export const CREATURE_VERSION = 1;
 export const CREATURE_SAVE_KEY = "johnny-spore-creature-stage";
-export const LIMITS = { minNodes: 3, maxNodes: 8, minR: 0.18, maxR: 0.95, maxLegPairs: 3, maxParts: 14, minLeg: 0.5, maxLeg: 2.2 };
+export const LIMITS = { minNodes: 3, maxNodes: 8, minR: 0.18, maxR: 0.95, maxLegPairs: 3, maxArmPairs: 2, maxParts: 14, minLeg: 0.5, maxLeg: 2.2, minArm: 0.5, maxArm: 1.8 };
+/** Arms sit on the flanks, never on the spine itself (they come in mirrored pairs). */
+export const ARM_ANGLE = { min: 0.55, max: 2.5 };
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const num = (v, fallback) => (Number.isFinite(v) ? v : fallback);
@@ -53,7 +57,7 @@ export function creatureFromCell(cell, name) {
   const hadSpikes = (cell?.parts || []).some((p) => p.id === "spike");
   const parts = [
     { id: mouth, t: 1, angle: 0 },
-    { id: eyes, t: 0.86, angle: 0.75 },
+    { id: eyes, t: 0.92, angle: 0.62 },
   ];
   if (hadSpikes && creaturePart("spines")) parts.push({ id: "spines", t: 0.5, angle: 0 });
   return validateCreature({
@@ -87,28 +91,43 @@ export function validateCreature(raw) {
   r.spine = r.spine.slice(0, LIMITS.maxNodes).map((n) => ({ x: clamp(n.x, -3, 3), y: clamp(n.y || 0, -1, 1.5), r: clamp(n.r || 0.4, LIMITS.minR, LIMITS.maxR) }));
   r.legs = (Array.isArray(r.legs) ? r.legs : []).slice(0, LIMITS.maxLegPairs).map((l) => ({ t: clamp(num(l.t, 0.5), 0.05, 0.95), length: clamp(num(l.length, 1), LIMITS.minLeg, LIMITS.maxLeg), bend: clamp(num(l.bend, 0), -1, 1) }));
   r.foot = creaturePart(r.foot)?.slot === "foot" ? r.foot : "pads";
+  // Older saves kept arms as single flank parts: each becomes an arm pair holding the same hand.
+  const oldParts = Array.isArray(r.parts) ? r.parts : [];
+  const legacyArms = oldParts
+    .filter((p) => p && LEGACY_ARM_HANDS[p.id])
+    .map((p) => ({ t: p.t, angle: p.angle, length: 0.9 * clamp(num(p.scale, 1), 0.6, 1.6), bend: p.bend, hand: LEGACY_ARM_HANDS[p.id] }));
+  r.arms = [...(Array.isArray(r.arms) ? r.arms : []), ...legacyArms].slice(0, LIMITS.maxArmPairs).map((a) => ({
+    t: clamp(num(a?.t, 0.7), 0.05, 0.95),
+    angle: clamp(Math.abs(num(a?.angle, 1.4)), ARM_ANGLE.min, ARM_ANGLE.max),
+    length: clamp(num(a?.length, 1), LIMITS.minArm, LIMITS.maxArm),
+    bend: clamp(num(a?.bend, 0), -1, 1),
+    hand: a?.hand === null ? null : fitsArm(a?.hand) ? a.hand : "paw",
+  }));
   const seenMouth = { v: false };
-  r.parts = (Array.isArray(r.parts) ? r.parts : [])
-    .filter((p) => creaturePart(p.id) && creaturePart(p.id).slot !== "foot")
+  r.parts = oldParts
+    .filter((p) => p && !LEGACY_ARM_HANDS[p.id] && creaturePart(p.id) && !["foot", "hand"].includes(creaturePart(p.id).slot))
     .filter((p) => {
       if (creaturePart(p.id).slot !== "mouth") return true;
       if (seenMouth.v) return false;
       return (seenMouth.v = true);
     })
     .slice(0, LIMITS.maxParts)
+    // Eyes left at the old default spot (behind the head's bulge) move to the new one, up front.
+    .map((p) => (creaturePart(p.id).slot === "eye" && p.t === 0.86 && p.angle === 0.75 ? { ...p, t: 0.92, angle: 0.62 } : p))
     .map((p) => ({
       id: p.id,
       t: clamp(num(p.t, 0.5), 0, 1),
       angle: clamp(num(p.angle, 0), -Math.PI, Math.PI),
       scale: clamp(num(p.scale, 1), 0.6, 1.6),
       roll: clamp(num(p.roll, 0), -Math.PI, Math.PI),
-      bend: clamp(num(p.bend, 0), -1, 1),
     }));
   return r;
 }
 
-/** Part ids in use (foot counted once), for ability totals. */
-export const creaturePartIds = (r) => [...r.parts.map((p) => p.id), r.foot];
+/** Part ids in use (foot counted once, each arm pair's hand once), for ability totals and costs. */
+export const creaturePartIds = (r) => [...r.parts.map((p) => p.id), r.foot, ...(r.arms || []).map((a) => a.hand).filter(Boolean)];
+/** Abilities of a whole design: its parts, legs and arms. */
+export const armPairsOf = (r) => (r.arms || []).length;
 
 export const creatureToJson = (r) => JSON.stringify(validateCreature(r));
 export function creatureFromJson(text) {

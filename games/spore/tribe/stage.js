@@ -2,22 +2,45 @@
  * Tribe Stage (early prototype).
  *
  * Your creatures have settled: a hut, a fire and a food pile on the beach where you first crawled
- * ashore. You no longer steer one creature; you direct the tribe from above. Gather food, raise
- * babies, build tool shacks, and deal with the three neighbouring tribes, by playing horns for them
- * until they ally with you or by knocking their hut down.
+ * ashore. You no longer steer one creature; you direct the tribe from above. Gather, fish and hunt,
+ * raise babies, build tool shacks (weapons, instruments, staffs), and deal with the three
+ * neighbouring tribes: play the instruments they call for until they ally with you, send gifts, or
+ * knock their hut down.
  *
  * Controls are the same on a phone and a desktop: drag to move the camera, pinch or scroll to zoom,
  * tap a member to select it (or use All), then tap where it should go or what it should do.
  */
 import * as THREE from "three";
-import { ABILITY_TIME, buildCreatureBody } from "../creature/body3d.js";
+import { buildCreatureBody } from "../creature/body3d.js";
 import { createEmotes } from "../creature/emotes.js";
 import { validateCreature } from "../creature/format.js";
 import { dietOfParts } from "../creature/parts.js";
 import { RELATION_INFO } from "../creature/relations.js";
 import { generateSpecies } from "../creature/species.js";
 import { ISLAND, createIsland, heightAt } from "../creature/world.js";
-import { BABY_COST, CARRY, START_FOOD, TOOLS, TRIBE_SAVE_KEY, canGather, clampRelation, popCap, readTribeSave, relationFace, stageWon, willRaid } from "./rules.js";
+import {
+  ASK_TIME,
+  BABY_COST,
+  CARRY,
+  DAMAGE,
+  GIFT,
+  HUT_DAMAGE,
+  INSTRUMENTS,
+  SOCIAL_MISS,
+  START_FOOD,
+  TOOLS,
+  TOOL_IDS,
+  TRIBE_SAVE_KEY,
+  answerCall,
+  canGather,
+  clampRelation,
+  nextAsk,
+  popCap,
+  readTribeSave,
+  relationFace,
+  stageWon,
+  willRaid,
+} from "./rules.js";
 
 const TAU = Math.PI * 2;
 const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -58,13 +81,16 @@ export function createTribeStage(o) {
 
   const T = {
     food: save ? save.food : START_FOOD,
-    tools: { axe: !!save?.tools.axe, horn: !!save?.tools.horn },
+    tools: Object.fromEntries(TOOL_IDS.map((id) => [id, !!save?.tools[id]])),
     units: [], // every creature in the world, yours and theirs
     tribes: [],
     selected: new Set(),
     eggs: [],
     time: 0,
-    won: false,
+    won: !!save?.won,
+    animals: [],
+    carcasses: [],
+    spears: [],
     chiefRespawn: 0,
   };
   let paused = false,
@@ -158,7 +184,16 @@ export function createTribeStage(o) {
   makeHut(HOME.x, HOME.z, 0x3fa9d6);
   const FIRE = { x: HOME.x + 6.5, z: HOME.z - 1.5 };
   const PILE = { x: HOME.x + 3.5, z: HOME.z + 5.5 };
-  const SHACK = { axe: { x: HOME.x - 6.5, z: HOME.z + 2 }, horn: { x: HOME.x - 5, z: HOME.z - 5.5 } };
+  /* Tool shacks stand in an arc behind the hut, away from the fire and the food pile. */
+  const SHACK = {};
+  TOOL_IDS.forEach((id, i) => {
+    const a = ((110 + i * 31) * Math.PI) / 180;
+    let r = 10.5;
+    // Keep them on dry ground: step in toward the hut if the spot is wet.
+    while (r > 6 && heightAt(HOME.x + Math.cos(a) * r, HOME.z + Math.sin(a) * r) < 0.25) r -= 0.5;
+    SHACK[id] = { x: HOME.x + Math.cos(a) * r, z: HOME.z + Math.sin(a) * r };
+  });
+  const KIND_ROOF = { fight: 0xb5523a, music: 0xd9a441, village: 0x6aa84f };
   const fires = [makeFire(FIRE.x, FIRE.z)];
 
   // The food pile grows as the stock does.
@@ -202,40 +237,83 @@ export function createTribeStage(o) {
       p.position.set(px, 0.9, pz);
       g.add(p);
     }
-    const roof = new THREE.Mesh(shackRoofGeo, mat(tool === "axe" ? 0xb5523a : 0xd9a441));
+    const roof = new THREE.Mesh(shackRoofGeo, mat(KIND_ROOF[TOOLS[tool].kind]));
     roof.position.y = 1.85;
     roof.rotation.z = 0.12;
     g.add(roof);
     // A few of the tools leaning inside, so the shack reads at a glance.
     for (let i = 0; i < 3; i++) {
       const t = toolMesh(tool);
-      t.position.set(-0.7 + i * 0.7, 0.7, 0);
+      t.position.set(-0.7 + i * 0.7, 0.35, 0);
       t.rotation.z = 0.25;
-      t.scale.setScalar(1.25);
+      t.scale.setScalar(1.1);
       g.add(t);
     }
+    // Shacks face the hut.
+    g.rotation.y = Math.atan2(-(HOME.z - at.z), HOME.x - at.x) + Math.PI / 2;
     scene.add(g);
     shackMeshes[tool] = g;
   }
-  const hornGeo = geo(new THREE.ConeGeometry(0.2, 0.75, 8, 1, true).rotateZ(-Math.PI / 2)),
-    haftGeo = geo(new THREE.CylinderGeometry(0.045, 0.045, 0.95, 6)),
-    bladeGeo = geo(new THREE.BoxGeometry(0.36, 0.3, 0.07));
+  /* Tool models: built standing up along +y with the grip at the origin. */
+  const hornGeo = geo(new THREE.ConeGeometry(0.2, 0.75, 10, 1, true).translate(0, 0.38, 0)),
+    haftGeo = geo(new THREE.CylinderGeometry(0.045, 0.05, 1, 6).translate(0, 0.4, 0)),
+    longHaftGeo = geo(new THREE.CylinderGeometry(0.04, 0.045, 1.7, 6).translate(0, 0.6, 0)),
+    bladeGeo = geo(new THREE.BoxGeometry(0.36, 0.3, 0.07)),
+    tipGeo = geo(new THREE.ConeGeometry(0.08, 0.32, 6)),
+    torchHeadGeo = geo(new THREE.CylinderGeometry(0.11, 0.07, 0.22, 7)),
+    torchFlameGeo = geo(new THREE.ConeGeometry(0.15, 0.42, 7)),
+    shakerGeo = geo(new THREE.SphereGeometry(0.13, 10, 8).scale(1, 1.2, 1)),
+    stickGeo = geo(new THREE.CylinderGeometry(0.025, 0.025, 0.32, 5).translate(0, 0.16, 0)),
+    didgeGeo = geo(new THREE.CylinderGeometry(0.07, 0.1, 1.5, 9, 1, true).translate(0, 0.5, 0)),
+    bandGeo = geo(new THREE.TorusGeometry(0.085, 0.022, 6, 12).rotateX(Math.PI / 2)),
+    crookGeo = geo(new THREE.TorusGeometry(0.16, 0.035, 6, 12, Math.PI * 1.3)),
+    orbGeo = geo(new THREE.SphereGeometry(0.13, 12, 10));
   const hornMat = mat(0xf2e3c0, { side: THREE.DoubleSide, flatShading: false }),
-    bladeMat = mat(0x9aa3ab);
+    bladeMat = mat(0x9aa3ab),
+    shakerMat = mat(0xd96b3a, { flatShading: false }),
+    didgeMat = mat(0x8a5a2e, { side: THREE.DoubleSide }),
+    bandMat = mat(0xf2d27a),
+    healMat = new THREE.MeshStandardMaterial({ color: 0x8ff0a8, emissive: 0x3fc26e, emissiveIntensity: 0.9, roughness: 0.3 });
+  disposables.push(healMat);
   /** The small model a member carries (and the shacks display). */
   function toolMesh(tool) {
     const g = new THREE.Group();
-    if (tool === "horn") g.add(new THREE.Mesh(hornGeo, hornMat));
-    else {
-      const haft = new THREE.Mesh(haftGeo, poleMat);
-      const blade = new THREE.Mesh(bladeGeo, bladeMat);
-      blade.position.set(0.16, 0.36, 0);
-      g.add(haft, blade);
+    const add = (geometry, material, x = 0, y = 0, z = 0, rz = 0) => {
+      const m = new THREE.Mesh(geometry, material);
+      m.position.set(x, y, z);
+      m.rotation.z = rz;
+      g.add(m);
+      return m;
+    };
+    if (tool === "horn") add(hornGeo, hornMat, 0, 0.1, 0, -0.5);
+    else if (tool === "axe") {
+      add(haftGeo, poleMat);
+      add(bladeGeo, bladeMat, 0.16, 0.78);
+    } else if (tool === "spear") {
+      add(longHaftGeo, poleMat);
+      add(tipGeo, bladeMat, 0, 1.6);
+    } else if (tool === "torch") {
+      add(haftGeo, poleMat);
+      add(torchHeadGeo, logMat, 0, 0.92);
+      add(torchFlameGeo, flameMat, 0, 1.2);
+    } else if (tool === "maracas") {
+      for (const x of [-0.12, 0.14]) {
+        add(stickGeo, poleMat, x, 0, 0, x * 1.5);
+        add(shakerGeo, shakerMat, x * 1.5, 0.4);
+      }
+    } else if (tool === "didgeridoo") {
+      add(didgeGeo, didgeMat, 0, 0, 0, 0.15);
+      for (const y of [0.2, 0.55, 0.9]) add(bandGeo, bandMat, -y * 0.15, y, 0, 0.15);
+    } else if (tool === "staff") {
+      add(longHaftGeo, poleMat);
+      add(crookGeo, poleMat, 0.12, 1.45);
+    } else if (tool === "healer") {
+      add(longHaftGeo, poleMat);
+      add(orbGeo, healMat, 0, 1.55);
     }
     return g;
   }
-  if (T.tools.axe) buildShack("axe");
-  if (T.tools.horn) buildShack("horn");
+  TOOL_IDS.forEach((id) => T.tools[id] && buildShack(id));
 
   /* Fishing spots: rings of ripples in the shallows nearest the village. */
   const fishSpots = [];
@@ -301,14 +379,25 @@ export function createTribeStage(o) {
     return u;
   }
   function setTool(u, tool) {
-    if (u.toolModel) u.body.root.remove(u.toolModel);
+    if (u.toolModel) u.toolModel.removeFromParent();
     u.tool = tool;
     u.toolModel = null;
     if (!tool) return;
     const m = toolMesh(tool);
-    m.position.set(u.body.length * 0.2, u.body.height * 0.75, u.body.radius + 0.25);
-    m.rotation.z = tool === "axe" ? -0.5 : 0.35;
-    u.body.root.add(m);
+    const hand = u.body.handAnchor();
+    if (hand) {
+      // Held in the hand, standing up out of the fist (the wrist's +x is "up" when the arm is raised).
+      m.rotation.z = -Math.PI / 2;
+      m.position.y = -0.12;
+      m.scale.setScalar(0.85);
+      hand.add(m);
+    } else {
+      // No arms: carried slung along the flank.
+      m.position.set(u.body.length * 0.15, u.body.height * 0.72, u.body.radius + 0.2);
+      m.rotation.set(0.25, 0, -0.9);
+      m.scale.setScalar(0.8);
+      u.body.root.add(m);
+    }
     u.toolModel = m;
   }
   function removeUnit(u) {
@@ -369,6 +458,14 @@ export function createTribeStage(o) {
         performers: 0,
         watching: 0,
         faceShown: null,
+        band: [], // your performers in place at their fire this frame
+        ask: null, // the instrument they want to hear next
+        askT: 0,
+        lastAsk: null,
+        rest: 0, // a breath between calls
+        giftCool: 0,
+        burning: 0,
+        flames: null,
       };
       tribe.hut = makeHut(site.x, site.z, setup.color);
       tribe.fire = makeFire(site.x + 6, site.z + 1);
@@ -376,7 +473,8 @@ export function createTribeStage(o) {
       const alive = tribe.status === "conquered" ? 0 : saved ? saved.alive : 5;
       for (let k = 0; k < alive; k++) {
         const at = around(tribe.center, 4, 9);
-        makeUnit(tribe, sp.record, at.x, at.z);
+        // The aggressive tribe arms its hunters with spears.
+        makeUnit(tribe, sp.record, at.x, at.z, { tool: i === 2 && k % 2 === 0 ? "spear" : null });
       }
       T.tribes.push(tribe);
       if (tribe.status === "conquered") ruinHut(tribe);
@@ -395,6 +493,169 @@ export function createTribeStage(o) {
     tribe.fire.flame.visible = false;
   }
 
+  /* ---- wildlife -------------------------------------------------------------------------------
+     Small herds of grazers roam the land around the village. Carnivores and omnivores hunt them:
+     a felled animal leaves a carcass that hunters butcher and carry home a few pieces at a time. */
+  const HERDS = [0, 1].map((i) => {
+    const sp = generateSpecies(31415 + i * 2718, "plant", 1);
+    // A grazing ground inland of the village, one on each side.
+    const a = Math.atan2(HOME.z, HOME.x) + Math.PI + (i ? 0.55 : -0.55);
+    let r = 30;
+    let x = HOME.x + Math.cos(a) * r,
+      z = HOME.z + Math.sin(a) * r;
+    while (heightAt(x, z) < 0.6 && r > 12) {
+      r -= 2;
+      x = HOME.x + Math.cos(a) * r;
+      z = HOME.z + Math.sin(a) * r;
+    }
+    return { species: sp, center: { x, z }, respawn: 0 };
+  });
+  function spawnAnimal(herd) {
+    const at = around(herd.center, 0, 7);
+    const body = buildCreatureBody(herd.species.record, { quality: "low", seed: nextId++ });
+    const scale = 0.85;
+    body.root.scale.setScalar(scale);
+    scene.add(body.root);
+    const a = {
+      animal: true,
+      herd,
+      body,
+      scale,
+      pos: new THREE.Vector3(at.x, heightAt(at.x, at.z), at.z),
+      heading: Math.random() * TAU,
+      speed: 0,
+      health: 40,
+      maxHealth: 40,
+      fleeT: 0,
+      think: Math.random() * 3,
+      wander: null,
+      dead: false,
+      hurtAt: -99,
+    };
+    T.animals.push(a);
+    return a;
+  }
+  HERDS.forEach((h) => [0, 1, 2].forEach(() => spawnAnimal(h)));
+  const carcassGeo = geo(new THREE.SphereGeometry(0.55, 10, 7).scale(1.4, 0.55, 1));
+  const meatMat = mat(0xb3473a, { flatShading: false, roughness: 0.6 });
+  function hurtAnimal(a, dmg) {
+    if (a.dead) return;
+    a.health -= dmg;
+    a.hurtAt = T.time;
+    a.body.hit();
+    a.fleeT = 3.5; // bolt away from whoever hit it
+    if (a.health > 0) return;
+    a.dead = true;
+    a.body.die();
+    o.sfx("death", { pitch: 1.2 });
+    const m = new THREE.Mesh(carcassGeo, meatMat);
+    m.position.set(a.pos.x, Math.max(heightAt(a.pos.x, a.pos.z), 0) + 0.2, a.pos.z);
+    scene.add(m);
+    T.carcasses.push({ from: a, x: a.pos.x, z: a.pos.z, food: 12, full: 12, mesh: m, life: 120 });
+    pop(a.pos.x, a.pos.z, "🍖", "good");
+    tipOnce("carcass", "Your hunters will carry the meat home.");
+    setTimeout(() => {
+      scene.remove(a.body.root);
+      a.body.dispose();
+      T.animals.splice(T.animals.indexOf(a), 1);
+    }, 2200);
+  }
+  function syncCarcass(c) {
+    c.mesh.scale.setScalar(0.35 + (0.65 * c.food) / c.full);
+    if (c.food <= 0) {
+      scene.remove(c.mesh);
+      T.carcasses.splice(T.carcasses.indexOf(c), 1);
+    }
+  }
+  function updateAnimals(dt) {
+    for (const a of T.animals) {
+      if (a.dead) {
+        a.body.update(dt, 0);
+        continue;
+      }
+      if (a.fleeT > 0) {
+        a.fleeT -= dt;
+        // Away from the nearest of your tribe.
+        let near = null,
+          nd = 30;
+        for (const u of T.units) if (u.mine && !u.dead && dist(u, a) < nd) (nd = dist(u, a)), (near = u);
+        const away = near ? { x: a.pos.x + (a.pos.x - near.pos.x), z: a.pos.z + (a.pos.z - near.pos.z) } : around(a.herd.center, 4, 9);
+        walk(a, away.x, away.z, 4.6, dt);
+      } else {
+        // Graze: amble about the herd's ground, and drift back if chased off it.
+        if (distTo(a, a.herd.center) > 22) a.wander = around(a.herd.center, 0, 6);
+        idle(a, a.herd.center, dt, 0, 8);
+      }
+      if (T.time - a.hurtAt > 8 && a.health < a.maxHealth) a.health = Math.min(a.maxHealth, a.health + dt * 2);
+      a.pos.y = Math.max(heightAt(a.pos.x, a.pos.z), -0.4);
+      a.body.root.position.copy(a.pos);
+      a.body.root.rotation.y = a.heading;
+      a.body.update(dt, a.speed);
+    }
+    // Herds grow back slowly.
+    for (const h of HERDS) {
+      if (T.animals.filter((a) => a.herd === h && !a.dead).length >= 3) continue;
+      if ((h.respawn += dt) > 45) {
+        h.respawn = 0;
+        spawnAnimal(h);
+      }
+    }
+    for (let i = T.carcasses.length - 1; i >= 0; i--) {
+      const c = T.carcasses[i];
+      if ((c.life -= dt) <= 0) {
+        c.food = 0;
+        syncCarcass(c);
+      }
+    }
+  }
+
+  /* ---- burning huts and healers ------------------------------------------------------------ */
+  const burnGeo = geo(new THREE.ConeGeometry(0.5, 1.6, 7));
+  function setBurning(tr) {
+    tr.burning = 8;
+    if (tr.flames) return;
+    tr.flames = [0, 1, 2, 3].map((i) => {
+      const f = new THREE.Mesh(burnGeo, flameMat);
+      const a = (i / 4) * TAU;
+      f.position.set(tr.center.x + Math.cos(a) * 1.6, heightAt(tr.center.x, tr.center.z) + 3 + (i % 2) * 0.6, tr.center.z + Math.sin(a) * 1.6);
+      scene.add(f);
+      return f;
+    });
+    o.sfx("roar", { pitch: 1.6, gain: 0.4 });
+  }
+  function updateBurning(dt) {
+    for (const tr of T.tribes) {
+      if (!tr.flames) continue;
+      tr.burning -= dt;
+      // A burning hut keeps burning down on its own for a while.
+      if (tr.status === "neutral" && tr.burning > 0) {
+        tr.hutHealth -= dt * 0.01;
+        if (tr.hutHealth <= 0) conquer(tr);
+      }
+      tr.flames.forEach((f, i) => f.scale.set(1 + Math.sin(T.time * 9 + i) * 0.2, 1 + Math.sin(T.time * 13 + i * 2) * 0.35, 1));
+      if (tr.burning <= 0 || tr.status !== "neutral") {
+        tr.flames.forEach((f) => scene.remove(f));
+        tr.flames = null;
+      }
+    }
+  }
+  let healPulse = 0;
+  function updateHealers(dt) {
+    healPulse -= dt;
+    const pulse = healPulse <= 0;
+    if (pulse) healPulse = 1.5;
+    for (const h of T.units) {
+      if (!h.mine || h.dead || h.tool !== "healer") continue;
+      let healed = false;
+      for (const u of T.units) {
+        if (!u.mine || u.dead || u.health >= u.maxHealth || dist(u, h) > 7) continue;
+        u.health = Math.min(u.maxHealth, u.health + dt * 5);
+        healed = true;
+      }
+      if (healed && pulse) pop(h.pos.x, h.pos.z, "✚", "good");
+    }
+  }
+
   /* ---- HUD ------------------------------------------------------------------------------------ */
   const hud = document.createElement("div");
   hud.className = "tribeHUD";
@@ -410,8 +671,24 @@ export function createTribeStage(o) {
     <div class="trTribes" id="trTribes" role="list" aria-label="Neighbouring tribes"></div>
     <div class="trMarks" id="trMarks" aria-hidden="true"></div>
     <div class="trToast" id="trToast" role="status" aria-live="polite"></div>
+    <div class="trArc" id="trArc" hidden>
+      <svg class="arcSvg" viewBox="0 0 240 128" aria-hidden="true">
+        <path class="arcRim" d="M 22 118 A 98 98 0 0 1 218 118"></path>
+        <path class="arcTrack" d="M 22 118 A 98 98 0 0 1 218 118" pathLength="100"></path>
+        <path class="arcFill" id="trArcFill" d="M 22 118 A 98 98 0 0 1 218 118" pathLength="100"></path>
+      </svg>
+      <div class="arcAsk" id="trArcAsk" hidden>
+        <svg viewBox="0 0 44 44" aria-hidden="true"><circle class="arcAskTrack" cx="22" cy="22" r="19" pathLength="100"></circle><circle class="arcAskTime" id="trArcTime" cx="22" cy="22" r="19" pathLength="100"></circle></svg>
+        <span id="trArcAskIcon"></span>
+      </div>
+      <img class="arcFace" id="trArcFace" alt="" width="58" height="58" draggable="false">
+      <span class="arcLabel" id="trArcLabel" role="status" aria-live="polite"></span>
+    </div>
     <div class="trSheet" id="trSheet" hidden></div>
     <div class="trBottom">
+      <div class="trBand" id="trBand" hidden role="group" aria-label="Play an instrument">
+        ${INSTRUMENTS.map((id, i) => `<button data-play="${id}" aria-label="Play ${TOOLS[id].name.toLowerCase()}"><span>${TOOLS[id].icon}</span><small>${TOOLS[id].name}</small><kbd>${i + 1}</kbd></button>`).join("")}
+      </div>
       <div class="trUnits" id="trUnits" role="list" aria-label="Your tribe"></div>
       <div class="trActions">
         <button id="trAll" aria-label="Select everyone"><span>👥</span><small>All</small></button>
@@ -485,6 +762,7 @@ export function createTribeStage(o) {
     cam.z = HOME.z;
   };
   $h("#trBaby").onclick = haveBaby;
+  hud.querySelectorAll("#trBand [data-play]").forEach((b) => (b.onclick = () => playInstrument(b.dataset.play)));
   $h("#trBuild").onclick = () => openSheet("build");
 
   function showHelp() {
@@ -507,31 +785,60 @@ export function createTribeStage(o) {
     el.hidden = false;
     let html = "";
     if (sheet.kind === "build") {
-      html = `<div class="tsHead"><b>Build a tool shack</b><button class="tsClose" aria-label="Close">✕</button></div><div class="tsTools">`;
-      for (const [id, t] of Object.entries(TOOLS)) {
-        const owned = T.tools[id];
-        html += `<button class="tsTool" data-tool="${id}" ${owned || T.food < t.cost ? 'aria-disabled="true"' : ""}><span>${t.icon}</span><b>${t.name}</b><small>${t.desc}</small><em>${owned ? "Built" : "🍖 " + t.cost}</em></button>`;
+      html = `<div class="tsHead"><b>Build a tool shack</b><button class="tsClose" aria-label="Close">✕</button></div>`;
+      for (const [kind, title] of [
+        ["fight", "Weapons"],
+        ["music", "Instruments"],
+        ["village", "Village"],
+      ]) {
+        html += `<h5 class="tsKind">${title}</h5><div class="tsTools">`;
+        for (const [id, t] of Object.entries(TOOLS)) {
+          if (t.kind !== kind) continue;
+          const owned = T.tools[id];
+          html += `<button class="tsTool ${kind}" data-tool="${id}" ${owned || T.food < t.cost ? 'aria-disabled="true"' : ""}><span>${t.icon}</span><b>${t.name}</b><small>${t.desc}</small><em>${owned ? "Built" : "🍖 " + t.cost}</em></button>`;
+        }
+        html += `</div>`;
       }
-      html += `</div><p class="tsHint">Once built, select members and tap the shack to pick the tool up.</p>`;
+      html += `<p class="tsHint">Once built, select members and tap the shack to pick the tool up.</p>`;
     } else if (sheet.kind === "tribe") {
       const tr = sheet.tribe;
       const face = RELATION_INFO[relationFace(tr.relation, tr.status)];
-      const horns = [...T.selected].filter((u) => u.tool === "horn").length;
+      const players = [...T.selected].filter((u) => INSTRUMENTS.includes(u.tool)).length;
+      const anyInstrument = INSTRUMENTS.some((id) => T.tools[id]);
       html = `<div class="tsHead"><img src="${face.face}" alt="${face.label}" width="40" height="40"><div><b>${esc(tr.name)} tribe</b><small>${face.label} · ${tr.mood}</small></div><button class="tsClose" aria-label="Close">✕</button></div>
         <i class="tsRel"><b style="width:${(tr.relation + 100) / 2}%;background:${face.color}"></b></i>
         <div class="tsBtns">
-          <button id="tsImpress" class="good" ${horns ? "" : 'aria-disabled="true"'}>📯 Play for them</button>
+          <button id="tsImpress" class="good" ${players ? "" : 'aria-disabled="true"'}>🎶 Play for them</button>
+          <button id="tsGift" class="gift" ${T.food < GIFT.food || tr.giftCool > 0 ? 'aria-disabled="true"' : ""}>🎁 Gift · 🍖${GIFT.food}</button>
           <button id="tsAttack" class="bad">⚔ Attack</button>
         </div>
-        <p class="tsHint">${horns ? horns + " of your selected members " + (horns === 1 ? "has a horn" : "have horns") + "." : T.tools.horn ? "Nobody selected has a horn: tap the Horns shack first." : "To make friends, build Horns (🔨) and pick them up."}</p>`;
+        <p class="tsHint">${
+          players
+            ? players + " of your selected members " + (players === 1 ? "has an instrument" : "have instruments") + ". When they call for one, play it."
+            : anyInstrument
+              ? "Nobody selected has an instrument: tap an instrument shack first."
+              : "To make friends, build an instrument (🔨) and pick it up, or send gifts."
+        }</p>`;
+    } else if (sheet.kind === "won") {
+      const allied = T.tribes.filter((t) => t.status === "allied").length,
+        conquered = T.tribes.length - allied;
+      html = `<div class="tsHead tsWon"><b>Tribe Stage complete</b><button class="tsClose" aria-label="Close">✕</button></div>
+        <p class="tsWonText">${
+          conquered === 0 ? "Every neighbour is your friend. Your tribe is known for its music." : allied === 0 ? "Every neighbour has fallen. Your tribe is feared across the island." : "Some neighbours are friends, some have fallen. Your tribe is respected."
+        }</p>
+        <div class="tsStats"><span><b>${allied}</b> allied</span><span><b>${conquered}</b> conquered</span><span><b>${mine().length}</b> members</span><span><b>${Math.floor(T.food)}</b> food</span></div>
+        <p class="tsHint">The Civilization Stage is next. It isn't built yet: keep playing here, or head back to your creature.</p>
+        <div class="tsBtns"><button class="good" id="tsKeep">Keep playing</button><button id="tsBack">Back to the Creature Stage</button></div>`;
     } else {
       html = `<div class="tsHead"><b>Tribe Stage · early prototype</b><button class="tsClose" aria-label="Close">✕</button></div>
         <ul class="tsHelp">
           <li><b>Look around:</b> drag to move, pinch or scroll to zoom.</li>
           <li><b>Select:</b> tap a member, or All. Then tap where to go.</li>
           <li><b>Food:</b> tap ${diet === "meat" ? "the ripples in the sea to fish" : diet === "plant" ? "a fruit bush to pick fruit" : "a fruit bush, or the ripples in the sea to fish"}. They carry it home by themselves.</li>
-          <li><b>Grow:</b> 🥚 Baby costs ${BABY_COST} food. 🔨 Build adds Axes or Horns.</li>
-          <li><b>Other tribes:</b> select members, tap their village, then play horns for them or attack.</li>
+          ${diet !== "plant" ? "<li><b>Hunt:</b> tap a grazing animal. Your hunters bring the meat home.</li>" : ""}
+          <li><b>Grow:</b> 🥚 Baby costs ${BABY_COST} food. 🔨 Build shacks for weapons, instruments and staffs.</li>
+          <li><b>Make friends:</b> select members holding instruments and tap a village. When the tribe calls for an instrument, play it (or press 1-3). Gifts of food help too.</li>
+          <li><b>Or conquer:</b> attack the village and knock down its hut. Torches burn huts fast.</li>
           <li><b>Goal:</b> make every tribe an ally, or knock down its hut.</li>
         </ul>`;
     }
@@ -542,11 +849,22 @@ export function createTribeStage(o) {
     if (imp)
       imp.onclick = () => {
         const tr = sheet.tribe;
-        const players = [...T.selected].filter((u) => u.tool === "horn");
-        if (!players.length) return toast(T.tools.horn ? "Select members holding horns." : "Build Horns first (🔨 Build).");
+        const players = [...T.selected].filter((u) => INSTRUMENTS.includes(u.tool));
+        if (!players.length) return toast(INSTRUMENTS.some((id) => T.tools[id]) ? "Select members holding instruments." : "Build an instrument first (🔨 Build).");
         players.forEach((u, i) => (u.task = { type: "perform", tribe: tr, slot: i }));
         o.sfx("click");
+        tipOnce("band", "When your band arrives, the tribe calls for instruments. Play the one they ask for.", 5);
         closeSheet();
+      };
+    const gift = el.querySelector("#tsGift");
+    if (gift) gift.onclick = () => sendGift(sheet.tribe);
+    const keep = el.querySelector("#tsKeep");
+    if (keep) keep.onclick = closeSheet;
+    const back = el.querySelector("#tsBack");
+    if (back)
+      back.onclick = () => {
+        saveState();
+        o.onExit();
       };
     const atk = el.querySelector("#tsAttack");
     if (atk)
@@ -697,6 +1015,8 @@ export function createTribeStage(o) {
       else T.selected.clear();
       return;
     }
+    const n = ["1", "2", "3"].indexOf(e.key);
+    if (n >= 0 && !e.repeat) return playInstrument(INSTRUMENTS[n]);
     keys.add(e.key.toLowerCase());
   };
   const onKeyUp = (e) => keys.delete(e.key.toLowerCase());
@@ -755,7 +1075,8 @@ export function createTribeStage(o) {
       36,
       unitAt,
     );
-    const hutTribe = nearestOnScreen(T.tribes, sx, sy, 52, (t) => groundY(t.center, 2.5));
+    // A hut counts wherever you tap it, from the doorstep to the top of the roof.
+    const hutTribe = nearestOnScreen(T.tribes, sx, sy, 50, (t) => groundY(t.center, 1.2)) || nearestOnScreen(T.tribes, sx, sy, 60, (t) => groundY(t.center, 3.6));
     const tribe = foreign?.tribe || hutTribe;
     if (tribe) {
       if (tribe.status === "allied") return toast("The " + tribe.name + " tribe are your allies.");
@@ -784,6 +1105,23 @@ export function createTribeStage(o) {
         flash(SHACK[tool].x, SHACK[tool].z);
         return o.sfx("click");
       }
+    }
+    // Wild animals: hunt them (or butcher a carcass).
+    const prey = nearestOnScreen(
+      T.animals.filter((a) => !a.dead),
+      sx,
+      sy,
+      40,
+      unitAt,
+    );
+    const meat = nearestOnScreen(T.carcasses, sx, sy, 40, (c) => groundY(c, 0.5));
+    if (prey || meat) {
+      if (diet === "plant") return toast("Your tribe are herbivores: they don't hunt.");
+      picked.forEach((u) => (u.task = prey ? { type: "hunt", target: prey } : { type: "haul", carcass: meat }));
+      const at = prey ? prey.pos : meat;
+      flash(at.x, at.z);
+      tipOnce("hunt", "Hunting! Spears let your hunters strike from a distance.");
+      return o.sfx("click");
     }
     // Fishing spots.
     const spot = nearestOnScreen(fishSpots, sx, sy, 46, (f) => ({ x: f.x, y: 0.2, z: f.z }));
@@ -817,7 +1155,7 @@ export function createTribeStage(o) {
     let best = null,
       bestD = radius;
     for (const f of world.fruits) {
-      if (!f.alive || f.claimed) continue;
+      if (!f.alive || f.claimed || f.hanging) continue; // tree fruit is out of reach until it falls
       const d = Math.hypot(f.x - p.x, f.z - p.z);
       if (d < bestD) {
         bestD = d;
@@ -873,18 +1211,59 @@ export function createTribeStage(o) {
     emotes.emit(kind, headOf(u), Math.max(0.8, u.scale));
   }
 
+  const weapon = (u) => (DAMAGE[u.tool] ? u.tool : "none");
+  /** Close in and hit (or, with a spear, throw from a distance). Returns false when the target is gone. */
   function strike(u, target, dt) {
-    // Returns false when the target is gone.
     if (!target || target.dead) return false;
-    const reach = 1.6 + (u.scale + target.scale) * 0.5;
+    const w = weapon(u);
+    const reach = w === "spear" ? 8 : 1.6 + (u.scale + (target.scale || 1)) * 0.5;
     if (!walk(u, target.pos.x, target.pos.z, 5.4, dt, reach)) return true;
     face(u, target.pos.x, target.pos.z);
     if (u.cool > 0) return true;
+    const dmg = DAMAGE[w] * (u.chief ? 1.4 : 1);
+    if (w === "spear") {
+      u.cool = 1.4;
+      u.body.playAbility("strike");
+      throwSpear(u, target, dmg);
+      return true;
+    }
     u.cool = 1;
-    u.body.playAbility(u.tool === "axe" ? "strike" : "bite");
-    o.sfx(u.tool === "axe" ? "chop" : "creatureBite", { pitch: 1, gain: 0.6 });
-    hurt(target, (u.tool === "axe" ? 12 : 6) * (u.chief ? 1.4 : 1), u);
+    u.body.playAbility(w === "none" ? "bite" : "strike");
+    o.sfx(w === "none" ? "creatureBite" : "chop", { pitch: w === "torch" ? 1.3 : 1, gain: 0.6 });
+    (target.animal ? hurtAnimal : hurt)(target, dmg, u);
     return true;
+  }
+  /** A spear in flight: a quick arc from the thrower to where the target is. */
+  const spearGeo = geo(new THREE.CylinderGeometry(0.03, 0.03, 1.3, 5).rotateZ(Math.PI / 2));
+  function throwSpear(u, target, dmg) {
+    const m = new THREE.Mesh(spearGeo, poleMat);
+    const from = new THREE.Vector3(u.pos.x, u.pos.y + u.body.height * u.scale, u.pos.z);
+    m.position.copy(from);
+    scene.add(m);
+    o.sfx("spit", { pitch: 0.7, gain: 0.5 });
+    T.spears.push({ m, from, target, by: u, dmg, t: 0, dur: 0.28 + dist(u, target) * 0.025 });
+  }
+  function updateSpears(dt) {
+    for (let i = T.spears.length - 1; i >= 0; i--) {
+      const sp = T.spears[i];
+      sp.t += dt;
+      const k = Math.min(1, sp.t / sp.dur);
+      const to = sp.target.pos;
+      const x = sp.from.x + (to.x - sp.from.x) * k,
+        z = sp.from.z + (to.z - sp.from.z) * k,
+        y = sp.from.y + (to.y + 0.8 - sp.from.y) * k + Math.sin(k * Math.PI) * 1.4;
+      sp.m.lookAt(x, y, z);
+      sp.m.position.set(x, y, z);
+      sp.m.rotation.y += Math.PI / 2;
+      if (k >= 1) {
+        scene.remove(sp.m);
+        T.spears.splice(i, 1);
+        if (!sp.target.dead) {
+          (sp.target.animal ? hurtAnimal : hurt)(sp.target, sp.dmg, sp.by);
+          o.sfx("chop", { pitch: 1.4, gain: 0.4 });
+        }
+      }
+    }
   }
   function hurt(u, dmg, by) {
     if (u.dead) return;
@@ -950,7 +1329,7 @@ export function createTribeStage(o) {
       }
     } else if (task.type === "gather" || task.type === "fish") {
       const kind = task.type === "gather" ? "fruit" : "fish";
-      if (u.carry >= CARRY[kind] || task.deliver) {
+      if (u.carry >= carryOf(u, kind) || task.deliver) {
         // Home with the food, then straight back out.
         if (walk(u, PILE.x, PILE.z, 4.6, dt, 2.4)) {
           if (u.carry) {
@@ -970,12 +1349,12 @@ export function createTribeStage(o) {
           len = Math.hypot(s.x, s.z) || 1;
         if (!walk(u, s.stand.x + (-s.z / len) * side, s.stand.z + (s.x / len) * side, 5, dt, 1)) return;
         face(u, s.x, s.z);
-        u.work += dt;
+        u.work += dt * (u.tool === "staff" ? 2 : 1);
         if (u.work >= 2.4) {
           u.work = 0;
-          u.body.playAbility("bite");
+          u.body.playAbility(u.tool === "staff" ? "strike" : "bite");
           o.sfx("splash");
-          u.carry += 2;
+          u.carry += u.tool === "staff" ? 3 : 2;
           pop(s.x, s.z, "🐟");
         }
         return;
@@ -998,8 +1377,8 @@ export function createTribeStage(o) {
       }
       if (!walk(u, task.fruit.x, task.fruit.z, 5, dt, 1.7)) return;
       face(u, task.fruit.x, task.fruit.z);
-      if (u.work === 0) u.body.playAbility("bite");
-      u.work += dt;
+      if (u.work === 0) u.body.playAbility(u.tool === "staff" ? "strike" : "bite");
+      u.work += dt * (u.tool === "staff" ? 2 : 1);
       if (u.work >= 1.1) {
         u.work = 0;
         task.fruit.alive = false;
@@ -1012,7 +1391,7 @@ export function createTribeStage(o) {
       }
     } else if (task.type === "perform") {
       const tr = task.tribe;
-      if (tr.status !== "neutral" || u.tool !== "horn") {
+      if (tr.status !== "neutral" || !INSTRUMENTS.includes(u.tool)) {
         u.task = null;
         return;
       }
@@ -1023,14 +1402,8 @@ export function createTribeStage(o) {
         sz = tr.center.z + Math.sin(a) * 9;
       if (!walk(u, sx, sz, 5, dt, 0.8)) return;
       face(u, tr.center.x, tr.center.z);
-      tr.performers++;
-      u.work -= dt;
-      if (u.work <= 0) {
-        const kind = (task.n = (task.n || 0) + 1) % 2 ? "sing" : "dance";
-        u.work = ABILITY_TIME[kind] + 0.25;
-        perform(u, kind);
-        o.sfx("horn", { pitch: [1, 1.19, 1.5][task.slot % 3], gain: 0.8 });
-      }
+      // In place: part of the band. The tribe calls for instruments; you play them.
+      tr.band.push(u);
     } else if (task.type === "attack") {
       const tr = task.tribe;
       if (tr.status !== "neutral") {
@@ -1055,17 +1428,55 @@ export function createTribeStage(o) {
         face(u, tr.center.x, tr.center.z);
         if (u.cool > 0) return;
         u.cool = 1;
-        u.body.playAbility(u.tool === "axe" ? "strike" : "bite");
+        u.body.playAbility(weapon(u) === "none" ? "bite" : "strike");
         o.sfx("chop");
         tr.relation = -100;
-        tr.hutHealth -= (u.tool === "axe" ? 0.05 : 0.025) * (u.chief ? 1.4 : 1);
+        tr.hutHealth -= HUT_DAMAGE[weapon(u)] * (u.chief ? 1.4 : 1);
+        if (u.tool === "torch") setBurning(tr);
         tr.hut.group.rotation.z = (Math.random() - 0.5) * 0.05;
         if (tr.hutHealth <= 0) conquer(tr);
       }
     } else if (task.type === "fight") {
       if (!strike(u, task.target, dt) || (task.guard && distTo(u, HOME) > 30)) u.task = null;
+    } else if (task.type === "hunt") {
+      // Chase the animal down; once it falls, butcher it and carry the meat home.
+      if (task.target.dead) {
+        const c = T.carcasses.find((k) => k.from === task.target);
+        u.task = c ? { type: "haul", carcass: c } : null;
+        return;
+      }
+      strike(u, task.target, dt);
+    } else if (task.type === "haul") {
+      const c = task.carcass;
+      if (u.carry > 0 && (u.carry >= carryOf(u, "fish") || c.food <= 0)) {
+        if (walk(u, PILE.x, PILE.z, 4.6, dt, 2.4)) {
+          T.food += u.carry;
+          pop(PILE.x, PILE.z, "+" + u.carry + " 🍖", "good");
+          o.sfx("eat");
+          u.carry = 0;
+          if (c.food <= 0) u.task = null;
+        }
+        return;
+      }
+      if (c.food <= 0) {
+        u.task = null;
+        return;
+      }
+      if (!walk(u, c.x, c.z, 5, dt, 1.6)) return;
+      face(u, c.x, c.z);
+      u.work += dt;
+      if (u.work >= 0.9) {
+        u.work = 0;
+        u.body.playAbility("bite");
+        const take = Math.min(2, c.food);
+        c.food -= take;
+        u.carry += take;
+        syncCarcass(c);
+      }
     }
   }
+  /** Members with a gathering staff carry half as much again. */
+  const carryOf = (u, kind) => Math.ceil(CARRY[kind] * (u.tool === "staff" ? 1.5 : 1));
   function nearestFoe(u, radius) {
     let best = null,
       bestD = radius;
@@ -1160,6 +1571,95 @@ export function createTribeStage(o) {
     idle(u, tr.center, dt, 3, 9);
   }
 
+  /* ---- the tribal social game ---------------------------------------------------------------
+     As in Spore: once your band stands at a tribe's fire, the tribe calls for an instrument. Play it
+     before the timer runs out and their mood rises (more players, more); play the wrong one, or
+     nothing, and it drops. Fill the meter and they ally with you. */
+  /** The tribe your band is playing for right now (the one with most of your band there). */
+  function stageTribe() {
+    let best = null;
+    for (const tr of T.tribes) if (tr.status === "neutral" && tr.watching > 0 && (!best || tr.watching > best.watching)) best = tr;
+    return best;
+  }
+  function updateCalls(tr, dt) {
+    if (!tr.band.length) {
+      tr.ask = null;
+      return;
+    }
+    if (!tr.ask) {
+      if ((tr.rest -= dt) > 0) return;
+      const owned = [...new Set(tr.band.map((u) => u.tool))];
+      tr.ask = nextAsk(tr.lastAsk, owned);
+      tr.lastAsk = tr.ask;
+      tr.askT = ASK_TIME;
+      // Their chief demonstrates: one of them performs, and a note of the instrument sounds.
+      const lead = membersOf(tr)[0];
+      if (lead) perform(lead, "sing");
+      o.sfx("horn", { pitch: INSTRUMENT_PITCH[tr.ask] * 0.8, gain: 0.5 });
+      return;
+    }
+    tr.askT -= dt;
+    if (tr.askT <= 0) answer(tr, null);
+  }
+  const INSTRUMENT_PITCH = { horn: 1, maracas: 1.5, didgeridoo: 0.6 };
+  /** You pressed an instrument: everyone in the band holding it plays. */
+  function playInstrument(id) {
+    const tr = stageTribe();
+    if (!tr) return;
+    const players = tr.band.length ? tr.band : membersBandFor(tr);
+    const holding = players.filter((u) => u.tool === id);
+    if (!holding.length) {
+      toast("Nobody in your band holds " + TOOLS[id].name.toLowerCase() + ".");
+      return;
+    }
+    holding.forEach((u, i) => perform(u, i % 2 ? "dance" : "sing"));
+    o.sfx("horn", { pitch: INSTRUMENT_PITCH[id], gain: 0.9 });
+    if (tr.ask) answer(tr, id, holding.length);
+  }
+  /** Performers in place at a tribe (the per-frame list is rebuilt during updates). */
+  const membersBandFor = (tr) => mine().filter((u) => u.task?.type === "perform" && u.task.tribe === tr && distTo(u, tr.center) < 11);
+  function answer(tr, played, count = 0) {
+    const right = played === tr.ask;
+    // Missing a call you couldn't have answered (nobody holds that instrument) costs half as much.
+    const couldnt = !played && !(tr.band.length ? tr.band : membersBandFor(tr)).some((u) => u.tool === tr.ask);
+    tr.relation = couldnt ? clampRelation(tr.relation - SOCIAL_MISS / 2) : answerCall(tr.relation, right ? count : 0);
+    tr.ask = null;
+    tr.rest = 0.8;
+    bumpArc(right ? "good" : "miss");
+    if (right) {
+      pop(tr.center.x, tr.center.z, "♪", "good");
+      // They like it: a few of them dance along.
+      membersOf(tr)
+        .slice(0, 3)
+        .forEach((m) => perform(m, "dance"));
+    } else {
+      pop(tr.center.x, tr.center.z, played ? "✖" : "⌛", "bad");
+      o.sfx("snub", { gain: 0.6 });
+    }
+    if (tr.relation >= 100) ally(tr);
+  }
+  function bumpArc(kind) {
+    const el = $h("#trArc");
+    el.classList.remove("good", "miss");
+    void el.offsetWidth;
+    el.classList.add(kind);
+  }
+  /** A gift of food: a quick boost to a tribe's mood, once in a while. */
+  function sendGift(tr) {
+    if (tr.status !== "neutral") return;
+    if (tr.giftCool > 0) return toast("They need a little time before another gift.");
+    if (T.food < GIFT.food) return toast("A gift needs " + GIFT.food + " food.");
+    T.food -= GIFT.food;
+    tr.giftCool = 25;
+    tr.relation = clampRelation(tr.relation + GIFT.relation);
+    tr.war = 0;
+    pop(tr.center.x, tr.center.z, "🎁", "good");
+    pop(PILE.x, PILE.z, "−" + GIFT.food + " 🍖", "bad");
+    o.sfx("friend", { gain: 0.6 });
+    if (tr.relation >= 100) ally(tr);
+    else renderSheet();
+  }
+
   /* ---- tribes: friendship, conquest, raids, gifts ------------------------------------- */
   function ally(tr) {
     tr.status = "allied";
@@ -1197,22 +1697,19 @@ export function createTribeStage(o) {
     saveState();
     if (!T.won && stageWon(T.tribes)) {
       T.won = true;
+      saveState();
       setTimeout(() => {
         o.sfx("unlock");
-        toast("Every tribe is settled. That is the end of this prototype: the Civilization Stage comes next.", 8);
+        openSheet("won");
       }, 2500);
     } else tipOnce("room", "Your village can now hold " + popCap(settled()) + " members.", 4);
   }
   function updateTribes(dt) {
     for (const tr of T.tribes) {
       tr.war = Math.max(0, tr.war - dt);
+      tr.giftCool = Math.max(0, tr.giftCool - dt);
       if (tr.status === "neutral") {
-        if (tr.performers > 0) {
-          // Each horn adds to the mood; a tribe that dislikes you takes more winning over.
-          const rate = 2.6 * tr.performers * (tr.relation < -10 ? 0.7 : 1);
-          tr.relation = clampRelation(tr.relation + rate * dt);
-          if (tr.relation >= 100) ally(tr);
-        }
+        updateCalls(tr, dt);
         // Raids on your food pile.
         const alive = membersOf(tr);
         if (willRaid({ status: tr.status, relation: tr.relation, alive: alive.length }) && tr.war <= 0 && !alive.some((m) => m.raid)) {
@@ -1240,8 +1737,9 @@ export function createTribeStage(o) {
           if (Math.hypot(cam.x - HOME.x, cam.z - HOME.z) < 60) toast("A gift of food from the " + tr.name + " tribe.", 3);
         }
       }
-      tr.watching = tr.performers;
-      tr.performers = 0; // recounted by the performers each frame
+      tr.watching = tr.band.length;
+      tr.performers = tr.band.length;
+      tr.band = []; // refilled by the performers each frame
     }
   }
 
@@ -1256,6 +1754,7 @@ export function createTribeStage(o) {
           tools: T.tools,
           units: mine().map((u) => ({ tool: u.tool, chief: u.chief })),
           tribes: T.tribes.map((t) => ({ relation: Math.round(t.relation), status: t.status, alive: membersOf(t).length, hut: t.hutHealth })),
+          won: T.won,
         }),
       );
       o.onSaved?.();
@@ -1349,6 +1848,38 @@ export function createTribeStage(o) {
       html += `<span class="trBar ${u.mine ? "" : "foe"}" style="left:${pt.x}px;top:${pt.y}px"><b style="width:${Math.max(0, (u.health / u.maxHealth) * 100)}%"></b></span>`;
     }
     $h("#trMarks").innerHTML = html;
+    // The social arc and the band's instrument buttons, while you're playing for a tribe.
+    const tr = stageTribe();
+    $h("#trArc").hidden = !tr;
+    $h("#trBand").hidden = !tr;
+    hud.classList.toggle("playing", !!tr);
+    if (tr) {
+      const f = RELATION_INFO[relationFace(tr.relation, tr.status)];
+      $h("#trArcFill").style.strokeDasharray = ((tr.relation + 100) / 2).toFixed(1) + " 100";
+      const face = $h("#trArcFace");
+      if (face.dataset.face !== f.face) {
+        face.dataset.face = f.face;
+        face.src = f.face;
+        face.alt = f.label;
+      }
+      $h("#trArcLabel").textContent = tr.name + " tribe";
+      const ask = $h("#trArcAsk");
+      ask.hidden = !tr.ask;
+      if (tr.ask) {
+        if (ask.dataset.ask !== tr.ask + tr.lastAsk + Math.round(tr.relation)) {
+          ask.dataset.ask = tr.ask + tr.lastAsk + Math.round(tr.relation);
+          $h("#trArcAskIcon").textContent = TOOLS[tr.ask].icon;
+          ask.setAttribute("aria-label", "They want to hear: " + TOOLS[tr.ask].name);
+        }
+        $h("#trArcTime").style.strokeDasharray = ((tr.askT / ASK_TIME) * 100).toFixed(1) + " 100";
+        ask.classList.toggle("hurry", tr.askT < ASK_TIME * 0.3);
+      }
+      const held = new Set(tr.band.length ? tr.band.map((u) => u.tool) : membersBandFor(tr).map((u) => u.tool));
+      hud.querySelectorAll("#trBand [data-play]").forEach((b) => {
+        b.disabled = !held.has(b.dataset.play);
+        b.classList.toggle("wanted", b.dataset.play === tr.ask);
+      });
+    }
     if (sheet?.kind === "tribe" && sheet.tribe.status === "neutral") {
       const bar = $h("#trSheet .tsRel b");
       if (bar) bar.style.width = (sheet.tribe.relation + 100) / 2 + "%";
@@ -1370,6 +1901,10 @@ export function createTribeStage(o) {
     world.update(dt, { x: cam.sx, z: cam.sz });
 
     updateTribes(dt);
+    updateAnimals(dt);
+    updateSpears(dt);
+    updateBurning(dt);
+    updateHealers(dt);
     for (const u of [...T.units]) {
       if (u.dead) {
         u.body.update(dt, 0);
@@ -1497,7 +2032,7 @@ export function createTribeStage(o) {
       }
     },
     save: saveState,
-    debug: { T, cam, tap, project, haveBaby, buyTool, ally, conquer, fishSpots, world, HOME, PILE, SHACK, openSheet },
+    debug: { T, cam, tap, project, haveBaby, buyTool, ally, conquer, fishSpots, world, HOME, PILE, SHACK, openSheet, playInstrument, sendGift, setTool, hurtAnimal, stageTribe, heightAt },
     dispose() {
       canvas.removeEventListener("pointerdown", onDown);
       window.removeEventListener("pointermove", onMove);
@@ -1509,6 +2044,9 @@ export function createTribeStage(o) {
       window.removeEventListener("keyup", onKeyUp);
       [...T.units].forEach(removeUnit);
       T.eggs.forEach((e) => scene.remove(e.mesh));
+      T.animals.forEach((a) => a.body.dispose());
+      T.carcasses.forEach((c) => scene.remove(c.mesh));
+      T.spears.forEach((sp) => scene.remove(sp.m));
       emotes.dispose();
       world.dispose();
       disposables.forEach((d) => d.dispose());

@@ -78,3 +78,29 @@ test('stored cell record reads back', () => {
   storeCellRecord(store, rec);
   assert.deepEqual(readCellRecord(store), rec);
 });
+
+test('random starter cells vary, stay valid and are reproducible from a seed', async () => {
+  const { randomStarterCell, randomCellName } = await import('../cell-format.js');
+  const { BASE_COLORS, PATTERN_COLORS, ACCENT_COLORS, PATTERNS } = await import('../part-defs.js');
+  const plans = new Set(), names = new Set(), bases = new Set();
+  for (let seed = 1; seed <= 200; seed++) {
+    const c = randomStarterCell(makeRng(seed));
+    plans.add(c.plan); names.add(c.name); bases.add(c.baseColor);
+    assert.ok(c.nodes.length >= 3 && c.nodes.length <= 6);
+    const xs = c.nodes.map((n) => n.x);
+    assert.ok(Math.abs(xs[0] + xs.at(-1)) < 1e-2, 'spine is centred');
+    for (let i = 1; i < xs.length; i++) assert.ok(xs[i] - xs[i - 1] >= 0.4 && xs[i] - xs[i - 1] <= 0.95);
+    c.nodes.forEach((n) => assert.ok(n.y === 0 && n.r >= 0.12 && n.r <= 1));
+    assert.ok(BASE_COLORS.includes(c.baseColor) && PATTERN_COLORS.includes(c.patternColor) && ACCENT_COLORS.includes(c.accentColor));
+    assert.notEqual(c.baseColor, c.patternColor);
+    assert.ok(PATTERNS.includes(c.pattern));
+    assert.ok(c.eyeAt > 0 && c.eyeAt < 1 && c.ciliaAt < 0 && c.ciliaAt > -1);
+    assert.ok(/^[A-Z][a-z]{2,10}$/.test(c.name));
+    assert.ok(validateCellRecord(createCellRecord({ name: c.name, nodes: c.nodes, baseColor: c.baseColor, patternColor: c.patternColor, accentColor: c.accentColor, pattern: c.pattern })).ok);
+  }
+  assert.equal(plans.size, 6, 'every body plan turns up');
+  assert.ok(names.size > 80, 'names are varied');
+  assert.ok(bases.size >= 5, 'colours are varied');
+  assert.deepEqual(randomStarterCell(makeRng(42)), randomStarterCell(makeRng(42)));
+  assert.equal(typeof randomCellName(), 'string');
+});

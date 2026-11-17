@@ -44,11 +44,50 @@ test("tribe saves are read defensively", () => {
   assert.equal(readTribeSave({ food: 5 }), null);
   const d = readTribeSave({ food: 1e9, tools: { axe: 1 }, units: [{ tool: "sword" }, { tool: "horn" }], tribes: [{ relation: 500, status: "evil", alive: 99, hut: 3 }] });
   assert.equal(d.food, 9999);
-  assert.deepEqual(d.tools, { axe: true, horn: false });
+  assert.equal(d.tools.axe, true);
+  assert.equal(d.tools.horn, false);
+  assert.equal(Object.keys(d.tools).length, 8);
   assert.equal(d.units[0].chief, true, "a chief is always restored");
   assert.deepEqual(
     d.units.map((u) => u.tool),
     [null, null, "horn"],
   );
   assert.deepEqual(d.tribes[0], { relation: 100, status: "neutral", alive: 8, hut: 1 });
+});
+
+import { ASK_TIME, DAMAGE, HUT_DAMAGE, INSTRUMENTS, TOOL_IDS, answerCall, nextAsk } from "../tribe/rules.js";
+test("eight tools in three kinds, with weapons that hit differently", () => {
+  assert.equal(TOOL_IDS.length, 8);
+  assert.deepEqual(INSTRUMENTS, ["horn", "maracas", "didgeridoo"]);
+  assert.ok(DAMAGE.axe > DAMAGE.none && HUT_DAMAGE.torch > HUT_DAMAGE.axe);
+  assert.ok(ASK_TIME > 2);
+});
+
+test("a tribe calls for instruments you own more often, never twice running", () => {
+  let n = 0;
+  const seq = () => (n = (n * 9301 + 49297) % 233280) / 233280;
+  let last = null;
+  const counts = { horn: 0, maracas: 0, didgeridoo: 0 };
+  for (let i = 0; i < 300; i++) {
+    const a = nextAsk(last, ["horn"], seq);
+    assert.notEqual(a, last);
+    counts[a]++;
+    last = a;
+  }
+  assert.ok(counts.horn > counts.maracas && counts.horn > counts.didgeridoo);
+});
+
+test("answering a call raises the mood, missing it lowers it", () => {
+  assert.ok(answerCall(0, 1) > 0);
+  assert.ok(answerCall(0, 3) > answerCall(0, 1));
+  assert.ok(answerCall(0, 0) < 0);
+  assert.equal(answerCall(99, 4), 100);
+});
+
+test("saves keep every tool, and drop unknown ones", () => {
+  const d = readTribeSave({ food: 5, tools: { spear: true, laser: true }, units: [{ chief: true, tool: "torch" }], tribes: [], won: true });
+  assert.equal(d.tools.spear, true);
+  assert.equal(d.tools.laser, undefined);
+  assert.equal(d.units[0].tool, "torch");
+  assert.equal(d.won, true);
 });
