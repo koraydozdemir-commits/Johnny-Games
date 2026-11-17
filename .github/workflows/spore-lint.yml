@@ -17,5 +17,7 @@ jobs:
           node-version: 20
       - name: Lint
         run: npx --yes eslint@9 -c eslint.config.js .
+      - name: Install three.js for the tests (the game itself loads it from a CDN)
+        run: npm install --no-save --no-package-lock three@0.160.0
       - name: Unit tests
         run: node --test tests/*.test.mjs

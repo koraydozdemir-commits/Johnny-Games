@@ -176,7 +176,7 @@ body.cellEditorMode.dragging-part #editorTrash.ready{background:linear-gradient(
 
 /* Main soup gameplay polish — only active outside the creator */
 #damageFlash{position:absolute;z-index:4;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(188,24,43,.56) 100%);transition:opacity .07s}
-#qualityToggle,#soundToggle,#fullscreenToggle{width:32px;height:32px;min-height:32px;padding:0;border-radius:50%;font-size:17px;border-color:#8199a0;background:radial-gradient(circle at 35% 25%,#97cfdb,#294e63 64%,#112c40);flex:none}
+#pathToggle,#qualityToggle,#soundToggle,#settingsToggle,#fullscreenToggle{width:32px;height:32px;min-height:32px;padding:0;border-radius:50%;font-size:17px;border-color:#8199a0;background:radial-gradient(circle at 35% 25%,#97cfdb,#294e63 64%,#112c40);flex:none}
 #guideButton{width:25px;height:25px;min-height:25px;padding:0;border-radius:50%;font-weight:900;line-height:1}
 .controlHint{display:none;position:absolute;z-index:8;left:50%;bottom:82px;transform:translateX(-50%);align-items:center;gap:10px;max-width:min(600px,90vw);padding:10px 15px;border:1px solid #99c8d3;border-radius:22px;background:linear-gradient(120deg,#1c4659ee,#0b2239f2);color:#eaf8f3;box-shadow:0 5px 25px #0008,inset 0 1px #ffffff29;font-size:11px;letter-spacing:.04em;pointer-events:auto}
 .controlHint.show{display:flex;animation:hintRise .35s ease-out}
@@ -197,8 +197,10 @@ body.cellEditorMode.dragging-part #editorTrash.ready{background:linear-gradient(
 .mobileControls .actionCol button{width:52px;height:52px;min-height:52px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;font-size:20px;line-height:1;background:radial-gradient(circle at 35% 25%,#507b8eeb,#18374eeF 70%);border-color:#a8c5cd;box-shadow:inset 0 2px #ffffff42,0 4px 8px #0008}
 .mobileControls .actionCol button small{font-size:7px;letter-spacing:.1em;margin-top:3px}
 #touchBoost{color:#ffe59a}#touchMate{color:#ffc4e4}#touchPause{color:#d3efff}
+#touchLand{color:#c9ffb0;box-shadow:0 0 0 2px #8ff0a8,0 0 14px #8ff0a866}
+.landBtn[hidden]{display:none!important}
 @media(max-width:850px){
- #qualityToggle,#soundToggle,#fullscreenToggle{width:27px;height:27px;min-height:27px;font-size:14px}
+ #pathToggle,#qualityToggle,#soundToggle,#settingsToggle,#fullscreenToggle{width:27px;height:27px;min-height:27px;font-size:14px}
  .controlHint{bottom:calc(125px + env(safe-area-inset-bottom));max-width:76vw;text-align:center;font-size:10px;padding:8px 11px}
  #intro .dialog{max-height:91dvh;overflow-y:auto;padding:23px 15px}
  #intro .options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
@@ -230,7 +232,7 @@ body{overscroll-behavior:none;user-select:none;-webkit-user-select:none;-webkit-
 button{user-select:none;-webkit-user-select:none}
 input,select,textarea{user-select:text;-webkit-user-select:text}
 #dialogText{white-space:pre-line}
-@media(max-width:560px){#qualityToggle,#soundToggle,#fullscreenToggle{width:24px;height:24px;min-height:24px;font-size:12px;border-width:1px}}
+@media(max-width:560px){#pathToggle,#qualityToggle,#soundToggle,#settingsToggle,#fullscreenToggle{width:24px;height:24px;min-height:24px;font-size:12px;border-width:1px}}
 
 .mobileControls{position:absolute;z-index:7;inset:0;display:none;pointer-events:none}
 @media(max-width:850px){.mobileControls{display:block}}
@@ -386,12 +388,12 @@ body.inGameMode header .brand,body.inGameMode header .grow{display:none!importan
 body.inGameMode header .back{display:flex;align-items:center;justify-content:center;width:32px;height:32px;min-width:32px;border-radius:50%;border:2px solid #a1c0ca;background:radial-gradient(circle at 35% 25%,#a4dbea,#294f69 65%,#102a40);box-shadow:inset 0 2px #fff6,0 3px 7px #0007;font-size:27px;line-height:1}
 body.inGameMode header #tierLabel{margin-left:auto;background:linear-gradient(#294a5b,#102b40);border-color:#6c929e;font:700 9px Georgia,serif;letter-spacing:.07em}
 body.inGameMode header .pill:first-of-type{border-color:#6d969e;background:linear-gradient(#182c3d,#0a1725);font-family:Georgia,serif}
-body.inGameMode header #qualityToggle,body.inGameMode header #soundToggle,body.inGameMode header #fullscreenToggle{margin:0;width:31px;height:31px;min-height:31px}
+body.inGameMode header #pathToggle,body.inGameMode header #qualityToggle,body.inGameMode header #soundToggle,body.inGameMode header #settingsToggle,body.inGameMode header #fullscreenToggle{margin:0;width:31px;height:31px;min-height:31px}
 body.inGameMode #gameButtons #saveBtn,body.inGameMode #gameButtons #resetBtn{display:none!important}
 body.inGameMode #gameButtons{flex-wrap:nowrap}
 body.inGameMode #gameButtons button{min-height:41px}
-@media(max-width:850px){body.inGameMode header{height:40px;padding:4px 7px;gap:5px}body.inGameMode header .back{width:29px;height:29px;min-width:29px;font-size:24px}body.inGameMode header #tierLabel{font-size:8px;max-width:91px;white-space:normal;text-align:center;padding:4px 6px}body.inGameMode header .pill:first-of-type{font-size:9px;padding:4px 7px}body.inGameMode header #qualityToggle,body.inGameMode header #soundToggle,body.inGameMode header #fullscreenToggle{width:26px;height:26px;min-height:26px;font-size:12px}body.inGameMode #gameButtons{padding-left:6px;padding-right:6px;gap:4px}body.inGameMode #gameButtons button{font-size:10px;min-height:38px;padding:6px 6px}}
-@media(max-width:560px){body.inGameMode header{padding-left:5px;padding-right:5px}body.inGameMode header #tierLabel{max-width:68px;font-size:7px;padding:3px 4px}body.inGameMode header .pill:first-of-type{font-size:8px;padding:3px 5px}body.inGameMode header #qualityToggle,body.inGameMode header #soundToggle,body.inGameMode header #fullscreenToggle{width:23px;height:23px;min-height:23px;font-size:11px}body.inGameMode #gameButtons button{font-size:9px;padding:5px 4px}}
+@media(max-width:850px){body.inGameMode header{height:40px;padding:4px 7px;gap:5px}body.inGameMode header .back{width:29px;height:29px;min-width:29px;font-size:24px}body.inGameMode header #tierLabel{font-size:8px;max-width:91px;white-space:normal;text-align:center;padding:4px 6px}body.inGameMode header .pill:first-of-type{font-size:9px;padding:4px 7px}body.inGameMode header #pathToggle,body.inGameMode header #qualityToggle,body.inGameMode header #soundToggle,body.inGameMode header #settingsToggle,body.inGameMode header #fullscreenToggle{width:26px;height:26px;min-height:26px;font-size:12px}body.inGameMode #gameButtons{padding-left:6px;padding-right:6px;gap:4px}body.inGameMode #gameButtons button{font-size:10px;min-height:38px;padding:6px 6px}}
+@media(max-width:560px){body.inGameMode header{padding-left:5px;padding-right:5px}body.inGameMode header #tierLabel{max-width:68px;font-size:7px;padding:3px 4px}body.inGameMode header .pill:first-of-type{font-size:8px;padding:3px 5px}body.inGameMode header #pathToggle,body.inGameMode header #qualityToggle,body.inGameMode header #soundToggle,body.inGameMode header #settingsToggle,body.inGameMode header #fullscreenToggle{width:23px;height:23px;min-height:23px;font-size:11px}body.inGameMode #gameButtons button{font-size:9px;padding:5px 4px}}
 @media(pointer:coarse){body.inGameMode header{height:44px;padding:5px 9px}body.inGameMode #gameButtons #saveBtn,body.inGameMode #gameButtons #resetBtn{display:none!important}}
 
 .zoomControls{position:absolute;z-index:6;top:252px;right:17px;display:flex;flex-direction:column;gap:5px;pointer-events:auto}
@@ -433,11 +435,477 @@ body.cellEditorMode .partThumb{object-fit:contain;background:radial-gradient(ell
 .mateCue #mateCueTitle{font-size:24px;line-height:1;letter-spacing:0}
 #growthBar.needsFoodPulse{animation:needsFoodPulse .72s ease-in-out}
 @keyframes needsFoodPulse{0%,100%{filter:brightness(1)}45%{filter:brightness(1.8);box-shadow:0 0 18px #f5d47b}}
+body.dragging-catalog,body.dragging-catalog *{cursor:grabbing!important}
+.moveStick.floating{position:fixed;z-index:7;margin:0;box-shadow:0 0 0 2px #b4e2eb33,0 6px 24px #0006}
+@media (max-width:600px){#gameHUD{transform:scale(.78);transform-origin:top left}#radarWrap{transform:scale(.8);transform-origin:top right}}
+@media (pointer:coarse){#pauseBtn,#callMateBtn{display:none!important}}
+
+/* ---- Progression UI ---- */
+.dietPath{margin-top:7px}
+.dpHead{display:flex;justify-content:space-between;align-items:baseline;font-size:9px;letter-spacing:.1em;color:#a9cbd6}
+.dpHead b{font-size:11px;letter-spacing:.04em;color:#fff}
+.dpTrack{position:relative;display:flex;height:8px;border-radius:6px;overflow:visible;margin:5px 0 4px;background:#0b1a26}
+.dpZone{display:block;height:100%}
+.dpZone.herb{flex:25;background:#3fc26e;border-radius:6px 0 0 6px}.dpZone.omni{flex:50;background:#3f9cf0}.dpZone.carn{flex:25;background:#ef4b48;border-radius:0 6px 6px 0}
+.dpMark{position:absolute;top:50%;left:50%;width:13px;height:13px;margin:-6.5px 0 0 -6.5px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px #0b1a26,0 0 8px #fff9;transition:left .5s cubic-bezier(.2,.8,.2,1)}
+.dpCounts{display:flex;justify-content:space-between;font-size:10px;color:#cfe6ec}
+.tipBubble{position:fixed;z-index:30;left:50%;top:84px;transform:translate(-50%,-8px);width:min(440px,calc(100vw - 32px));box-sizing:border-box;display:flex;gap:10px;align-items:flex-start;padding:11px 12px 11px 14px;border-radius:14px;background:#0e2536f2;border:1px solid #8fe3ee66;box-shadow:0 10px 30px #0008;color:#eaf8fb;font-size:13px;line-height:1.4;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s}
+.tipBubble.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.tipBubble #tipText{flex:1}
+.tipBubble .tipIcon{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:#f5c75a;color:#2a1d05;font-weight:800}
+.tipBubble button{flex:none;margin-left:4px;border:0;border-radius:9px;padding:6px 10px;background:#ffffff1c;color:#fff;font:inherit;font-size:12px;cursor:pointer}
+.tipAnchorGlow{outline:3px solid #f5c75a!important;outline-offset:3px;border-radius:12px;animation:tipGlow 1.2s ease-in-out infinite}
+@keyframes tipGlow{50%{outline-color:#f5c75a55}}
+body.cellEditorMode .tipBubble{top:62px;bottom:auto}
+.stageBanner{position:fixed;z-index:29;left:50%;top:30%;transform:translate(-50%,-50%) scale(.92);text-align:center;pointer-events:none;opacity:0;transition:opacity .5s,transform .5s;color:#fff;text-shadow:0 4px 20px #000a}
+.stageBanner.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.stageBanner small{display:block;font-size:12px;letter-spacing:.3em;color:#9fe9f2}
+.stageBanner strong{display:block;font-size:clamp(30px,7vw,54px);letter-spacing:.04em;margin:4px 0}
+.stageBanner span{display:block;max-width:420px;font-size:14px;color:#d6eef3}
+.cardPop{position:fixed;z-index:31;right:16px;top:84px;width:220px;padding:14px;border-radius:16px;background:linear-gradient(160deg,#1c3b52,#0e2233);border:1px solid var(--c,#f5c75a);box-shadow:0 0 0 1px #0006,0 12px 40px #000a,0 0 24px color-mix(in srgb,var(--c,#f5c75a) 40%,transparent);color:#fff;transform:translateX(130%);transition:transform .45s cubic-bezier(.2,.9,.2,1)}
+.cardPop.show{transform:none}
+.cardPop .cpKind{font-size:9px;letter-spacing:.2em;color:var(--c,#f5c75a)}
+.cardPop .cpIcon{font-size:30px;margin:6px 0 2px}.cardPop .cpTitle{font-weight:800;font-size:16px}.cardPop .cpText{font-size:12px;color:#cfe3ea;margin-top:4px}
+.cardPop img{width:70px;height:52px;display:block;margin:6px 0 2px}
+.overlayScreen{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;background:#04101ad9;backdrop-filter:blur(6px);padding:16px;overflow:auto}
+.overlayScreen.show{display:flex}
+.pathPanel{width:min(760px,100%);max-height:100%;overflow:auto;border-radius:20px;background:#0c2131;border:1px solid #7fd3e044;box-shadow:0 20px 60px #000b;color:#eaf6f9;padding:20px}
+.pathPanel h2{margin:0 0 2px;font-size:20px}.pathPanel h3{margin:18px 0 8px;font-size:12px;letter-spacing:.16em;color:#9fd8e2}
+.pathPanel .close{float:right;border:0;background:#ffffff1a;color:#fff;border-radius:10px;padding:8px 12px;font:inherit;cursor:pointer}
+.roadmap{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.roadNode{flex:1 1 90px;min-width:84px;padding:9px 8px;border-radius:12px;background:#132f43;border:1px solid #ffffff14;text-align:center;font-size:12px}
+.roadNode b{display:block;font-size:13px}.roadNode small{color:#9fb8c2}
+.roadNode.current{border-color:#f5c75a;box-shadow:0 0 0 1px #f5c75a55}.roadNode.future{opacity:.45}
+.stagePips{display:flex;gap:4px;justify-content:center;margin-top:6px}.stagePips i{width:12px;height:5px;border-radius:3px;background:#ffffff26}.stagePips i.on{background:#5fe0c8}
+.cardRow{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.traitCard{position:relative;padding:12px;border-radius:14px;background:#132f43;border:1px solid #ffffff1a;font-size:12px;color:#cfe3ea}
+.traitCard .tcIcon{font-size:24px}.traitCard b{display:block;color:#fff;font-size:14px;margin:4px 0 2px}
+.traitCard.earned{border-color:var(--c,#f5c75a);background:linear-gradient(160deg,#1d4058,#11283a)}
+.traitCard.heading{border-color:var(--c);box-shadow:0 0 0 2px color-mix(in srgb,var(--c) 45%,transparent)}
+.traitCard.locked{opacity:.62}
+.traitCard .tcBar{height:5px;border-radius:3px;background:#ffffff1f;margin-top:8px;overflow:hidden}.traitCard .tcBar i{display:block;height:100%;background:#5fe0c8}
+.traitCard .tcTag{position:absolute;top:10px;right:10px;font-size:9px;letter-spacing:.12em;color:var(--c,#f5c75a)}
+.statGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;font-size:12px}.statGrid div{background:#132f43;border-radius:10px;padding:8px}.statGrid b{display:block;font-size:17px;color:#fff}
+.partCard.locked .partThumb{filter:brightness(0) opacity(.55)}
+.partCard.locked small{white-space:normal;line-height:1.2}
+.finale{position:fixed;inset:0;z-index:45;display:none;overflow:hidden;background:linear-gradient(180deg,#8fd3f0 0%,#bfe8f3 38%,#e9d9a8 60%,#cdb57e 100%);color:#132532}
+.finale.show{display:block}
+.finale .waves{position:absolute;left:-10%;right:-10%;bottom:34%;height:22%;background:repeating-radial-gradient(ellipse at 50% 0,#2f86b8 0 18px,#3c9ccc 18px 36px);border-radius:0 0 50% 50%;animation:waveIn 6s ease-in-out infinite alternate}
+@keyframes waveIn{to{transform:translateY(8%)}}
+.finale .finaleInner{position:relative;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center}
+.finale h2{margin:0;font-size:clamp(26px,6vw,44px)}.finale p{margin:0;max-width:460px;font-size:15px}
+.flipCard{width:220px;height:300px;perspective:900px}
+.flipCard .fcInner{position:relative;width:100%;height:100%;transition:transform 1s cubic-bezier(.2,.8,.2,1);transform-style:preserve-3d}
+.flipCard.flipped .fcInner{transform:rotateY(180deg)}
+.flipCard .fcFace{position:absolute;inset:0;border-radius:18px;backface-visibility:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;box-shadow:0 18px 40px #0005}
+.flipCard .fcBack{background:repeating-linear-gradient(45deg,#163a52 0 10px,#1b4560 10px 20px);border:3px solid #f5c75a;color:#f5c75a;font-size:46px}
+.flipCard .fcFront{transform:rotateY(180deg);background:linear-gradient(170deg,#183b52,#0d2131);border:3px solid var(--c,#f5c75a);color:#fff}
+.flipCard .fcFront .ic{font-size:54px}.flipCard .fcFront b{font-size:22px;margin-top:6px}.flipCard .fcFront em{font-style:normal;color:var(--c);font-size:13px;letter-spacing:.14em;margin-top:2px}.flipCard .fcFront p{font-size:12px;color:#cfe3ea;margin-top:10px}
+.finaleButtons{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.finaleButtons button{border:0;border-radius:14px;padding:13px 18px;font:inherit;font-weight:700;cursor:pointer;background:#ffffffcc;color:#132532}
+.finaleButtons button.primary{background:#f5c75a}
+html body.creatureMode:not(.landUiShown) #gameReticle,html body.creatureMode:not(.landUiShown) #sporeEditorTop,html body.creatureMode:not(.landUiShown) #sporeEditorBottom,html body.creatureMode:not(.landUiShown) #editorTrash,html body.creatureMode:not(.landUiShown) #partsPanel,html body.creatureMode:not(.landUiShown) #editorPanel,html body.creatureMode:not(.landUiShown) #editorButtons,html body.creatureMode:not(.landUiShown) #worldWaypoint,html body.creatureMode:not(.landUiShown) #controlHint,html body.creatureMode:not(.landUiShown) #growthHUD,html body.creatureMode:not(.landUiShown) #growthBar,html body.creatureMode:not(.landUiShown) .tipBubble,html body.creatureMode:not(.landUiShown) .stageBanner,html body.creatureMode:not(.landUiShown) header,html body.creatureMode:not(.landUiShown) #gameHUD,html body.creatureMode:not(.landUiShown) #radarWrap,html body.creatureMode:not(.landUiShown) #zoomControls,html body.creatureMode:not(.landUiShown) #mateCue,html body.creatureMode:not(.landUiShown) #gameButtons,html body.creatureMode:not(.landUiShown) .mobileActions,html body.creatureMode:not(.landUiShown) #touchBoost,html body.creatureMode:not(.landUiShown) #touchMate,html body.creatureMode:not(.landUiShown) #touchPause,html body.creatureMode:not(.landUiShown) .waypoint,html body.creatureMode:not(.landUiShown) #waypoint{display:none!important}
+.creatureHUD [hidden],.crEditor [hidden]{display:none!important}
+.creatureHUD{position:fixed;inset:0;z-index:20;pointer-events:none;color:#fff;display:none;font-family:inherit}
+body.creatureMode .creatureHUD{display:block}
+body.creatureEditing .creatureHUD,body.creatureEditing .moveStick{display:none!important}
+.creatureHUD.hurt::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 80px 12px #ff3b4a77;animation:chHurt .5s ease-out forwards}
+@keyframes chHurt{from{opacity:1}to{opacity:0}}
+.creatureHUD .chTop{position:absolute;top:max(10px,env(safe-area-inset-top));left:10px;right:10px;display:flex;gap:10px;align-items:flex-start;justify-content:space-between}
+.creatureHUD .chBox{pointer-events:auto;background:#0d2232d9;backdrop-filter:blur(6px);border:1px solid #ffffff22;border-radius:14px;padding:9px 12px;font-size:12px;width:min(250px,56vw)}
+.creatureHUD .chName{display:flex;justify-content:space-between;gap:8px;margin-bottom:4px}.creatureHUD .chName b{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.creatureHUD .chName span{color:#ffd98a;font-weight:700;white-space:nowrap}
+.creatureHUD .chBar{display:grid;grid-template-columns:52px 1fr;align-items:center;gap:6px;margin-top:4px;font-size:10px;letter-spacing:.06em;color:#bfd6de}
+.creatureHUD .chBar i{display:block;height:8px;border-radius:5px;background:#ffffff1c;overflow:hidden}
+.creatureHUD .chBar i b{display:block;height:100%;width:0;border-radius:5px;background:linear-gradient(90deg,#3fc26e,#8ff0a8);transition:width .2s}
+.creatureHUD .chBar:nth-child(3) i b{background:linear-gradient(90deg,#f2a33b,#ffd98a)}
+.creatureHUD .chBar i.low b{background:#ef4b48;animation:chBlink 1s infinite}
+.creatureHUD .chBar.brain i b{background:linear-gradient(90deg,#9a63e0,#d3a9ff)}
+.creatureHUD .chBar.brain i.ready b{background:linear-gradient(90deg,#f5c75a,#fff1b8);animation:chBlink 1.2s infinite}
+@keyframes chBlink{50%{opacity:.55}}
+.creatureHUD .chTopRight{display:flex;gap:6px;align-items:center}
+.creatureHUD .chPill{background:#0d2232d9;border:1px solid #ffffff22;border-radius:20px;padding:8px 11px;font-weight:700;font-size:13px}
+.creatureHUD .chIconBtn{pointer-events:auto;width:40px;height:40px;border-radius:12px;border:1px solid #ffffff22;background:#0d2232d9;color:#fff;font-size:18px;cursor:pointer}
+.creatureHUD button:focus-visible{outline:3px solid #ffd98a;outline-offset:2px}
+.creatureHUD .chObjective{position:absolute;top:calc(max(10px,env(safe-area-inset-top)) + 104px);left:10px;max-width:min(330px,70vw);font-size:12px;line-height:1.35;background:#0d223299;border-radius:10px;padding:7px 10px;color:#e8f6f8}
+.creatureHUD .chTarget{position:absolute;top:max(10px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);margin-top:52px;background:#0d2232d9;border:1px solid #ffffff22;border-radius:12px;padding:7px 12px;text-align:center;min-width:170px;font-size:11px}
+.creatureHUD .chTarget b{display:block;font-size:13px}.creatureHUD .chTarget span{color:#bfd6de}
+.creatureHUD .chTarget i{display:block;height:6px;border-radius:4px;background:#ffffff1c;margin-top:5px;overflow:hidden}.creatureHUD .chTarget i b{height:100%;background:#ef4b48;width:0}
+.creatureHUD .chSocial{position:absolute;transform:translate(-50%,-100%);background:#fff;color:#132532;border-radius:16px;padding:6px 10px;display:flex;align-items:center;gap:6px;box-shadow:0 6px 18px #0006}
+.creatureHUD .chSocial::after{content:"";position:absolute;left:50%;bottom:-7px;margin-left:-7px;border:7px solid transparent;border-bottom:0;border-top-color:#fff}
+.creatureHUD .chSocial span{font-size:22px}.creatureHUD .chSocial i{display:block;width:60px;height:7px;border-radius:4px;background:#13253222;overflow:hidden}.creatureHUD .chSocial i b{display:block;height:100%;background:#3fc26e;width:0;transition:width .25s}
+.creatureHUD .chMarkers{position:absolute;inset:0;overflow:hidden}
+.creatureHUD .chMark{position:absolute;transform:translate(-50%,-100%);font-size:11px;font-weight:700;white-space:nowrap;background:#0d2232b3;border-radius:10px;padding:3px 8px;border:1px solid #ffffff22}
+.creatureHUD .chMark.allied{border-color:#3fc26e}.creatureHUD .chMark.extinct{opacity:.6}.creatureHUD .chMark.home{border-color:#ffd98a}
+.creatureHUD .chToast{position:absolute;left:50%;top:30%;transform:translateX(-50%);width:min(90vw,520px);text-align:center;font-weight:800;font-size:17px;text-shadow:0 3px 14px #000c;opacity:0;transition:opacity .3s}
+.creatureHUD .chToast.show{opacity:1}
+.creatureHUD .chMate{pointer-events:auto;position:absolute;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);border:0;border-radius:24px;padding:13px 22px;font:inherit;font-weight:800;background:#ff8fb1;color:#3a0f1e;box-shadow:0 6px 20px #ff8fb166;cursor:pointer;animation:chBlink 1.4s infinite}
+.creatureHUD .chAbilities{pointer-events:auto;position:absolute;right:10px;bottom:calc(14px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(3,62px);gap:8px;direction:rtl}
+.creatureHUD .chAb{direction:ltr;position:relative;width:62px;height:62px;border-radius:50%;border:2px solid #ffffff44;background:radial-gradient(circle at 40% 35%,#24506d,#0d2232);color:#fff;font:inherit;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding:0}
+.creatureHUD .chAb .ic{font-size:21px;line-height:1}.creatureHUD .chAb small{font-size:8.5px;font-weight:700;margin-top:2px;white-space:nowrap}
+.creatureHUD .chAb kbd{position:absolute;top:4px;right:9px;font-size:8px;opacity:.6;font-family:inherit}
+.creatureHUD .chAb.combat{border-color:#ef4b4899}.creatureHUD .chAb.social{border-color:#3fc26e99}.creatureHUD .chAb.card{border-color:#f5c75a}.creatureHUD .chAb.mode{background:#183b52}
+.creatureHUD .chAb[disabled]{opacity:.4;cursor:default}
+.creatureHUD .chAb.wanted{box-shadow:0 0 0 3px #fff,0 0 18px 4px #8ff0a8;animation:chBlink .9s infinite}
+.creatureHUD .chAb .cd{position:absolute;inset:0;border-radius:50%;background:conic-gradient(#000b var(--p,0%),transparent 0);pointer-events:none}
+.creatureHUD .chMenuPanel{pointer-events:auto;position:absolute;top:60px;right:10px;display:flex;flex-direction:column;gap:8px;background:#0d2232f2;border:1px solid #ffffff22;border-radius:14px;padding:12px}
+.creatureHUD .chMenuPanel button{border:0;border-radius:10px;padding:11px 16px;font:inherit;font-weight:700;background:#ffffff22;color:#fff;cursor:pointer}.creatureHUD .chMenuPanel button.primary{background:#f5c75a;color:#132532}
+@media (max-width:600px){.creatureHUD .chAbilities{grid-template-columns:repeat(3,54px);gap:6px}.creatureHUD .chAb{width:54px;height:54px}.creatureHUD .chAb small{font-size:7.5px}.creatureHUD .chObjective{font-size:11px;top:calc(max(10px,env(safe-area-inset-top)) + 96px)}.creatureHUD .chTarget{top:auto;bottom:calc(196px + env(safe-area-inset-bottom));margin:0}}
+/* Spore-style action bar and selection card */
+.creatureHUD .chAbilities{display:flex;flex-direction:column;align-items:flex-end;gap:6px;grid-template-columns:none;direction:ltr}
+.creatureHUD .chRow{display:flex;gap:6px}
+.creatureHUD .chAb .lv{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);font-style:normal;font-size:8px;font-weight:800;color:#ffd98a;display:none}
+.creatureHUD .chAb[aria-disabled=true]{opacity:.38;filter:grayscale(.8)}
+.creatureHUD .chAb.pending{box-shadow:0 0 0 3px #ffd98a;animation:chBlink .7s infinite}
+.creatureHUD .chAb.next{border-color:#9fd8e2}
+.creatureHUD .chTarget{min-width:min(300px,86vw);max-width:min(340px,92vw);text-align:left;padding:9px 12px;border-radius:14px;pointer-events:auto}
+.creatureHUD .chTarget .ctHead{display:flex;align-items:center;gap:7px}
+.creatureHUD .chTarget .ctHead b{flex:1;font-size:15px;display:inline;letter-spacing:.01em}
+.creatureHUD .chTarget .ctDiet{font-size:16px}
+.creatureHUD .chTarget .ctRel{font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;background:#ffffff1f;color:#fff}
+.creatureHUD .chTarget .ctRel.hostile{background:#ef4b48}.creatureHUD .chTarget .ctRel.friend,.creatureHUD .chTarget .ctRel.pack{background:#3fc26e;color:#08210f}.creatureHUD .chTarget .ctRel.neutral{background:#f5c75a;color:#132532}
+.creatureHUD .chTarget .ctClose{pointer-events:auto;border:0;background:#ffffff1a;color:#fff;border-radius:8px;width:26px;height:26px;cursor:pointer;font-size:12px}
+.creatureHUD .chTarget .ctInfo,.creatureHUD .chTarget .ctLikes,.creatureHUD .chTarget .ctHint{display:block;font-size:11px;color:#bfd6de;margin-top:3px}
+.creatureHUD .chTarget .ctHp{display:block;height:6px;border-radius:4px;background:#ffffff1c;margin-top:5px;overflow:hidden}.creatureHUD .chTarget .ctHp b{display:block;height:100%;background:#ef4b48;width:0}
+.creatureHUD .chTarget .ctLikes span{display:inline-block;padding:1px 6px;border-radius:8px;margin-left:2px;font-weight:800;color:#fff}
+.creatureHUD .chTarget .ctLikes .ok{background:#3fc26e55}.creatureHUD .chTarget .ctLikes .low{background:#ef4b4855}
+.creatureHUD .chTarget .ctHint{color:#ffd98a;font-weight:700}
+.creatureHUD .chTarget.revealing{animation:ctReveal .9s ease-out}
+.creatureHUD .chTarget.revealing .ctHead b{color:#ffd98a;letter-spacing:.3em}
+@keyframes ctReveal{0%{transform:translateX(-50%) scale(.85);opacity:.4}60%{transform:translateX(-50%) scale(1.06)}100%{transform:translateX(-50%) scale(1);opacity:1}}
+@media (max-width:600px){.creatureHUD .chRow{gap:5px}.creatureHUD .chAb,.creatureHUD .chAbilities .chAb{width:50px;height:50px}.creatureHUD .chAb small{font-size:7px}.creatureHUD .chAb .ic{font-size:18px}.creatureHUD .chAb kbd{display:none}.creatureHUD .chTarget{top:auto;bottom:calc(196px + env(safe-area-inset-bottom));left:50%;margin:0}.creatureHUD .chMate{bottom:calc(250px + env(safe-area-inset-bottom))}}
+@media (hover:none){.creatureHUD .chAb kbd{display:none}}
+/* Show-don't-tell feedback */
+.creatureHUD .chPops{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.creatureHUD .chPop{position:absolute;transform:translate(-50%,-50%);font-size:26px;filter:drop-shadow(0 2px 6px #0009);animation:chPopUp 1.35s ease-out forwards}
+.creatureHUD .chPop.good{font-size:34px}
+.creatureHUD .chPop.weak{font-size:18px;opacity:.6;filter:grayscale(.7) drop-shadow(0 2px 6px #0009)}
+.creatureHUD .chPop.bad{font-size:28px}
+@keyframes chPopUp{0%{opacity:0;transform:translate(-50%,-30%) scale(.4)}18%{opacity:1;transform:translate(-50%,-60%) scale(1.15)}100%{opacity:0;transform:translate(-50%,-260%) scale(.9)}}
+.creatureHUD .chAb.nope{animation:chNope .38s}
+@keyframes chNope{20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+.creatureHUD .chSocial.miss{animation:chMiss .45s}
+@keyframes chMiss{0%,100%{background:#fff}30%{background:#ffb0a8;transform:translate(-50%,-100%) rotate(-6deg)}60%{transform:translate(-50%,-100%) rotate(5deg)}}
+/* Surfacing: light floods down from the water's surface */
+.surfaceFx{position:fixed;inset:0;z-index:90;pointer-events:none;opacity:0;background:radial-gradient(ellipse at 50% 30%,#ffffff 0%,#d8f4ff 35%,#7fd0ec 70%,#2f8fc0 100%);transition:opacity 2.4s ease-in}
+.surfaceFx.rise{opacity:1}
+.surfaceFx.out{opacity:0;transition:opacity 1.3s ease-out}
+.surfaceFx i{position:absolute;left:50%;top:40%;width:20px;height:20px;margin:-10px;border:2px solid #ffffffaa;border-radius:50%;animation:sfRipple 2.2s ease-out infinite}
+.surfaceFx i:nth-child(2){animation-delay:.7s}.surfaceFx i:nth-child(3){animation-delay:1.4s}
+@keyframes sfRipple{from{transform:scale(1) scaleY(.35);opacity:.9}to{transform:scale(40) scaleY(.35);opacity:0}}
+/* Crawl-out cinematic */
+.stageIntro{position:fixed;inset:0;z-index:60;pointer-events:auto;cursor:pointer}
+.stageIntro .lbTop,.stageIntro .lbBottom{position:absolute;left:0;right:0;height:11vh;background:#05080b;transition:transform 1s cubic-bezier(.2,.8,.2,1)}
+.stageIntro .lbTop{top:0;transform:translateY(-100%)}.stageIntro .lbBottom{bottom:0;transform:translateY(100%)}
+.stageIntro.show .lbTop,.stageIntro.show .lbBottom{transform:none}
+.stageIntro .siTitle{position:absolute;left:0;right:0;bottom:calc(11vh + 4vh);text-align:center;color:#fff;opacity:0;transform:translateY(12px);transition:opacity 1.1s,transform 1.1s;text-shadow:0 3px 20px #000a}
+.stageIntro.titled .siTitle{opacity:1;transform:none}
+.stageIntro .siTitle small{display:block;font-size:12px;letter-spacing:.5em;text-transform:uppercase;color:#ffe6a8}
+.stageIntro .siTitle b{display:block;font-size:clamp(30px,7vw,58px);font-weight:900;letter-spacing:.02em;margin:4px 0 10px}
+.stageIntro .siTrait{display:inline-block;font-size:12px;font-weight:800;padding:5px 12px;border-radius:20px;background:#0008;border:1px solid var(--c);color:#fff}
+.stageIntro .siSkip{position:absolute;right:14px;bottom:calc(11vh + 12px);border:1px solid #ffffff44;background:#0006;color:#fff;border-radius:16px;padding:7px 13px;font:inherit;font-size:12px;cursor:pointer;opacity:0;transition:opacity .6s .8s}
+.stageIntro.show .siSkip{opacity:1}
+.creatureHUD.intro{visibility:hidden}
+html body.cinematic.creatureMode .moveStick,html body.cinematic .mobileControls{display:none!important}
+/* Creature editor */
+.crEditor{position:fixed;inset:0;z-index:70;pointer-events:none;color:#fff;font-family:inherit}
+.crEditor button{font:inherit;cursor:pointer}
+.crEditor button:focus-visible,.crEditor input:focus-visible{outline:3px solid #ffd98a;outline-offset:2px}
+.crEditor .ceTop{pointer-events:auto;position:absolute;top:0;left:0;right:0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:max(8px,env(safe-area-inset-top)) 10px 8px;background:linear-gradient(#0d2232f2,#0d2232b0)}
+.crEditor #ceName{flex:1 1 140px;min-width:0;border:1px solid #ffffff33;background:#ffffff14;color:#fff;border-radius:10px;padding:9px 11px;font:inherit;font-weight:800;font-size:15px}
+.crEditor .ceDna{font-weight:700;white-space:nowrap}.crEditor .ceDna small{color:#ffb3a8}.crEditor .ceDna.over b{color:#ff6a5e}
+.crEditor .ceTopBtns{display:flex;gap:6px;flex-wrap:wrap}
+.crEditor .ceTopBtns button{border:1px solid #ffffff2a;border-radius:10px;padding:9px 12px;background:#ffffff18;color:#fff;font-weight:700;min-width:40px}
+.crEditor .ceTopBtns button.primary{background:#f5c75a;color:#132532;border-color:#f5c75a}
+.crEditor .ceTopBtns button:disabled{opacity:.4;cursor:default}
+.crEditor .ceTopBtns button[aria-pressed=true]{background:#3fc26e;color:#08210f}
+.crEditor .ceHint{position:absolute;top:calc(max(8px,env(safe-area-inset-top)) + 58px);left:50%;transform:translateX(-50%);margin:0;width:min(92vw,560px);text-align:center;font-size:12.5px;color:#d8eef2;text-shadow:0 2px 8px #000a}
+.crEditor .ceStats{pointer-events:auto;position:absolute;right:10px;top:110px;width:170px;background:#0d2232d9;border:1px solid #ffffff1f;border-radius:14px;padding:10px 12px;font-size:11px}
+.crEditor .ceStats h3{margin:0 0 4px;font-size:14px}.crEditor .ceStats h4{margin:8px 0 3px;font-size:9px;letter-spacing:.2em;color:#9fd8e2}
+.crEditor .ceStat{display:flex;justify-content:space-between;align-items:center;gap:6px;margin:2px 0}
+.crEditor .ceStat i{display:flex;gap:2px}.crEditor .ceStat i b{width:9px;height:9px;border-radius:2px;background:#ffffff1c}.crEditor .ceStat i b.on{background:#f5c75a}
+.crEditor .ceTestBar{pointer-events:auto;position:absolute;left:50%;bottom:calc(min(42vh,330px) + 10px);transform:translateX(-50%);display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:min(96vw,640px)}
+.crEditor .ceTestBar button{border:1px solid #ffffff33;border-radius:12px;background:#0d2232e6;color:#fff;padding:6px 9px;font-size:18px;display:flex;flex-direction:column;align-items:center}
+.crEditor .ceTestBar button small{font-size:9px}.crEditor .ceTestBar button:disabled{opacity:.35}
+.crEditor .cePanel{pointer-events:auto;position:absolute;left:0;right:0;bottom:0;height:min(42vh,330px);display:flex;flex-direction:column;background:#0d2232f2;border-top:1px solid #ffffff22;border-radius:18px 18px 0 0;padding-bottom:env(safe-area-inset-bottom)}
+.crEditor.testing .cePanel,.crEditor.testing .ceStats{display:none}
+.crEditor.testing .ceTestBar{bottom:calc(20px + env(safe-area-inset-bottom))}
+.crEditor .ceTabs{display:flex;gap:4px;padding:8px 10px 0}
+.crEditor .ceTabs button{flex:1;border:0;border-radius:10px 10px 0 0;padding:10px;background:transparent;color:#9fb8c2;font-weight:800}
+.crEditor .ceTabs button[aria-selected=true]{background:#ffffff14;color:#fff;box-shadow:inset 0 -3px #f5c75a}
+.crEditor .ceTab{flex:1;overflow:auto;padding:10px 12px;-webkit-overflow-scrolling:touch}
+.crEditor .ceGroup{margin-bottom:12px}.crEditor .ceGroup h4{margin:0 0 6px;font-size:11px;letter-spacing:.14em;color:#9fd8e2}.crEditor .ceGroup h4 small{color:#7a96a0;letter-spacing:0}
+.crEditor .ceRow{display:flex;gap:6px;flex-wrap:wrap}
+.crEditor .ceGroup button,.crEditor .ceRow button,.crEditor .ceSelected button{border:1px solid #ffffff2a;border-radius:10px;background:#ffffff14;color:#fff;padding:9px 12px;font-weight:700}
+.crEditor .ceGroup button:disabled{opacity:.4;cursor:default}
+.crEditor .ceRow button[aria-checked=true]{background:#f5c75a;color:#132532}
+.crEditor .ceSlider{display:grid;gap:4px;margin-top:8px;font-size:12px}.crEditor .ceSlider.off{opacity:.55}
+.crEditor input[type=range]{width:100%;accent-color:#f5c75a;min-height:28px}
+.crEditor .ceLeg{display:grid;grid-template-columns:auto 1fr 1fr auto;gap:8px;align-items:center;font-size:11px;margin-bottom:6px;background:#ffffff0a;border-radius:10px;padding:6px 8px}
+.crEditor .ceLeg label{display:grid;gap:2px}
+.crEditor .ceSelected{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#f5c75a22;border:1px solid #f5c75a66;border-radius:12px;padding:8px 10px;margin-bottom:10px;font-size:12px}.crEditor .ceSelected label{flex:1;display:grid;min-width:120px}
+.crEditor .ceSlot h5{margin:6px 0 5px;font-size:10px;letter-spacing:.16em;color:#9fd8e2}
+.crEditor .ceCards{display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:thin;overscroll-behavior:contain}
+.crEditor .ceChips{display:flex;gap:6px;overflow-x:auto;padding:0 2px 8px;scrollbar-width:none}.crEditor .ceChips::-webkit-scrollbar{display:none}
+.crEditor .ceChips button{flex:none;min-height:36px;padding:6px 12px;border-radius:18px;border:1px solid #ffffff2a;background:#ffffff10;color:#cfe3ea;font:inherit;font-size:12px;font-weight:700;white-space:nowrap}
+.crEditor .ceChips button[aria-selected=true]{background:#f5c75a;border-color:#f5c75a;color:#132532}
+.crEditor .cePart{position:relative;width:104px;border:1px solid #ffffff22;border-radius:12px;background:#ffffff10;color:#fff;padding:6px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:2px;flex:0 0 104px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.crEditor .cePart .thumb{width:58px;height:58px;display:grid;place-items:center;font-size:20px;position:relative}.crEditor .cePart .thumb img{width:100%;height:100%;object-fit:contain;pointer-events:none}
+.crEditor .cePart b{font-size:11px;line-height:1.15}.crEditor .cePart small{font-size:10px;color:#cfe0e6}.crEditor .cePart em{font-style:normal;font-size:10px;color:#ffd98a;font-weight:700}
+.crEditor .cePart .thumb .lk{position:absolute;top:0;right:0;font-size:13px}.crEditor .cePart.locked{opacity:.55}.crEditor .cePart.locked .thumb img{filter:brightness(0) opacity(.5)}.crEditor .cePart.locked .thumb{font-size:16px}
+.crEditor .cePart.inUse{border-color:#3fc26e;box-shadow:inset 0 0 0 1px #3fc26e}
+.crEditor .cePart.dragging{opacity:.4}
+.crEditor .cePart.nudge{animation:ceNudge .45s}
+@keyframes ceNudge{30%{transform:translateY(-8px)}60%{transform:translateY(-3px)}}
+.crEditor .cePart .legIc{font-size:30px}
+.crEditor .ceSwatches{display:flex;gap:6px;flex-wrap:wrap}
+.crEditor .ceSwatches button{width:34px;height:34px;border-radius:50%;padding:0;border:2px solid #ffffff33;background:var(--c)}
+.crEditor .ceSwatches button[aria-checked=true]{border-color:#fff;box-shadow:0 0 0 3px #f5c75a}
+.crEditor .ceCustom{width:34px;height:34px;border-radius:50%;overflow:hidden;border:2px dashed #ffffff66;display:grid;place-items:center}.crEditor .ceCustom input{width:48px;height:48px;border:0;padding:0;background:none;cursor:pointer}
+.crEditor .ceGhost{position:fixed;width:64px;height:64px;margin:-32px 0 0 -32px;background:#ffffff22 center/contain no-repeat;border-radius:50%;border:2px solid #8ff0a8;pointer-events:none;z-index:50}
+@media (max-width:760px){.crEditor .ceStats{top:auto;bottom:calc(min(42vh,330px) + 8px);right:8px;width:auto;padding:6px 8px;display:flex;gap:8px;font-size:10px}.crEditor .ceStats h4,.crEditor .ceStats .ceStat:nth-of-type(n){display:none}.crEditor .ceStats h3{margin:0;font-size:12px}.crEditor .cePart{flex:0 0 96px}.crEditor .ceLeg{grid-template-columns:1fr 1fr auto}.crEditor .ceLeg>b{grid-column:1/-1}}
+.genCard .genNoThumb{display:grid;place-items:center;height:90px;font-size:38px;background:#0d2a40}
+/* ==== Relationship faces, selection card, encounter arc, pack bar, movement ==== */
+.srOnly{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.creatureHUD .chTarget{--rel:#b9c3c9;background:linear-gradient(160deg,#1b3a4ccc,#0b1c28d9);-webkit-backdrop-filter:blur(14px) saturate(1.3);backdrop-filter:blur(14px) saturate(1.3);border:1.5px solid color-mix(in srgb,var(--rel) 75%,transparent);box-shadow:0 10px 30px #0007,inset 0 1px #ffffff2e,0 0 0 4px color-mix(in srgb,var(--rel) 16%,transparent);transition:border-color .3s,box-shadow .3s,margin-top .25s}
+.creatureHUD .chTarget .ctTag{display:flex;gap:4px;font-style:normal;flex:none}
+.creatureHUD .chTarget .ctTag span{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:9px;background:#ffffff24;color:#fff;white-space:nowrap}
+.creatureHUD .chTarget .ctTag .alpha{background:#f5c75a;color:#2b1d00}
+.creatureHUD .chTarget .ctTag .epic,.creatureHUD .chTarget .ctTag .rogue,.creatureHUD .chTarget .ctTag .raider{background:#ef4b48}
+.creatureHUD .chTarget .ctVital{display:flex;align-items:center;gap:9px;margin-top:7px}
+.creatureHUD .chTarget .ctFace{width:40px;height:40px;flex:none;filter:drop-shadow(0 2px 4px #0009);-webkit-user-select:none;user-select:none}
+.creatureHUD .ctFace.bounce,.creatureHUD .arcFace.bounce{animation:ctFaceBounce .55s cubic-bezier(.3,1.7,.5,1)}
+@keyframes ctFaceBounce{0%{transform:scale(.55) rotate(-14deg)}55%{transform:scale(1.28) rotate(6deg)}100%{transform:none}}
+.creatureHUD .chTarget .ctHpWrap{flex:1;position:relative;min-width:0}
+.creatureHUD .chTarget .ctHp{height:17px;border-radius:9px;margin:0;background:#00000066;box-shadow:inset 0 1px 3px #000a,0 1px #ffffff1a}
+.creatureHUD .chTarget .ctHp b{background:linear-gradient(#8be89c,#3fc26e 60%,#2f9d57);border-radius:9px;transition:width .25s}
+.creatureHUD .chTarget .ctHp.low b{background:linear-gradient(#ff9a8c,#ef4b48 60%,#c53330)}
+.creatureHUD .chTarget .ctHpNum{position:absolute;inset:0;display:grid;place-items:center;font-size:10.5px;font-weight:800;color:#fff;text-shadow:0 1px 2px #000d;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+/* Encounter arc */
+.creatureHUD .chArc{position:absolute;top:max(8px,env(safe-area-inset-top));left:50%;width:260px;height:138px;margin-left:-130px;pointer-events:none;filter:drop-shadow(0 6px 14px #0009);transform-origin:top center}
+.creatureHUD .chArc .arcSvg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.creatureHUD .arcRim{fill:none;stroke:#ffffff59;stroke-width:20;stroke-linecap:round}
+.creatureHUD .arcTrack{fill:none;stroke:#0b1c28;stroke-width:17;stroke-linecap:round}
+.creatureHUD .arcFill{fill:none;stroke:#3fc26e;stroke-width:10.5;stroke-linecap:round;stroke-dasharray:0 100;transition:stroke-dasharray .4s cubic-bezier(.3,1.35,.5,1),stroke .3s}
+.creatureHUD .chArc.fight .arcFill{stroke:#ef4b48;transition:stroke-dasharray .2s ease-out,stroke .3s}
+.creatureHUD .arcFace{position:absolute;left:50%;bottom:0;width:58px;height:58px;margin-left:-29px;-webkit-user-select:none;user-select:none}
+.creatureHUD .arcAsk{position:absolute;left:50%;top:30px;width:42px;height:42px;margin-left:-21px;display:grid;place-items:center;background:#fff;border-radius:50%;box-shadow:0 3px 10px #0008}
+.creatureHUD .arcAsk svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.creatureHUD .arcAskTrack{fill:none;stroke:#00000016;stroke-width:4}
+.creatureHUD .arcAskTime{fill:none;stroke:#3fc26e;stroke-width:4;stroke-linecap:round;stroke-dasharray:100 100}
+.creatureHUD .arcAsk.hurry .arcAskTime{stroke:#ef4b48}
+.creatureHUD .arcAsk.hurry{animation:chBlink .5s infinite}
+.creatureHUD .arcAsk span{position:relative;font-size:21px;line-height:1}
+.creatureHUD .arcAsk.fresh{animation:arcAskIn .4s cubic-bezier(.3,1.7,.5,1)}
+@keyframes arcAskIn{from{transform:scale(.3) translateY(18px);opacity:0}to{transform:none;opacity:1}}
+.creatureHUD .arcLabel{position:absolute;left:-20px;right:-20px;top:100%;margin-top:2px;text-align:center;font-size:11.5px;font-weight:800;letter-spacing:.02em;text-shadow:0 2px 6px #000d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.creatureHUD .chArc.miss{animation:arcMiss .45s}
+.creatureHUD .chArc.good .arcSvg{animation:arcGood .4s}
+.creatureHUD .chArc.weak .arcSvg{animation:arcGood .25s}
+@keyframes arcMiss{20%{transform:translateX(-9px) rotate(-3deg)}45%{transform:translateX(8px) rotate(3deg)}70%{transform:translateX(-4px)}}
+@keyframes arcGood{40%{transform:scale(1.06)}}
+.creatureHUD .chPill{white-space:nowrap}
+@media (max-width:600px){.creatureHUD .chBox{width:min(250px,50vw)}}
+/* The card sits at the bottom, out of the way of the arc and the creature you are looking at. */
+.creatureHUD .chTarget{top:auto;bottom:calc(16px + env(safe-area-inset-bottom));margin:0}
+@media (min-width:601px){.creatureHUD .chMate{bottom:calc(200px + env(safe-area-inset-bottom))}}
+@media (max-width:1100px){.creatureHUD .chTarget{bottom:calc(226px + env(safe-area-inset-bottom))}}
+@media (min-width:601px) and (max-width:1100px){.creatureHUD .chMate{bottom:calc(390px + env(safe-area-inset-bottom))}}
+@media (max-width:900px){.creatureHUD .chArc{top:calc(max(10px,env(safe-area-inset-top)) + 104px)}.creatureHUD.arcOn .chObjective{opacity:0}}
+@media (max-width:600px){.creatureHUD .chArc{transform:scale(.86)}.creatureHUD .chTarget{bottom:calc(196px + env(safe-area-inset-bottom))}}
+@media (max-height:520px){.creatureHUD .chArc{top:max(6px,env(safe-area-inset-top));transform:scale(.72)}.creatureHUD.arcOn .chObjective{opacity:1}}
+.creatureHUD .chObjective{transition:opacity .25s}
+/* Faces over heads */
+.creatureHUD .chPop.chFacePop{width:38px;height:38px;animation:chFacePop 1.55s ease-out forwards}
+.creatureHUD .chPop.chFacePop.down{animation-name:chFacePopDown}
+@keyframes chFacePop{0%{opacity:0;transform:translate(-50%,-20%) scale(.3)}16%{opacity:1;transform:translate(-50%,-80%) scale(1.3)}30%{transform:translate(-50%,-75%) scale(1)}78%{opacity:1}100%{opacity:0;transform:translate(-50%,-170%) scale(.9)}}
+@keyframes chFacePopDown{0%{opacity:0;transform:translate(-50%,-20%) scale(.3)}16%{opacity:1;transform:translate(-50%,-80%) scale(1.3)}26%{transform:translate(-58%,-75%) rotate(-10deg)}36%{transform:translate(-42%,-75%) rotate(10deg)}46%{transform:translate(-50%,-75%)}78%{opacity:1}100%{opacity:0;transform:translate(-50%,-150%) scale(.9)}}
+.creatureHUD .chMark.bone{border-color:#ffe69a;color:#fff3c9}
+.creatureHUD .chMark.raid{background:#ef4b48;border-color:#ffb3ad;animation:chBlink .6s infinite}
+/* Pack bar */
+.creatureHUD .chPack{position:absolute;left:10px;top:calc(max(10px,env(safe-area-inset-top)) + 172px);display:flex;flex-direction:column;gap:9px}
+.creatureHUD .chPackMember{position:relative;display:flex;align-items:center;gap:5px;animation:arcAskIn .35s}
+.creatureHUD .chPackMember img,.creatureHUD .chPackMember .noPic{width:46px;height:46px;border-radius:50%;background:radial-gradient(circle at 40% 30%,#2a5a74,#0d2232);border:2px solid #3fc26e;object-fit:contain;display:grid;place-items:center;font-size:20px;box-shadow:0 3px 10px #0007}
+.creatureHUD .chPackMember .pmHp{position:absolute;left:5px;bottom:-4px;width:36px;height:6px;border-radius:3px;background:#000c;overflow:hidden;border:1px solid #ffffff2a}
+.creatureHUD .chPackMember .pmHp b{display:block;height:100%;width:100%;background:#3fc26e;transition:width .2s}
+.creatureHUD .chPackMember.low .pmHp b{background:#ef4b48}
+.creatureHUD .chPackMember.low img{border-color:#ef4b48}
+.creatureHUD .chPackMember .pmHome{pointer-events:auto;width:30px;height:30px;border-radius:50%;border:1px solid #ffffff33;background:#0d2232d9;color:#fff;font-size:15px;line-height:1;padding:0;cursor:pointer}
+@media (max-height:520px){.creatureHUD .chPack{flex-direction:row;top:auto;bottom:calc(120px + env(safe-area-inset-bottom));left:120px}}
+/* Sneak, sprint, jump */
+.creatureHUD .chAb.move{border-color:#7fd8ff99}
+.creatureHUD .chAb .stam{position:absolute;inset:0;border-radius:50%;background:conic-gradient(#7fe0ff var(--s,100%),#ffffff12 0);-webkit-mask:radial-gradient(circle,transparent 66%,#000 68%);mask:radial-gradient(circle,transparent 66%,#000 68%);pointer-events:none;opacity:.85}
+.creatureHUD .chAb.jump .stam{display:none}
+.creatureHUD .chAb.move.tired .stam{background:conic-gradient(#ef4b48 var(--s,100%),#ffffff12 0)}
+.creatureHUD .chAb.move.on{background:radial-gradient(circle at 40% 35%,#3596bb,#124058);box-shadow:0 0 0 3px #7fe0ff,0 0 16px #7fe0ff99}
+.creatureHUD::before{content:"";position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 140px 40px #030c12;opacity:0;transition:opacity .35s}
+.creatureHUD.sneaking::before{opacity:.75}
+.creatureHUD .chMenuPanel{z-index:3}
+/* ==== Species library ==== */
+.library{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.libCard{margin:0;border-radius:12px;background:#132f43;border:1px solid #ffffff1a;overflow:hidden;display:flex;flex-direction:column}
+.libCard img{display:block;width:100%;aspect-ratio:4/3;object-fit:contain;background:radial-gradient(circle at 50% 35%,#1d4a66,#0d2a40)}
+.libCard figcaption{padding:8px;font-size:11px;color:#cfe3ea;display:flex;flex-direction:column;gap:2px;flex:1}
+.libCard figcaption b{color:#fff;font-size:13px}.libCard figcaption b small{color:#ffd98a;font-weight:700;font-size:10px}
+.libCard .libHow{margin-top:auto;align-self:flex-start;font-style:normal;font-weight:800;font-size:10px;padding:3px 8px;border-radius:9px;background:#ffffff1f;color:#fff}
+.libCard.allied .libHow,.libCard.friendly .libHow,.libCard.own .libHow{background:#3fc26e;color:#062310}
+.libCard.extinct .libHow,.libCard.hunted .libHow{background:#8a3a38}
+.libCard.danger .libHow{background:#ef4b48}
+.libCard.mixed .libHow{background:#f5c75a;color:#2b1d00}
+.libCard.allied{border-color:#3fc26e88}.libCard.extinct{opacity:.8}.libCard.own{border-color:#f5c75a88}
+/* ==== Settings ==== */
+.settingsScreen{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;padding:14px;background:#04101acc;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);opacity:0;transition:opacity .2s;color:#eaf6f9;font:13px/1.35 "Trebuchet MS",system-ui,sans-serif}
+.settingsScreen.show{opacity:1}
+.settingsPanel{width:min(460px,100%);max-height:100%;overflow:auto;border-radius:20px;background:#0c2131;border:1px solid #7fd3e044;box-shadow:0 20px 60px #000b;padding:16px 18px 18px;transform:translateY(10px);transition:transform .2s}
+.settingsScreen.show .settingsPanel{transform:none}
+.settingsPanel .spHead{display:flex;align-items:center;justify-content:space-between}
+.settingsPanel h2{margin:0;font-size:20px;letter-spacing:.04em}
+.settingsPanel h3{margin:16px 0 8px;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#9fd8e2}
+.settingsPanel button{font:inherit;cursor:pointer;border:1px solid #ffffff2a;border-radius:10px;background:#ffffff14;color:#fff;padding:9px 12px;font-weight:700;min-height:38px;box-shadow:none;filter:none}
+.settingsPanel button:focus-visible,.settingsPanel input:focus-visible{outline:3px solid #ffd98a;outline-offset:2px}
+.settingsPanel .spClose{width:38px;padding:0}
+.settingsPanel .spRange{display:grid;grid-template-columns:78px 1fr 44px;align-items:center;gap:10px;margin:6px 0}
+.settingsPanel .spRange input{width:100%;accent-color:#f5c75a;min-height:30px}
+.settingsPanel .spRange output{text-align:right;font-variant-numeric:tabular-nums;color:#ffd98a;font-weight:700}
+.settingsPanel .spSwitch{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;position:relative;margin:4px 0 10px}
+.settingsPanel .spSwitch small{display:block;color:#9fb8c2;font-size:11px}
+.settingsPanel .spSwitch input{position:absolute;opacity:0;width:46px;height:28px;right:0;margin:0;cursor:pointer}
+.settingsPanel .spSwitch i{flex:none;width:46px;height:28px;border-radius:14px;background:#ffffff26;position:relative;transition:background .2s}
+.settingsPanel .spSwitch i::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .2s}
+.settingsPanel .spSwitch input:checked+i{background:#3fc26e}.settingsPanel .spSwitch input:checked+i::after{transform:translateX(18px)}
+.settingsPanel .spSwitch input:focus-visible+i{outline:3px solid #ffd98a;outline-offset:2px}
+.settingsPanel .spRow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.settingsPanel .spSeg{display:flex;gap:4px}
+.settingsPanel .spSeg button[aria-checked=true]{background:#f5c75a;color:#132532;border-color:#f5c75a}
+.settingsPanel .spSlots{display:grid;gap:8px}
+.settingsPanel .spSlot{display:flex;align-items:center;gap:8px;background:#ffffff0c;border:1px solid #ffffff1a;border-radius:12px;padding:9px 10px}
+.settingsPanel .spSlot.active{border-color:#3fc26e;background:#3fc26e14}
+.settingsPanel .spSlotInfo{flex:1;min-width:0;display:flex;flex-direction:column}
+.settingsPanel .spSlotInfo span{color:#cfe3ea;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.settingsPanel .spSlotInfo small{color:#8fa9b3;font-size:10.5px}
+.settingsPanel .spSlot.empty .spSlotInfo span{color:#8fa9b3}
+.settingsPanel .spPlaying{font-style:normal;font-weight:800;font-size:11px;color:#8ff0a8;padding:0 6px}
+.settingsPanel .spPlay{background:#f5c75a;color:#132532;border-color:#f5c75a}
+.settingsPanel .spDelete{background:transparent;color:#ffb3ad;border-color:#ef4b4866}
+.settingsPanel .spDelete.confirm{background:#ef4b48;color:#fff;border-color:#ef4b48}
+/* ==== Growth pull-back: the HUD steps aside ==== */
+#gameHUD,#radarWrap,#growthHUD,#growthBar,#gameButtons,.mobileActions,#zoomControls,#worldWaypoint,.progressTop,.moveStick{transition:opacity .5s}
+body.growthPullback #gameHUD,body.growthPullback #radarWrap,body.growthPullback #growthHUD,body.growthPullback #growthBar,body.growthPullback #gameButtons,body.growthPullback .mobileActions,body.growthPullback #zoomControls,body.growthPullback #worldWaypoint,body.growthPullback .progressTop,body.growthPullback .tipBubble{opacity:0!important;pointer-events:none}
+/* ==== Editor grips ==== */
+.crEditor .ceGrips{position:absolute;inset:0;pointer-events:none}
+.crEditor .ceGrip{position:fixed;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:2px solid #0b1820;background:#fff;color:#132532;font-size:16px;font-weight:800;line-height:1;display:grid;place-items:center;pointer-events:auto;touch-action:none;padding:0;box-shadow:0 2px 8px #0009,inset 0 -3px #0002;cursor:grab;transition:transform .12s}
+.crEditor .ceGrip.knee,.crEditor .ceGrip.elbow{width:26px;height:26px;margin:-13px 0 0 -13px;background:#ffd25e}
+.crEditor .ceGrip.foot{background:#7ff5e6}
+.crEditor .ceGrip.held{transform:scale(1.22);cursor:grabbing;box-shadow:0 0 0 4px #ffffff55,0 2px 8px #0009}
+.crEditor.testing .ceGrips,.crEditor.placing .ceGrips{display:none}
+@media (pointer:coarse){.crEditor .ceGrip{width:40px;height:40px;margin:-20px 0 0 -20px}.crEditor .ceGrip.knee,.crEditor .ceGrip.elbow{width:32px;height:32px;margin:-16px 0 0 -16px}}
+.crEditor .ceLeg{grid-template-columns:auto 1fr 1fr 1fr auto}
+.crEditor .ceStats{top:66px;max-height:calc(100dvh - min(42vh,330px) - 78px);overflow:auto;scrollbar-width:thin}
+@media (max-width:760px){.crEditor .ceStats{top:auto;max-height:none;overflow:visible}}
+@media (max-width:760px){.crEditor .ceLeg{grid-template-columns:1fr 1fr 1fr auto}.crEditor .ceLeg>b{grid-column:1/-1}}
+/* ==== Tribe Stage (prototype) ==== */
+html body.tribeMode.creatureMode .mobileControls,html body.tribeMode.creatureMode .moveStick,html body.tribeMode.creatureMode:not(.landUiShown) .mobileControls{display:none!important}
+.tribeHUD{position:fixed;inset:0;z-index:20;pointer-events:none;color:#fff;font:13px/1.3 "Trebuchet MS",system-ui,sans-serif;-webkit-user-select:none;user-select:none}
+.tribeHUD[hidden]{display:none}
+.tribeHUD button{font:inherit;color:#fff;cursor:pointer;pointer-events:auto;touch-action:manipulation}
+.tribeHUD button:focus-visible{outline:3px solid #ffd98a;outline-offset:2px}
+.tribeHUD .trTop{position:absolute;top:max(10px,env(safe-area-inset-top));left:10px;right:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.tribeHUD .trBox{background:linear-gradient(160deg,#1b3a4cd9,#0b1c28e6);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid #ffffff2a;border-radius:14px;padding:8px 12px;box-shadow:0 6px 18px #0006}
+.tribeHUD .trName{display:block;font-size:13px;letter-spacing:.02em}.tribeHUD .trName em{font-style:normal;font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;background:#f5c75a;color:#2b1d00;border-radius:8px;padding:1px 6px;margin-left:4px;vertical-align:1px}
+.tribeHUD .trStats{display:flex;gap:14px;margin-top:3px;font-size:14px}.tribeHUD .trStats b{font-variant-numeric:tabular-nums;color:#ffe08a}
+.tribeHUD .trIcon{width:44px;height:44px;border-radius:50%;border:1px solid #ffffff33;background:#0d2232d9;font-size:18px}
+.tribeHUD .trGoal{position:absolute;top:calc(max(10px,env(safe-area-inset-top)) + 64px);left:50%;transform:translateX(-50%);max-width:calc(100vw - 24px);text-align:center;font-size:12px;font-weight:700;background:#0d2232b8;border-radius:12px;padding:4px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tribeHUD .trTribes{position:absolute;top:calc(max(10px,env(safe-area-inset-top)) + 94px);left:50%;transform:translateX(-50%);display:flex;gap:10px}
+.tribeHUD .trTribe{--rel:#b9c3c9;width:44px;height:44px;border-radius:50%;padding:3px;background:#0d2232d9;border:2.5px solid var(--rel);display:grid;place-items:center;box-shadow:0 3px 10px #0007}
+.tribeHUD .trTribe img{width:100%;height:100%}.tribeHUD .trTribe span{font-size:18px;opacity:.7}
+.tribeHUD .trMarks{position:absolute;inset:0;overflow:hidden}
+.tribeHUD .trMark{--rel:#b9c3c9;position:absolute;transform:translate(-50%,-100%);display:flex;align-items:center;gap:5px;font-size:11px;font-weight:800;white-space:nowrap;background:#0d2232cc;border:1.5px solid var(--rel);border-radius:12px;padding:3px 9px 7px 4px}
+.tribeHUD .trMark img{width:20px;height:20px}
+.tribeHUD .trMark i{position:absolute;left:8px;right:8px;bottom:2px;height:3px;border-radius:2px;background:#000a;overflow:hidden}.tribeHUD .trMark i b{display:block;height:100%}
+.tribeHUD .trMark.gone{opacity:.65;padding:3px 9px;border-color:#666}
+.tribeHUD .trBar{position:absolute;width:34px;height:5px;margin-left:-17px;border-radius:3px;background:#000b;overflow:hidden;border:1px solid #ffffff33}
+.tribeHUD .trBar b{display:block;height:100%;background:#3fc26e}.tribeHUD .trBar.foe b{background:#ef4b48}
+.tribeHUD .trPop{position:absolute;transform:translate(-50%,-50%);font-size:17px;font-weight:800;text-shadow:0 2px 5px #000c;animation:trPop 1.25s ease-out forwards;white-space:nowrap}
+.tribeHUD .trPop.good{color:#a8f5b8}.tribeHUD .trPop.bad{color:#ff9d94}
+@keyframes trPop{0%{opacity:0;transform:translate(-50%,-10%) scale(.5)}18%{opacity:1;transform:translate(-50%,-70%) scale(1.15)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-190%)}}
+.tribeHUD .trToast{position:absolute;left:50%;top:calc(max(10px,env(safe-area-inset-top)) + 150px);transform:translate(-50%,-6px);max-width:min(460px,calc(100vw - 28px));text-align:center;background:#0d2232ee;border:1px solid #ffffff2a;border-radius:14px;padding:9px 14px;font-weight:700;opacity:0;transition:opacity .25s,transform .25s}
+.tribeHUD .trToast.show{opacity:1;transform:translate(-50%,0)}
+.tribeHUD .trBottom{position:absolute;left:0;right:0;bottom:0;padding:8px 10px calc(10px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px;background:linear-gradient(#0000,#061520cc 45%)}
+.tribeHUD .trUnits{display:flex;gap:8px;overflow-x:auto;padding:4px 2px;pointer-events:auto;scrollbar-width:none}.tribeHUD .trUnits::-webkit-scrollbar{display:none}
+.tribeHUD .trUnit{position:relative;flex:none;width:52px;height:52px;border-radius:50%;padding:0;border:2.5px solid #ffffff40;background:radial-gradient(circle at 40% 30%,#2a5a74,#0d2232);box-shadow:0 3px 10px #0007}
+.tribeHUD .trUnit img{width:100%;height:100%;border-radius:50%;object-fit:contain;pointer-events:none}.tribeHUD .trUnit .noPic{font-size:20px}
+.tribeHUD .trUnit.sel{border-color:#8ff0a8;box-shadow:0 0 0 3px #8ff0a866,0 3px 10px #0007}
+.tribeHUD .trUnit.child{opacity:.6;transform:scale(.82)}
+.tribeHUD .trUnit em{position:absolute;right:-5px;top:-6px;font-style:normal;font-size:15px;filter:drop-shadow(0 1px 2px #000)}
+.tribeHUD .trUnit i{position:absolute;left:8px;right:8px;bottom:-5px;height:5px;border-radius:3px;background:#000c;overflow:hidden;border:1px solid #ffffff2a}
+.tribeHUD .trUnit i b{display:block;height:100%;background:#3fc26e}.tribeHUD .trUnit.low i b{background:#ef4b48}
+.tribeHUD .trActions{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-width:520px;width:100%;margin:0 auto}
+.tribeHUD .trActions button{min-height:54px;border-radius:14px;border:1px solid #ffffff2a;background:linear-gradient(#21485ef0,#10293af0);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;box-shadow:0 4px 12px #0006}
+.tribeHUD .trActions button span{font-size:20px;line-height:1}.tribeHUD .trActions button small{font-size:11px;font-weight:700;color:#d5e8ee}
+.tribeHUD .trActions button[aria-disabled=true]{opacity:.5}
+.tribeHUD .trActions button:active{transform:translateY(1px)}
+.tribeHUD .trSheet{position:absolute;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(430px,calc(100vw - 20px));pointer-events:auto;background:linear-gradient(160deg,#1b3a4cf5,#0b1c28fa);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border:1px solid #ffffff33;border-radius:18px;padding:12px 14px;box-shadow:0 14px 40px #000a;animation:trSheetIn .2s ease-out}
+.tribeHUD .trSheet[hidden]{display:none}
+@keyframes trSheetIn{from{opacity:0;transform:translate(-50%,10px)}}
+.tribeHUD .tsHead{display:flex;align-items:center;gap:10px}.tribeHUD .tsHead>b,.tribeHUD .tsHead>div{flex:1;font-size:15px}.tribeHUD .tsHead small{display:block;font-size:11px;color:#bcd3db;font-weight:400}
+.tribeHUD .tsClose{width:38px;height:38px;border-radius:50%;border:1px solid #ffffff2a;background:#ffffff14}
+.tribeHUD .tsRel{display:block;height:10px;border-radius:5px;background:#0009;overflow:hidden;margin:10px 0;box-shadow:inset 0 1px 3px #000a}.tribeHUD .tsRel b{display:block;height:100%;transition:width .2s}
+.tribeHUD .tsBtns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tribeHUD .tsBtns button{min-height:48px;border-radius:12px;border:0;font-weight:800;font-size:14px}
+.tribeHUD .tsBtns .good{background:#3fc26e;color:#062310}.tribeHUD .tsBtns .bad{background:#c53330}
+.tribeHUD .tsBtns button[aria-disabled=true]{opacity:.45}
+.tribeHUD .tsHint{margin:8px 0 0;font-size:11.5px;color:#bcd3db}
+.tribeHUD .tsTools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.tribeHUD .tsTool{display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center;padding:10px 8px;border-radius:14px;border:1px solid #ffffff2a;background:#ffffff10}
+.tribeHUD .tsTool span{font-size:26px}.tribeHUD .tsTool small{font-size:11px;color:#cfe0e6}.tribeHUD .tsTool em{font-style:normal;font-weight:800;color:#ffe08a;font-size:12px}
+.tribeHUD .tsTool[aria-disabled=true]{opacity:.5}
+.tribeHUD .tsHelp{margin:10px 0 0;padding-left:18px;display:grid;gap:6px;font-size:12.5px;color:#e4f0f3}
+.tribeHUD .trMenuPanel{pointer-events:auto;position:absolute;top:calc(max(10px,env(safe-area-inset-top)) + 52px);right:10px;display:flex;flex-direction:column;gap:8px;background:#0d2232f2;border:1px solid #ffffff22;border-radius:14px;padding:10px;z-index:3}
+.tribeHUD .trMenuPanel[hidden]{display:none}
+.tribeHUD .trMenuPanel button{border:0;border-radius:10px;padding:11px 16px;font-weight:700;background:#ffffff22}.tribeHUD .trMenuPanel button.primary{background:#f5c75a;color:#132532}
+@media (max-height:520px){.tribeHUD .trGoal{top:max(10px,env(safe-area-inset-top));left:190px;right:70px;transform:none;max-width:none}.tribeHUD .trTribes{top:calc(max(10px,env(safe-area-inset-top)) + 30px)}.tribeHUD .trToast{top:calc(max(10px,env(safe-area-inset-top)) + 84px)}.tribeHUD .trBottom{flex-direction:row;align-items:flex-end}.tribeHUD .trUnits{flex:1;min-width:0}.tribeHUD .trActions{width:auto;margin:0;grid-template-columns:repeat(4,62px)}.tribeHUD .trSheet{bottom:calc(84px + env(safe-area-inset-bottom))}}
+/* ==== Reduced motion ==== */
+body.reduceMotion *,body.reduceMotion *::before,body.reduceMotion *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+body.reduceMotion .creatureHUD .chPop{animation-duration:1.2s!important}
+body.creatureMode .moveStick{display:flex!important}
+body.creatureMode .cardPop{z-index:80}
+@media (max-width:850px),(pointer:coarse){html body.creatureMode:not(.landUiShown) .mobileControls{display:block!important}}
+html body.creatureMode:not(.landUiShown) .mobileControls .actionCol{display:none!important}
+body.cellEditorMode #partsPanel .partCard.locked .partThumb{filter:brightness(0) opacity(.5)}
+body.cellEditorMode #partsPanel .partCard.locked small{display:block;font:8.5px/1.15 system-ui,sans-serif;color:#cfe0e6;text-align:center;margin-top:2px}
+body.cellEditorMode #partsPanel .partCard.locked{min-height:96px}
+@media (max-width:850px){
+ body.cellEditorMode #partsPanel{left:6px!important;right:6px!important;top:auto!important;bottom:calc(66px + env(safe-area-inset-bottom))!important;width:auto!important;height:136px!important;max-height:none!important;border-radius:16px}
+ body.cellEditorMode #partsPanel .catalog{display:grid!important;grid-auto-flow:column;grid-template-columns:none!important;grid-template-rows:1fr;grid-auto-columns:92px;overflow-x:auto!important;overflow-y:hidden!important;padding:8px!important;gap:8px!important;touch-action:pan-x;scroll-snap-type:x proximity}
+ body.cellEditorMode #partsPanel .partCard{min-height:0!important;scroll-snap-align:start}
+ body.cellEditorMode #partsPanel .description,body.cellEditorMode #partsPanel .notice{display:none!important}
+}
+.evoTrack{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.trackStage{text-align:center}.trackStage .tsHead{font-size:11px;color:#9fd8e2;margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trackStage.future,.trackStage.preview{opacity:.5}
+.tcSlot{aspect-ratio:3/4;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:6px;background:#132f43;border:2px dashed #ffffff30;font-size:11px}
+.tcSlot span{font-size:24px}.tcSlot b{font-size:12px;line-height:1.15}.tcSlot small{font-size:10px;color:#cfe3ea;line-height:1.15}
+.tcSlot.earned{border:2px solid var(--c);background:linear-gradient(170deg,color-mix(in srgb,var(--c) 45%,#132f43),#0f2536);box-shadow:0 0 18px color-mix(in srgb,var(--c) 40%,transparent)}
+.tcSlot.pending{border:2px dashed var(--c);background:color-mix(in srgb,var(--c) 14%,#132f43)}
+.lineage{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x proximity}
+.genCard{flex:none;width:170px;margin:0;border-radius:12px;background:#132f43;border:1px solid #ffffff1a;overflow:hidden;scroll-snap-align:start}
+.genCard img{display:block;width:100%;aspect-ratio:240/150;object-fit:cover;background:#0d2a40}
+.genCard figcaption{padding:8px;font-size:11px;color:#cfe3ea;display:flex;flex-direction:column;gap:2px}.genCard figcaption b{color:#fff;font-size:13px}
+@media (max-width:560px){.evoTrack{grid-template-columns:repeat(5,minmax(58px,1fr));overflow-x:auto}.tcSlot b{font-size:10px}.tcSlot small{display:none}}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:6;box-shadow:inset 0 0 0 0 #ff3b4a00;transition:box-shadow .4s}
+body.dangerNear:not(.cellEditorMode):not(.creatureMode)::after{box-shadow:inset 0 0 90px 10px #ff3b4a55;animation:dangerPulse 1.1s ease-in-out infinite}
+@keyframes dangerPulse{50%{box-shadow:inset 0 0 60px 4px #ff3b4a33}}
+#radarWrap{display:none!important}
+#gameHUD .hudbox{background:#06182a8c;backdrop-filter:blur(3px);border-color:#ffffff1a}
+#gameHUD .hudbox:has(#objectiveText){opacity:.35;transition:opacity .6s}
+#gameHUD .hudbox:has(#objectiveText).fresh,#gameHUD .hudbox:has(#objectiveText):hover{opacity:1}
+.partDragGhost{position:fixed;width:84px;height:63px;pointer-events:none;z-index:9999;transform:translate(-50%,-50%) scale(1.1);filter:drop-shadow(0 6px 10px #000a);transition:opacity .12s}
+body.cellEditorMode #partsPanel .partCard{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+body.cellEditorMode #partsPanel .catalog{overflow-y:auto;overflow-x:hidden;min-height:0;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y}
 </style>
 </head>
 <body>
 <canvas id="scene"></canvas><div id="damageFlash" aria-hidden="true"></div><div id="gameReticle" aria-hidden="true"><i></i></div><div class="vignette"></div>
-<header><a class="back" href="../index.html" aria-label="Back to games">‹</a><div class="brand">SPORE<small>PRIMORDIAL SOUP · CELL STAGE</small></div><div class="grow"></div><div class="pill">🧬 DNA <strong id="dnaCount">25</strong></div><div class="pill" id="tierLabel">SCALE TIER 1 / 4</div><button id="qualityToggle" aria-label="Graphics quality" title="Graphics quality">▣</button><button id="soundToggle" aria-label="Toggle sound effects" title="Toggle sound effects">♫</button><button id="fullscreenToggle" aria-label="Toggle fullscreen" title="Toggle fullscreen">⛶</button></header>
+<header><a class="back" href="../index.html" aria-label="Back to games">‹</a><div class="brand">SPORE<small>PRIMORDIAL SOUP · CELL STAGE</small></div><div class="grow"></div><div class="pill">🧬 DNA <strong id="dnaCount">25</strong></div><div class="pill" id="tierLabel">SCALE TIER 1 / 4</div><button id="pathToggle" aria-label="Species history" title="Species history">◈</button><button id="qualityToggle" aria-label="Graphics quality" title="Graphics quality">▣</button><button id="soundToggle" aria-label="Toggle sound effects" title="Toggle sound effects">♫</button><button id="settingsToggle" aria-label="Settings" title="Settings">⚙</button><button id="fullscreenToggle" aria-label="Toggle fullscreen" title="Toggle fullscreen">⛶</button></header>
 <div id="sporeEditorTop" aria-label="Cell editor tools">
  <div class="editorTopRail"></div>
  <div class="editorToolDock">
@@ -453,7 +921,7 @@ body.cellEditorMode .partThumb{object-fit:contain;background:radial-gradient(ell
 </div>
 <div id="sporeEditorBottom">
  <div class="editorBottomLeft">
-  <button class="bottomOrb oceanOrb" id="editorSoupButton" aria-label="Back to soup">◉</button>
+  <button class="bottomOrb oceanOrb" id="editorPartsButton" aria-label="Show or hide the parts drawer" title="Parts">🧩</button>
   <button class="bottomOrb gridOrb" id="editorGridButton" aria-label="Toggle grid">▦</button>
   <div class="editorDNA"><span><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M5 2c16 5-2 10 14 15S3 26 19 30M19 2C3 7 21 12 5 17S21 27 5 30M6 6h12M7 12h10M7 20h10M6 26h12" fill="none" stroke="#f2d98c" stroke-width="2" stroke-linecap="round"/></svg></span><b id="editorDNABalance">25</b></div>
   <button class="bottomOrb complexityOrb" id="editorComplexityButton" aria-label="Complexity meter">↔</button>
@@ -468,16 +936,21 @@ body.cellEditorMode .partThumb{object-fit:contain;background:radial-gradient(ell
 </div>
 <div id="editorTrash" aria-live="polite"><span class="trashIcon">⌫</span><span>DRAG OFF CELL TO REMOVE</span></div>
 <div class="progressTop" id="growthHUD"><div class="row"><b>EVOLUTION PROGRESS</b><span id="growthPercent">0%</span></div><div class="bar" id="growthBar"><i id="growthFill"></i></div></div>
-<div class="hud" id="gameHUD"><div class="glass hudbox"><div class="row"><b style="font-size:10px;letter-spacing:.1em">CELL INTEGRITY</b><strong id="healthValue">100%</strong></div><div class="bar health"><i id="healthFill" style="width:100%"></i></div><div class="metric"><div class="row"><span>Jet stamina</span><b id="staminaValue">100%</b></div><div class="bar"><i id="staminaFill" style="width:100%"></i></div></div><div class="metric"><div class="row"><span>Food collected</span><b id="foodValue">0 / 8</b></div><div class="bar"><i id="foodFill"></i></div></div><div class="hudchips"><span class="pill">🌿 <b id="plantCount">0</b></span><span class="pill">🥩 <b id="meatCount">0</b></span><span class="pill">Diet: <b id="dietLabel">Herbivore</b></span></div></div><div class="glass hudbox"><div class="row"><b style="font-size:10px">OBJECTIVE</b><div style="display:flex;align-items:center;gap:6px"><span id="objectiveStep" class="tiny">FORAGE</span><button id="guideButton" aria-label="Field guide" title="Field guide">?</button></div></div><div id="objectiveText" class="tiny" style="margin-top:5px">Eat 8 food particles to attract a mate.</div><div class="row" style="margin-top:8px"><span class="tiny">Nearby meteor parts</span><b id="discoveryCount">0</b></div></div></div>
+<div class="hud" id="gameHUD"><div class="glass hudbox"><div class="row"><b style="font-size:10px;letter-spacing:.1em">CELL INTEGRITY</b><strong id="healthValue">100%</strong></div><div class="bar health"><i id="healthFill" style="width:100%"></i></div><div class="metric"><div class="row"><span>Jet stamina</span><b id="staminaValue">100%</b></div><div class="bar"><i id="staminaFill" style="width:100%"></i></div></div><div class="metric"><div class="row"><span>Food collected</span><b id="foodValue">0 / 8</b></div><div class="bar"><i id="foodFill"></i></div></div><div class="dietPath" id="dietPath" role="img" aria-label="Diet path"><div class="dpHead"><span>DIET PATH</span><b id="dietPathLabel">Omnivore</b></div><div class="dpTrack"><i class="dpZone herb"></i><i class="dpZone omni"></i><i class="dpZone carn"></i><i class="dpMark" id="dietPathMark"></i></div><div class="dpCounts"><span>🌿 <b id="plantCount">0</b></span><span hidden><b id="dietLabel"></b></span><span><b id="meatCount">0</b> 🥩</span></div></div></div><div class="glass hudbox"><div class="row"><b style="font-size:10px">OBJECTIVE</b><div style="display:flex;align-items:center;gap:6px"><span id="objectiveStep" class="tiny">FORAGE</span><button id="guideButton" aria-label="Field guide" title="Field guide">?</button></div></div><div id="objectiveText" class="tiny" style="margin-top:5px">Eat 8 food particles to attract a mate.</div><div class="row" style="margin-top:8px"><span class="tiny" id="stageName">STAGE 1 · MICROBE</span><b id="discoveryCount" hidden>0</b></div></div></div>
 <div class="radarWrap" id="radarWrap"><div class="radartitle">BROTH RADAR</div><div class="radar" id="radar"><i class="radarDot player"></i></div><div class="radarKey"><span style="--c:#65ef9b">Plant</span><span style="--c:#f2ba85">Meat</span><span style="--c:#ff647a">Predator</span></div></div>
 <div class="zoomControls" id="zoomControls" aria-label="Camera zoom"><button id="zoomInBtn" aria-label="Zoom in" title="Zoom in">+</button><button id="zoomOutBtn" aria-label="Zoom out" title="Zoom out">−</button></div><div class="mateCue" id="mateCue"><b id="mateCueTitle">MATE READY</b><div id="mateCueText" style="font-size:10px;margin-top:3px">Press M to send a mating signal.</div></div>
-<div class="panel left" id="partsPanel"><div class="panelHeader">Cell parts drawer</div><div class="controls"><label>COMPLEXITY <b id="complexityValue">35 / 100%</b></label><div class="bar"><i id="complexityFill" style="width:35%"></i></div><label style="margin-top:7px">DNA balance <b id="dnaVsCost">25 DNA</b></label></div><div class="tabs" id="categoryTabs"><button class="active" data-cat="Mouths">Mouths</button><button data-cat="Locomotion">Locomotion</button><button data-cat="Weapons">Weapons</button><button data-cat="Senses">Senses</button><button data-cat="Body">Body</button><button data-cat="All">All parts</button></div><div class="catalog" id="catalog"></div><div class="description" id="partDescription">Select a part to see its cost and biological function.</div><div class="notice">Click a part, then click the membrane to attach it.</div></div>
+<div class="panel left" id="partsPanel"><div class="panelHeader">Cell parts drawer</div><div class="controls"><label>COMPLEXITY <b id="complexityValue">35 / 100%</b></label><div class="bar"><i id="complexityFill" style="width:35%"></i></div><label style="margin-top:7px">DNA balance <b id="dnaVsCost">25 DNA</b></label></div><div class="tabs" id="categoryTabs"><button class="active" data-cat="Mouths">Mouths</button><button data-cat="Locomotion">Locomotion</button><button data-cat="Weapons">Weapons</button><button data-cat="Senses">Senses</button><button data-cat="Body">Body</button><button data-cat="All">All parts</button></div><div class="catalog" id="catalog"></div><div class="description" id="partDescription">Select a part to see its cost and biological function.</div><div class="notice">Drag a part onto the membrane · drag the spine ends to stretch · scroll a vertebra to resize.</div></div>
 <div class="panel right" id="editorPanel"><div class="panelHeader">Genome &amp; manipulation</div><div class="scrollContent"><div class="controls directSculptHelp"><div class="row"><b style="font-size:10px;color:var(--gold)">DIRECT SPINE SCULPT</b><span id="nodeCount" class="tiny">5 vertebrae</span></div><p>Drag the gold spine points to bend the body. Pull a terminal point outward to grow a new section. Drag a blue ring to expand or narrow that section.</p><div class="sculptLegend"><span><i class="legend-dot gold"></i> Bend / extend</span><span><i class="legend-ring"></i> Body radius</span></div><div class="selectedVertebra">Selected vertebra <b id="radiusValue">0.72</b></div><div class="spineMenuControls" aria-hidden="true"><button id="addNode">＋ Add node</button><button id="removeNode">− Remove</button><input id="lengthSlider" type="range" min="65" max="150" step="5" value="100"><input id="radiusSlider" type="range" min=".25" max="1.15" step=".05" value=".72"><input id="sizeSlider" type="range" min=".7" max="1.6" step=".05" value="1"><span id="lengthValue">100%</span><span id="sizeValue">1.0×</span></div></div><div class="controls"><div class="row"><b style="font-size:10px;color:var(--gold)">PART TRANSFORM</b><span class="tiny" id="selectedPartLabel">None selected</span></div><label style="margin-top:7px">Scale <b id="partScaleValue">1.0×</b></label><input id="partScaleSlider" type="range" min=".45" max="2" step=".05" value="1"><label style="margin-top:8px">Rotation <b id="partRotationValue">0°</b></label><input id="partRotationSlider" type="range" min="-180" max="180" step="5" value="0"><div class="row" style="margin-top:7px"><button id="stackToggle">Stack parts: OFF</button><button id="mirrorToggle" class="active">↔ Symmetry ON</button></div></div><div class="controls"><b style="font-size:10px;color:var(--gold)">PAINT · THREE LAYERS</b><label style="margin-top:8px">Base membrane</label><div id="baseSwatches" class="swatches"></div><label style="margin-top:9px">Pattern / coat</label><select id="patternSelect" style="width:100%;padding:7px;background:#102e4e;color:white;border:1px solid var(--edge);border-radius:7px"><option value="speckle">Microscopic speckles</option><option value="stripes">Fluid stripes</option><option value="spots">Leopard spots</option><option value="gradient">Pearlescent gradient</option><option value="glow">Bioluminescence</option></select><label style="margin-top:8px">Pattern colour</label><div id="patternSwatches" class="swatches"></div><label style="margin-top:9px">Accent details</label><div id="accentSwatches" class="swatches"></div></div><div class="controls"><b style="font-size:10px;color:var(--gold)">CELL ATTRIBUTES</b><div id="statRows"></div><div class="tiny">Removing parts refunds their full placement cost. Maximum complexity: 100%.</div></div></div></div>
-<div class="bottom" id="gameButtons"><button id="pauseBtn">Ⅱ Pause</button><button id="callMateBtn">♡ Call mate [M]</button><button id="openEditorBtn" class="primary">🧬 Cell editor</button><button id="saveBtn">Save</button><button id="resetBtn">↺ Reset</button></div>
+<div class="bottom" id="gameButtons"><button id="pauseBtn">Ⅱ Pause</button><button id="callMateBtn">♡ Call mate [M]</button><button id="landBtn" class="primary landBtn" hidden title="Leave the water [L]">🦎 Go to land [L]</button><button id="openEditorBtn" class="primary">🧬 Cell editor</button><button id="saveBtn">Save</button><button id="resetBtn">↺ Reset</button></div>
 <div class="editButtons" id="editorButtons"><button id="cancelEditor">← Soup</button><button id="paintBtn">🎨 Paint mode</button><button id="deletePartBtn">− Remove part</button><button id="undoBtn">↶ Undo</button><button id="resetEditorBtn">↺ Reset</button><button id="finishEditor" class="primary">✓ Finish / Accept</button></div>
-<div class="mobileControls" id="mobileControls"><div class="moveStick" id="moveStick" role="application" aria-label="Virtual movement joystick"><div class="stickRing"></div><div class="stickKnob" id="moveStickKnob"></div></div><div class="actionCol"><button id="touchBoost" aria-label="Jet boost">⚡<small>BOOST</small></button><button id="touchMate" aria-label="Call mate">♡<small>MATE</small></button><button id="touchPause" aria-label="Pause game">Ⅱ<small>PAUSE</small></button></div></div>
+<div class="mobileControls" id="mobileControls"><div class="moveStick" id="moveStick" role="application" aria-label="Virtual movement joystick"><div class="stickRing"></div><div class="stickKnob" id="moveStickKnob"></div></div><div class="actionCol"><button id="touchBoost" aria-label="Jet boost">⚡<small>BOOST</small></button><button id="touchMate" aria-label="Call mate">♡<small>MATE</small></button><button id="touchLand" class="landBtn" aria-label="Go to land" hidden>🦎<small>LAND</small></button><button id="touchPause" aria-label="Pause game">Ⅱ<small>PAUSE</small></button></div></div>
 <div class="worldToast" id="toast"></div><div id="worldWaypoint" aria-hidden="true"><span class="waypointArrow">➤</span><span class="waypointText"><b id="waypointTitle">METEOR</b><small id="waypointSubtitle">DNA FRAGMENT</small></span></div><div class="controlHint" id="controlHint"><span id="controlHintText">STEER · EAT · EVOLVE</span><button id="dismissControlHint" aria-label="Dismiss controls hint">×</button></div>
-<div class="overlay" id="intro"><div class="dialog"><h1>PRIMORDIAL SOUP</h1><p>Build a cell. Survive the broth. Eat to grow, collect glowing meteor fragments to discover new biological parts, and hunt or flee according to your anatomy.</p><p><b>Swim:</b> WASD / arrows · <b>Jet:</b> Space · <b>Call mate:</b> M · <b>Editor:</b> Tab<br>On mobile, use the virtual joystick and the Boost / Mate / Pause buttons. In the editor, drag the spine and radius handles directly.</p><div class="options"><button id="eggPlant">🌿 Herbivore egg</button><button id="eggCarn">🥩 Carnivore egg</button><button id="eggOmni">✧ Omnivore egg</button><button id="begin" class="primary">Hatch egg &amp; enter</button><button id="introEditor">Build my first cell</button></div></div></div>
+<div class="overlay" id="intro"><div class="dialog"><h1>PRIMORDIAL SOUP</h1><p>A meteor brings life to the soup. Build your first cell, then eat to grow, find new parts in meteor shards and fallen cells, and choose your path: plants, meat, or both.</p><p><b>Swim:</b> WASD / arrows · <b>Jet:</b> Space · <b>Call mate:</b> M · <b>Editor:</b> Tab<br>On mobile, use the virtual joystick and the Boost / Mate / Pause buttons. In the editor, drag the spine and radius handles directly.</p><div class="options"><button id="begin" class="primary">Begin life</button></div></div></div>
 <div id="hatchCinematic" aria-label="Meteor impact and life beginning"><div class="hatchStarfield"></div><div class="hatchOrbit hatchOrbitOne"></div><div class="hatchOrbit hatchOrbitTwo"></div><div class="hatchMeteorTrail"></div><div class="hatchMeteor"></div><div class="hatchRipple"></div><div class="hatchEgg" id="hatchEgg"></div><div class="hatchCaption"><small>PRIMORDIAL SOUP</small><b id="hatchTitle">LIFE BEGINS</b><span>ONE CELL. ONE CHANCE.</span></div><button id="skipHatch">SKIP ›</button></div><div class="overlay" id="dialogOverlay" style="display:none"><div class="dialog"><h1 id="dialogTitle"></h1><p id="dialogText"></p><div class="options" id="dialogOptions"></div></div></div>
 <script type="module" src="spore/main.js"></script>
+<div class="tipBubble" id="tipBubble" role="status" aria-live="polite"><span class="tipIcon">!</span><span id="tipText"></span><button id="tipClose" aria-label="Dismiss hint">Got it</button></div>
+<div class="srOnly" id="growthAnnounce" aria-live="polite"></div><div class="stageBanner" id="stageBanner" aria-live="polite"><small id="stageBannerKicker">STAGE 1</small><strong id="stageBannerTitle">Microbe</strong><span id="stageBannerText"></span></div>
+<div class="cardPop" id="cardPop" role="status" aria-live="polite"><div class="cpKind" id="cardPopKind">TRAIT CARD</div><div id="cardPopArt"></div><div class="cpTitle" id="cardPopTitle"></div><div class="cpText" id="cardPopText"></div></div>
+<div class="overlayScreen" id="pathScreen" role="dialog" aria-modal="true" aria-labelledby="pathTitle"><div class="pathPanel" id="pathPanel"></div></div>
+<div class="finale" id="finale" role="dialog" aria-modal="true" aria-labelledby="finaleTitle"><div class="waves"></div><div class="finaleInner" id="finaleInner"></div></div>
 </body></html>

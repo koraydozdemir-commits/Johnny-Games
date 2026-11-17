@@ -15,17 +15,17 @@ export const MAX_COMPLEXITY = 100;
 /** `col` is the part's main colour; `cat` groups parts in the editor; `diet` is only set on mouths. */
 export const PART_DEFS = [
   { id: "filter", name: "Filter Mite", cat: "Mouths", cost: 0, unlock: 0, complex: 8, diet: "plant", desc: "Herbivore filter. Pulls in floating plant particles at short range.", stats: { bite: 1, feeding: 2 }, col: 0xffb78a },
-  { id: "jaw", name: "Jaw", cat: "Mouths", cost: 5, unlock: 5, complex: 15, diet: "meat", attack: 5, desc: "Carnivore mouth. Bites meat chunks and damages enemy cells at close range.", stats: { bite: 5, feeding: 3 }, col: 0xf08b87 },
-  { id: "proboscis", name: "Proboscis", cat: "Mouths", cost: 10, unlock: 10, complex: 18, diet: "omni", attack: 2, desc: "Omnivore feeder. Reaches farther and consumes plants or meat.", stats: { bite: 3, feeding: 4 }, col: 0xffc276 },
-  { id: "cilia", name: "Cilia Pair", cat: "Locomotion", cost: 5, unlock: 5, complex: 10, turn: 2.4, speed: 1, desc: "Fast turning, quick acceleration and precise movement.", stats: { turn: 3, thrust: 1 }, col: 0x91f0d5 },
-  { id: "flagellum", name: "Flagellum", cat: "Locomotion", cost: 10, unlock: 10, complex: 12, turn: 0.55, speed: 4, desc: "Long trailing tail gives strong forward propulsion, but a wide turning radius.", stats: { thrust: 4, turn: 1 }, col: 0x80edf0 },
-  { id: "jet", name: "Jet", cat: "Locomotion", cost: 15, unlock: 15, complex: 14, speed: 2, desc: "Press Space for a powerful impulse burst. Recharges over time.", stats: { burst: 5, thrust: 2 }, col: 0x8ce6ff },
-  { id: "spike", name: "Spike", cat: "Weapons", cost: 5, unlock: 5, complex: 9, attack: 3, desc: "Contact weapon inflicting damage when an enemy bumps this part.", stats: { damage: 3 }, col: 0xffa0a4 },
-  { id: "poison", name: "Poison Gland", cat: "Weapons", cost: 10, unlock: 10, complex: 15, attack: 2, desc: "Leaves poisonous green droplets behind you. Clouds damage cells over time.", stats: { damage: 2, trail: 1 }, col: 0xa8ef8a },
-  { id: "electric", name: "Electric Organs", cat: "Weapons", cost: 15, unlock: 15, complex: 16, attack: 5, desc: "Periodic area pulse damages and stuns cells nearby.", stats: { shock: 5, radius: 2 }, col: 0x9aaaff },
-  { id: "eye", name: "Eye", cat: "Senses", cost: 5, unlock: 5, complex: 8, sight: 4, desc: "Extends the visible radius and maximum camera zoom.", stats: { sight: 4 }, col: 0xffd98a },
-  { id: "mito", name: "Mitochondria", cat: "Body", cost: 3, unlock: 3, complex: 7, hp: 2, speed: 1, desc: "Boosts membrane health capacity and sustained metabolism.", stats: { health: 2, thrust: 1 }, col: 0xffb66f },
-  { id: "armour", name: "Chitin Plates", cat: "Body", cost: 8, unlock: 8, complex: 12, hp: 5, speed: -1, desc: "Hard shell plates reduce incoming damage, at the expense of speed.", stats: { health: 5, armour: 2 }, col: 0x9bbed3 },
+  { id: "jaw", name: "Jaw", cat: "Mouths", cost: 12, unlock: 12, complex: 15, diet: "meat", attack: 5, desc: "Carnivore mouth. Bites meat chunks and damages enemy cells at close range.", stats: { bite: 5, feeding: 3 }, col: 0xf08b87 },
+  { id: "proboscis", name: "Proboscis", cat: "Mouths", cost: 22, unlock: 22, complex: 18, diet: "omni", attack: 2, desc: "Omnivore feeder. Reaches farther and consumes plants or meat.", stats: { bite: 3, feeding: 4 }, col: 0xffc276 },
+  { id: "cilia", name: "Cilia Pair", cat: "Locomotion", cost: 12, unlock: 12, complex: 10, turn: 2.4, speed: 1, desc: "Fast turning, quick acceleration and precise movement.", stats: { turn: 3, thrust: 1 }, col: 0x91f0d5 },
+  { id: "flagellum", name: "Flagellum", cat: "Locomotion", cost: 22, unlock: 22, complex: 12, turn: 0.55, speed: 4, desc: "Long trailing tail gives strong forward propulsion, but a wide turning radius.", stats: { thrust: 4, turn: 1 }, col: 0x80edf0 },
+  { id: "jet", name: "Jet", cat: "Locomotion", cost: 32, unlock: 32, complex: 14, speed: 2, desc: "Press Space for a powerful impulse burst. Recharges over time.", stats: { burst: 5, thrust: 2 }, col: 0x8ce6ff },
+  { id: "spike", name: "Spike", cat: "Weapons", cost: 12, unlock: 12, complex: 9, attack: 3, desc: "Contact weapon inflicting damage when an enemy bumps this part.", stats: { damage: 3 }, col: 0xffa0a4 },
+  { id: "poison", name: "Poison Gland", cat: "Weapons", cost: 22, unlock: 22, complex: 15, attack: 2, desc: "Leaves poisonous green droplets behind you. Clouds damage cells over time.", stats: { damage: 2, trail: 1 }, col: 0xa8ef8a },
+  { id: "electric", name: "Electric Organs", cat: "Weapons", cost: 32, unlock: 32, complex: 16, attack: 5, desc: "Periodic area pulse damages and stuns cells nearby.", stats: { shock: 5, radius: 2 }, col: 0x9aaaff },
+  { id: "eye", name: "Eye", cat: "Senses", cost: 10, unlock: 10, complex: 8, sight: 4, desc: "Extends the visible radius and maximum camera zoom.", stats: { sight: 4 }, col: 0xffd98a },
+  { id: "mito", name: "Mitochondria", cat: "Body", cost: 8, unlock: 8, complex: 7, hp: 2, speed: 1, desc: "Boosts membrane health capacity and sustained metabolism.", stats: { health: 2, thrust: 1 }, col: 0xffb66f },
+  { id: "armour", name: "Chitin Plates", cat: "Body", cost: 18, unlock: 18, complex: 12, hp: 5, speed: -1, desc: "Hard shell plates reduce incoming damage, at the expense of speed.", stats: { health: 5, armour: 2 }, col: 0x9bbed3 },
 ];
 
 export const PART_IDS = PART_DEFS.map((d) => d.id);

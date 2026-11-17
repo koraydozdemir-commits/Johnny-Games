@@ -331,7 +331,8 @@ export function buildCellBody(record, opts = {}) {
   }
 
   let interior = null;
-  if (preset.interior || big) {
+  // Other cells only get an interior on high quality: on phones it is the first thing to go.
+  if (big || (preset.interior && currentQuality === "high")) {
     interior = new THREE.Mesh(buildInterior(hull, nodes, colors, opts.seed || 1), getInteriorMaterial());
     interior.frustumCulled = false;
     interior.renderOrder = 1;

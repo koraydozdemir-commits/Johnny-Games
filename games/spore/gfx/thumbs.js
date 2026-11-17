@@ -55,3 +55,48 @@ export function renderPartThumbnails(renderer, partIds, { bodyColor = 0x3be0d8 }
   target.dispose();
   return urls;
 }
+
+/**
+ * A small portrait of a whole cell for the species history: built from its record, lit like the
+ * part icons and rendered to an image. Returns a data URL (WebP where supported).
+ * @param {(record) => { root: THREE.Object3D, extent: object, rig?: { dispose(): void } }} build
+ */
+export function renderCellSnapshot(renderer, record, build, { width = 240, height = 150 } = {}) {
+  const scene = new THREE.Scene();
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x4a5f88, 2.2));
+  const key = new THREE.DirectionalLight(0xfff0d8, 2.6);
+  key.position.set(-3, 4, 6);
+  scene.add(key);
+  const body = build(record);
+  scene.add(body.root);
+  const box = new THREE.Box3().setFromObject(body.root);
+  const size = box.getSize(new THREE.Vector3()),
+    centre = box.getCenter(new THREE.Vector3());
+  const aspect = width / height;
+  const half = Math.max(size.x / 2 / aspect, size.y / 2) * 1.12 + 0.05;
+  const camera = new THREE.OrthographicCamera(-half * aspect, half * aspect, half, -half, 0.1, 40);
+  camera.position.set(centre.x, centre.y, 12);
+  const target = new THREE.WebGLRenderTarget(width, height, { samples: 4 });
+  target.texture.colorSpace = THREE.SRGBColorSpace;
+  const previous = { target: renderer.getRenderTarget(), clear: renderer.getClearColor(new THREE.Color()), alpha: renderer.getClearAlpha() };
+  renderer.setClearColor(0x0d2a40, 1);
+  renderer.setRenderTarget(target);
+  renderer.clear();
+  renderer.render(scene, camera);
+  const pixels = new Uint8Array(width * height * 4);
+  renderer.readRenderTargetPixels(target, 0, 0, width, height, pixels);
+  renderer.setRenderTarget(previous.target);
+  renderer.setClearColor(previous.clear, previous.alpha);
+  target.dispose();
+  scene.remove(body.root);
+  body.rig?.dispose?.();
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  const image = ctx.createImageData(width, height);
+  for (let y = 0; y < height; y++) image.data.set(pixels.subarray((height - 1 - y) * width * 4, (height - y) * width * 4), y * width * 4);
+  ctx.putImageData(image, 0, 0);
+  const webp = canvas.toDataURL("image/webp", 0.82);
+  return webp.startsWith("data:image/webp") ? webp : canvas.toDataURL("image/jpeg", 0.82);
+}

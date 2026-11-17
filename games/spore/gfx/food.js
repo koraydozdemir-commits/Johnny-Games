@@ -114,11 +114,63 @@ function foodMaterial() {
   return material;
 }
 
-/** A group holding one food mesh. The group is what the game moves, hides and removes. */
+/**
+ * A food item is a plain Group the game moves, rotates and hides; it holds no mesh of its own.
+ * `createFoodBatch` draws every visible item of each kind with one InstancedMesh, so a soup full
+ * of food costs four draw calls instead of one per piece.
+ */
 export function createFoodModel(type, kind) {
   const group = new THREE.Group();
-  const mesh = new THREE.Mesh(geometryFor(type, kind), foodMaterial());
-  mesh.rotation.z = Math.random() * Math.PI * 2;
-  group.add(mesh);
+  group.userData.renderKey = type + ":" + kind;
   return group;
+}
+
+const KEYS = ["plant:particle", "plant:chunk", "meat:particle", "meat:chunk"];
+
+export function createFoodBatch(parent) {
+  const batches = new Map();
+  const ensure = (key, needed) => {
+    let b = batches.get(key);
+    if (b && b.capacity >= needed) return b;
+    const capacity = Math.max(64, Math.ceil(needed * 1.5));
+    if (b) {
+      parent.remove(b.mesh);
+      b.mesh.dispose();
+    }
+    const [type, kind] = key.split(":");
+    const mesh = new THREE.InstancedMesh(geometryFor(type, kind), foodMaterial(), capacity);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.frustumCulled = false;
+    mesh.count = 0;
+    mesh.userData.shared = true;
+    parent.add(mesh);
+    b = { mesh, capacity };
+    batches.set(key, b);
+    return b;
+  };
+  const matrix = new THREE.Matrix4(),
+    q = new THREE.Quaternion(),
+    axis = new THREE.Vector3(0, 0, 1),
+    scale = new THREE.Vector3(1, 1, 1);
+  return {
+    /** Write the transforms of every visible, living food item. Call once per frame. */
+    sync(foodList) {
+      const counts = {};
+      KEYS.forEach((k) => (counts[k] = 0));
+      for (const f of foodList) if (f.visible && f.userData.alive) counts[f.userData.renderKey]++;
+      KEYS.forEach((k) => ensure(k, counts[k]).mesh && (batches.get(k).mesh.count = 0));
+      for (const f of foodList) {
+        if (!f.visible || !f.userData.alive) continue;
+        const mesh = batches.get(f.userData.renderKey).mesh;
+        q.setFromAxisAngle(axis, f.rotation.z);
+        scale.setScalar(f.scale.x);
+        matrix.compose(f.position, q, scale);
+        mesh.setMatrixAt(mesh.count++, matrix);
+      }
+      batches.forEach((b) => (b.mesh.instanceMatrix.needsUpdate = true));
+    },
+    setVisible(on) {
+      batches.forEach((b) => (b.mesh.visible = on));
+    },
+  };
 }

@@ -202,7 +202,7 @@ export function mutateCellRecord(record, rng = Math.random, strength = 1) {
   copy.body.nodes.forEach((n, i, all) => {
     const end = i === 0 || i === all.length - 1;
     n.r = clamp(n.r * (1 + jitter(end ? 0.06 : 0.1)), LIMITS.radiusMin, LIMITS.radiusMax);
-    n.y = clamp(n.y + (end ? 0 : jitter(0.05)), -LIMITS.nodeY, LIMITS.nodeY);
+    n.y = 0; // cell-stage spines are straight and mirror-symmetric, as in Spore
   });
   const stretch = 1 + jitter(0.06);
   copy.body.nodes.forEach((n) => (n.x = clamp(n.x * stretch, -LIMITS.nodeX, LIMITS.nodeX)));

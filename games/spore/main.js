@@ -1,11 +1,34 @@
 import * as THREE from "three";
-import { buildCellBody, getQuality, QUALITY_PRESETS, setQuality, snapPartsToSurface, surfacePoint } from "./gfx/body.js";
-import { createBackground } from "./gfx/background.js";
-import { createFoodModel } from "./gfx/food.js";
+import { buildCellBody, getQuality, pointInPolygon, QUALITY_PRESETS, setQuality, snapPartsToSurface, surfacePoint } from "./gfx/body.js";
+import { createBackground, createWaterFx } from "./gfx/background.js";
+import { createFoodBatch, createFoodModel } from "./gfx/food.js";
+import { createDebris, createPlantColony } from "./gfx/flora.js";
+import { createFxPool } from "./gfx/fx.js";
+import { GROWTH_STAGES, LAST_TIER, meteorPool, preyFor, stageFor, stageScale, unlockHint } from "./stages.js";
+import { dietPath } from "./traits.js";
+import { createTipEngine } from "./tutorials.js";
+import { hideTip, openHistoryScreen, pathScreenOpen, popCard, showTip, updateDietMeter } from "./progression-ui.js";
+import { createAudio } from "./audio.js";
+import { loadSettings, openSettings, saveSettings } from "./settings.js";
+import { createTribeStage, loadTribeSave } from "./tribe/stage.js";
+import { markSaved, switchSlot } from "./slots.js";
+import { capsuleGap, leadTarget, pointCapsuleGap, resolveCollisions, steerHeading, strokePulse } from "./cell-physics.js";
+import { createCreatureStage } from "./creature/stage.js";
+import { openCreatureEditor } from "./creature/editor.js";
+import { buildCreatureBody } from "./creature/body3d.js";
+import { CREATURE_SAVE_KEY, creatureFromCell } from "./creature/format.js";
+import { CREATURE_CARDS } from "./traits.js";
 import { timeUniform } from "./gfx/materials.js";
-import { renderPartThumbnails } from "./gfx/thumbs.js";
+import { renderCellSnapshot, renderPartThumbnails } from "./gfx/thumbs.js";
 import { SPECIES, chooseSpecies, speciesRecord } from "./species.js";
-import { cellToJson, createCellRecord, defaultNodes as defaultSpine, makeRng, mirrorCellRecord, mutateCellRecord, storeCellRecord, writeHandoff } from "./cell-format.js";
+import {
+  createCellRecord,
+  defaultNodes as defaultSpine,
+  makeRng,
+  mutateCellRecord,
+  storeCellRecord,
+  writeHandoff,
+} from "./cell-format.js";
 const $ = (s) => document.querySelector(s),
   canvas = $("#scene");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
@@ -34,8 +57,15 @@ const QUALITY_KEY = "johnny-spore-quality";
   } catch (e) {}
   setQuality(saved && QUALITY_PRESETS[saved] ? saved : matchMedia("(pointer: coarse)").matches ? "medium" : "high");
 })();
-renderer.setPixelRatio(Math.min(devicePixelRatio, QUALITY_PRESETS[getQuality()].pixelRatio));
+/* Adaptive resolution: if frames run slow for a couple of seconds, render fewer pixels (down to 60%
+   of the quality preset) and creep back up when there's headroom. Every feature stays on. */
+const perf = { time: 0, frames: 0, scale: 1 };
+const basePixelRatio = () => Math.min(devicePixelRatio, QUALITY_PRESETS[getQuality()].pixelRatio);
+renderer.setPixelRatio(basePixelRatio() * perf.scale);
 const background = createBackground(scene, getQuality());
+// Gentle underwater wobble over the whole picture (off on low quality and in the editor).
+const waterFx = createWaterFx(renderer);
+waterFx.setQuality(getQuality());
 const softGlowTexture = background.glowTexture;
 const world = new THREE.Group();
 scene.add(world);
@@ -48,7 +78,10 @@ const editorDisk = new THREE.Mesh(
 );
 editorDisk.position.z = -1.5;
 editorStage.add(editorDisk);
-const editorRim = new THREE.Mesh(new THREE.RingGeometry(5.7, 5.8, 128), new THREE.MeshBasicMaterial({ color: 0x7bd6d0, transparent: true, opacity: 0.45, depthWrite: false }));
+const editorRim = new THREE.Mesh(
+  new THREE.RingGeometry(5.7, 5.8, 128),
+  new THREE.MeshBasicMaterial({ color: 0x7bd6d0, transparent: true, opacity: 0.45, depthWrite: false }),
+);
 editorRim.position.z = -1.4;
 editorStage.add(editorRim);
 editorStage.visible = false;
@@ -59,7 +92,9 @@ const foodGroup = new THREE.Group(),
   hazardGroup = new THREE.Group(),
   meteorGroup = new THREE.Group(),
   currentGroup = new THREE.Group();
-scene.add(foodGroup, npcGroup, hazardGroup, meteorGroup, currentGroup);
+const sceneryGroup = new THREE.Group();
+const foodBatch = createFoodBatch(foodGroup);
+scene.add(sceneryGroup, foodGroup, npcGroup, hazardGroup, meteorGroup, currentGroup);
 const baseColors = [0x3be0d8, 0x8bd18b, 0xe6a76f, 0xb9a4ef, 0xe17fa9, 0x6ca4e8, 0xffd56d],
   patternColors = [0x9df6ee, 0x204d88, 0xf3dc9e, 0x8cf0af, 0xef97d0],
   accentColors = [0xffedbc, 0xff8eae, 0x91f8ed, 0xc9a4ff, 0xffb65c];
@@ -234,7 +269,7 @@ const state = {
   dna: 25,
   tier: 1,
   food: 0,
-  foodGoal: 8,
+  foodGoal: 12,
   plants: 0,
   meat: 0,
   health: 100,
@@ -245,7 +280,7 @@ const state = {
   patternColor: patternColors[0],
   accentColor: accentColors[0],
   pattern: "speckle",
-  selected: "filter",
+  selected: null,
   category: "Mouths",
   symmetry: true,
   stack: false,
@@ -266,7 +301,9 @@ const state = {
   meteorTimer: 18,
   ventTimer: 5,
   eliteTimer: 30,
-  epicTimer: 95,
+  worldSeed: (Math.random() * 2 ** 31) | 0,
+  streamTimer: 0,
+  epicTimer: 170,
   toastTimer: 0,
   runStarted: false,
   eliteKills: 0,
@@ -279,7 +316,39 @@ const state = {
   worldGeneration: 0,
   dietHintAt: 0,
 };
-const unlocked = new Set(["filter", "cilia", "eye"]);
+const STARTER_UNLOCKS = ["filter", "jaw", "cilia", "eye"];
+const unlocked = new Set(STARTER_UNLOCKS);
+/** Run progress that drives trait cards, tutorials and the Path screen. */
+const progress = {
+  kills: 0,
+  regions: new Set(),
+  deaths: 0,
+  history: [],
+  genStart: { plants: 0, meat: 0, kills: 0, deaths: 0 },
+  editorPass: false,
+  biteCooldown: 0,
+  pathOpened: false,
+  unlockedSinceEditor: 0,
+  wrongFoodAt: -99,
+  distanceSwum: 0,
+  runTime: 0,
+  editorOpenedAt: 0,
+  dietCard: null,
+  cellStageComplete: false,
+  /** The final generation has hatched: the cell may leave the water whenever the player chooses. */
+  landReady: false,
+  pendingBanner: 0,
+  firstBuild: false,
+};
+const progressStats = () => ({
+  plants: state.plants,
+  meat: state.meat,
+  kills: progress.kills,
+  deaths: progress.deaths,
+  shards: state.discoveries,
+  regions: progress.regions.size,
+  partsUnlocked: unlocked.size,
+});
 let nodes = [],
   parts = [],
   boundary = [],
@@ -296,6 +365,9 @@ let food = [],
   currents = [],
   epics = [],
   floatingMeat = [],
+  partOrbs = [],
+  colonies = [],
+  debris = [],
   particles = [],
   floatingFX = [],
   undoStack = [],
@@ -303,15 +375,63 @@ let food = [],
   lastTime = performance.now(),
   gameTime = 0,
   worldSize = 1,
-  radarDotCache = new Map(),
   editorCenterX = 0,
   editorEntrySnapshot = null,
   rebuildPending = false,
-  audioContext = null,
   soundEnabled = true,
   hintTimeout = null,
   wakeCooldown = 0,
+  strokePhase = 0,
   autoSaveTimer = 28;
+/* Impulses sit on top of swimming velocity and are never speed-capped, so a jet burst or a hit
+   really moves you; each fades on its own clock. Jets glide out, knockback is a short sharp shove. */
+const jetVel = new THREE.Vector2(),
+  knockVel = new THREE.Vector2();
+const JET_FADE = 2.4,
+  KNOCK_FADE = 9;
+const aiDesire = new THREE.Vector2();
+/** Collision radius of a cell body: between its half-width and half-length, since cells are oval. */
+const cellRadius = (extent, scale) => (Math.min(extent.width, extent.height) * 0.3 + Math.max(extent.width, extent.height) * 0.2) * scale;
+const playerRadius = () => (playerBody ? cellRadius(playerBody.extent, state.scale) : 0.5 * state.scale);
+const playerCollider = { pos: null, vel: null, r: 0.5, mass: 1, half: 0, angle: 0, off: 0 };
+/** Fit a capsule (radius = half-width, core along the body) to a cell's outline. */
+function fitCapsule(target, extent, scale, heading) {
+  const r = (extent.height / 2) * scale * 0.95;
+  target.r = r;
+  target.half = Math.max(0, (extent.width / 2) * scale - r);
+  target.off = (extent.minX + extent.width / 2) * scale;
+  target.angle = heading;
+  return target;
+}
+const updatePlayerCapsule = () => {
+  playerCollider.pos = player.position;
+  playerCollider.vel = velocity;
+  if (playerBody) fitCapsule(playerCollider, playerBody.extent, state.scale, angle);
+  else playerCollider.r = 0.5 * state.scale;
+  return playerCollider;
+};
+const npcCapsule = (e) => {
+  const u = e.userData;
+  if (!u.collider) u.collider = { pos: e.position, vel: u.velocity, r: 0.4, mass: 1 };
+  return fitCapsule(u.collider, u.body.extent, u.size, e.rotation.z);
+};
+/** Cells can't overlap: push every live cell (and you) apart, heavier cells shoving lighter ones. */
+function resolveCellCollisions() {
+  const bodies = [];
+  for (const e of enemies) {
+    const u = e.userData;
+    if (!u.alive || u.epic || (state.courtship && e === state.mate)) continue;
+    if (!u.radius) u.radius = cellRadius(u.body.extent, u.size);
+    const c = npcCapsule(e);
+    c.mass = u.size * u.size * (u.alpha ? 1.6 : 1);
+    bodies.push(c);
+  }
+  if (!state.courtship) {
+    updatePlayerCapsule().mass = state.scale * state.scale * 1.15;
+    bodies.push(playerCollider);
+  }
+  resolveCollisions(bodies, 0.3);
+}
 function toast(s) {
   const el = $("#toast");
   el.textContent = s;
@@ -319,43 +439,75 @@ function toast(s) {
   clearTimeout(state.toastTimer);
   state.toastTimer = setTimeout(() => el.classList.remove("show"), 2300);
 }
-function playSfx(kind) {
-  if (!soundEnabled) return;
-  try {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    if (!audioContext) audioContext = new AC();
-    if (audioContext.state === "suspended") audioContext.resume().catch(() => {});
-    const notes = {
-      eat: [640, 880],
-      damage: [180, 110],
-      meteor: [720, 980, 1240],
-      unlock: [540, 810, 1080],
-      mate: [440, 660, 880],
-      hatch: [330, 495, 660],
-      click: [420],
-      jet: [155, 95],
-      death: [180, 120],
-    };
-    const seq = notes[kind] || notes.click,
-      now = audioContext.currentTime;
-    seq.forEach((hz, i) => {
-      const osc = audioContext.createOscillator(),
-        gain = audioContext.createGain();
-      osc.type = kind === "damage" || kind === "death" ? "sawtooth" : "triangle";
-      osc.frequency.setValueAtTime(hz, now + i * 0.065);
-      if (kind === "jet") osc.frequency.exponentialRampToValueAtTime(Math.max(40, hz * 0.55), now + 0.12);
-      gain.gain.setValueAtTime(0.0001, now + i * 0.065);
-      gain.gain.linearRampToValueAtTime(kind === "damage" ? 0.035 : 0.045, now + i * 0.065 + 0.008);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.065 + 0.12);
-      osc.connect(gain);
-      gain.connect(audioContext.destination);
-      osc.start(now + i * 0.065);
-      osc.stop(now + i * 0.065 + 0.14);
-    });
-  } catch (e) {}
+const audio = createAudio();
+audio.setAmbient("cell"); // starts on the first tap or key press
+/* ---- Settings (shared by every save slot) ---- */
+const settings = loadSettings(localStorage);
+function applySettings() {
+  audio.setVolume({ sfx: settings.sfx, ambience: settings.ambience });
+  document.body.classList.toggle("reduceMotion", settings.reducedMotion);
 }
+applySettings();
+let settingsOpen = false;
+function refreshQualityButton() {
+  const q = getQuality();
+  $("#qualityToggle").textContent = q === "low" ? "▢" : q === "medium" ? "◫" : "▣";
+  $("#qualityToggle").title = "Graphics quality: " + q + " (click to change)";
+}
+function openGameSettings() {
+  if (settingsOpen) return;
+  settingsOpen = true;
+  // Everything holds still while the panel is open.
+  const wasPaused = state.paused;
+  if (tribeStage) tribeStage.setPaused(true);
+  else if (creatureStage && !creatureEditor) creatureStage.setPaused(true);
+  else state.paused = true;
+  openSettings({
+    store: localStorage,
+    settings,
+    onChange: () => {
+      applySettings();
+      saveSettings(localStorage, settings);
+    },
+    qualities: Object.keys(QUALITY_PRESETS),
+    getQuality,
+    onQuality: (q) => {
+      applyQuality(q);
+      refreshQualityButton();
+    },
+    onSwitchSlot: (n) => {
+      // Save the game in play first, then park it and load the other slot.
+      if (tribeStage) tribeStage.save();
+      else if (creatureStage) creatureStage.save();
+      else saveGame(true);
+      try {
+        switchSlot(localStorage, n);
+      } catch (e) {
+        toast("Couldn't switch save slots: storage is unavailable.");
+        return;
+      }
+      location.reload();
+    },
+    onClose: () => {
+      settingsOpen = false;
+      if (tribeStage) tribeStage.setPaused(false);
+      else if (creatureStage && !creatureEditor) creatureStage.setPaused(false);
+      else state.paused = wasPaused;
+    },
+  });
+}
+/** Every sound in the game goes through here. opts: { pitch, gain } for creature voices. */
+function playSfx(kind, opts) {
+  if (!soundEnabled) return;
+  audio.play(kind, opts);
+}
+// Browsers only allow sound after a user gesture: unlock (and start ambience) on the first one.
+["pointerdown", "keydown"].forEach((ev) => window.addEventListener(ev, () => audio.unlock(), { capture: true, passive: true }));
+const labelTextures = new Map();
+const labelGeometry = new THREE.PlaneGeometry(1.55, 0.52);
 function spawnFloatLabel(x, y, text, color = 0xfff0bd) {
+  const key = text + "|" + color;
+  if (labelTextures.has(key)) return addFloatLabel(x, y, labelTextures.get(key));
   const canvas = document.createElement("canvas");
   canvas.width = 256;
   canvas.height = 86;
@@ -371,64 +523,42 @@ function spawnFloatLabel(x, y, text, color = 0xfff0bd) {
   ctx.fillText(text, 128, 44);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
+  if (labelTextures.size < 40) labelTextures.set(key, texture);
+  addFloatLabel(x, y, texture);
+}
+function addFloatLabel(x, y, texture) {
   const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.55, 0.52),
+    labelGeometry,
     new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide }),
   );
   mesh.position.set(x, y, 2.4);
   mesh.renderOrder = 30;
-  mesh.userData = { life: 0.92, maxLife: 0.92, vx: (Math.random() - 0.5) * 0.32, vy: 0.62, vz: 0, spin: 0, floatText: true, texture };
+  mesh.userData = { life: 0.92, maxLife: 0.92, vx: (Math.random() - 0.5) * 0.32, vy: 0.62, vz: 0, spin: 0, floatText: true };
   scene.add(mesh);
   floatingFX.push(mesh);
 }
+const fxPool = createFxPool(scene);
+const poisonPuffGeometry = new THREE.SphereGeometry(0.09, 8, 7),
+  electricPulseGeometry = new THREE.TorusGeometry(2.15, 0.05, 8, 48);
+poisonPuffGeometry.userData.shared = electricPulseGeometry.userData.shared = true;
 function spawnBurst(x, y, color = 0xffe5a1, count = 10) {
-  for (let i = 0; i < count; i++) {
-    const mesh = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(0.025 + Math.random() * 0.04, 0),
-      new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.95 }),
-    );
-    mesh.position.set(x + (Math.random() - 0.5) * 0.18, y + (Math.random() - 0.5) * 0.18, 0.65 + Math.random() * 0.2);
-    mesh.userData = {
-      life: 0.38 + Math.random() * 0.5,
-      maxLife: 0.88,
-      vx: (Math.random() - 0.5) * 2.5,
-      vy: (Math.random() - 0.5) * 2.5,
-      vz: 0.2 + Math.random() * 0.8,
-      spin: (Math.random() - 0.5) * 5,
-    };
-    scene.add(mesh);
-    floatingFX.push(mesh);
-  }
+  fxPool.burst(x, y, color, count);
 }
 function spawnWake() {
-  const bubble = new THREE.Mesh(
-    new THREE.SphereGeometry(0.045 + Math.random() * 0.055, 9, 7),
-    new THREE.MeshBasicMaterial({ color: 0xb8f5f0, transparent: true, opacity: 0.5, depthWrite: false }),
-  );
-  bubble.position.set(
+  fxPool.bubble(
     player.position.x - Math.cos(angle) * 0.9 + (Math.random() - 0.5) * 0.25,
     player.position.y - Math.sin(angle) * 0.9 + (Math.random() - 0.5) * 0.25,
-    0.3,
+    -velocity.x * 0.12 + (Math.random() - 0.5) * 0.35,
+    -velocity.y * 0.12 + (Math.random() - 0.5) * 0.35,
   );
-  bubble.userData = {
-    life: 0.45 + Math.random() * 0.35,
-    maxLife: 0.8,
-    vx: -velocity.x * 0.12 + (Math.random() - 0.5) * 0.35,
-    vy: -velocity.y * 0.12 + (Math.random() - 0.5) * 0.35,
-    vz: 0.25,
-    spin: Math.random() * 2,
-  };
-  scene.add(bubble);
-  floatingFX.push(bubble);
 }
 function updateBurstFX(dt) {
+  fxPool.update(dt);
   floatingFX = floatingFX.filter((p) => {
     p.userData.life -= dt;
     if (p.userData.life <= 0) {
       scene.remove(p);
-      p.geometry.dispose();
-      if (p.userData.texture) p.userData.texture.dispose();
-      p.material.dispose();
+      p.material.dispose(); // geometry and text textures are shared
       return false;
     }
     p.position.x += p.userData.vx * dt;
@@ -468,7 +598,6 @@ function tube(points, r, color, extra = {}) {
   return new THREE.Mesh(new THREE.TubeGeometry(curve, Math.max(16, points.length * 8), r, 8, false), material(color, 0.23, extra));
 }
 
-
 const defaultNodes = defaultSpine;
 /** Free GPU resources of a subtree and detach it. Shared geometry, materials and textures are left alone. */
 function disposeTree(root) {
@@ -487,6 +616,53 @@ function disposeTree(root) {
 function clearGroup(group) {
   while (group.children.length) disposeTree(group.children[0]);
 }
+// Spore-style spine: vertebrae sit on one straight axis, so the body is always mirror-symmetric.
+const SPINE = { minGap: 0.32, maxGap: 1.0, maxX: 4.2 };
+function straightenSpine(list) {
+  const sorted = list.map((n) => ({ x: n.x, y: 0, r: n.r })).sort((a, b) => a.x - b.x);
+  for (let i = 1; i < sorted.length; i++) sorted[i].x = Math.max(sorted[i].x, sorted[i - 1].x + SPINE.minGap);
+  const mid = (sorted[0].x + sorted[sorted.length - 1].x) / 2;
+  sorted.forEach((n) => (n.x -= mid));
+  return sorted;
+}
+let previewParts = [];
+let partsNeedSeating = false;
+/** Remember where each part sits relative to the vertebrae around it, before the spine changes. */
+function anchorPartsToSpine() {
+  const first = nodes[0],
+    last = nodes[nodes.length - 1];
+  return {
+    extent: [first.x - first.r, last.x + last.r],
+    anchors: parts.map((p) => {
+      // Parts on the axis (mouths, tails) sit on a cap: keep them on that tip.
+      if (Math.abs(p.y) < 0.08)
+        return p.x >= (first.x + last.x) / 2
+          ? { end: last, dx: Math.max(0, (p.x - last.x) / last.r) }
+          : { end: first, dx: Math.min(0, (p.x - first.x) / first.r) };
+      if (p.x <= first.x) return { end: first, dx: (p.x - first.x) / first.r };
+      if (p.x >= last.x) return { end: last, dx: (p.x - last.x) / last.r };
+      const i = nodes.findIndex((n, k) => k < nodes.length - 1 && p.x >= n.x && p.x <= nodes[k + 1].x);
+      const a = nodes[i],
+        b = nodes[i + 1];
+      return { a, b, f: (p.x - a.x) / Math.max(1e-6, b.x - a.x) };
+    }),
+  };
+}
+/** After the spine changes, move each part with its vertebrae and re-seat it on the new membrane. */
+function carryPartsWithSpine(before) {
+  const live = new Set(nodes),
+    [a0, a1] = before.extent,
+    b0 = nodes[0].x - nodes[0].r,
+    b1 = nodes[nodes.length - 1].x + nodes[nodes.length - 1].r;
+  parts.forEach((p, i) => {
+    const anchor = before.anchors[i];
+    if (!anchor) return;
+    if (anchor.end && live.has(anchor.end)) p.x = anchor.end.x + anchor.dx * anchor.end.r;
+    else if (anchor.a && live.has(anchor.a) && live.has(anchor.b)) p.x = anchor.a.x + anchor.f * (anchor.b.x - anchor.a.x);
+    else if (a1 - a0 > 1e-6) p.x = b0 + ((p.x - a0) / (a1 - a0)) * (b1 - b0);
+  });
+  partsNeedSeating = true;
+}
 function scheduleRebuildPlayer() {
   if (rebuildPending) return;
   rebuildPending = true;
@@ -496,11 +672,18 @@ function scheduleRebuildPlayer() {
   });
 }
 /** The live cell as a saved-cell record: the single description the body builder, mating and the creature stage share. */
-function currentRecord() {
+function currentRecord({ withPreview = false } = {}) {
   return createCellRecord({
     name: state.cellName,
     nodes,
-    parts: parts.map((p) => ({ id: p.id, x: p.x, y: p.y, rotation: p.rotation, scale: p.scale, pairId: p.pairId })),
+    parts: (withPreview ? parts.concat(previewParts) : parts).map((p) => ({
+      id: p.id,
+      x: p.x,
+      y: p.y,
+      rotation: p.rotation,
+      scale: p.scale,
+      pairId: p.pairId,
+    })),
     baseColor: state.baseColor,
     patternColor: state.patternColor,
     accentColor: state.accentColor,
@@ -519,7 +702,16 @@ function rebuildPlayer() {
   }
   clearGroup(playerPartsGroup);
   clearGroup(handleGroup);
-  playerBody = buildCellBody(currentRecord(), { role: state.editor ? "editor" : "player", seed: 1, rimColor: 0xbff8ff });
+  if (partsNeedSeating && parts.length) {
+    const seated = snapPartsToSurface(currentRecord(), { faceOutward: true });
+    parts.forEach((p, i) => Object.assign(p, { x: seated.parts[i].x, y: seated.parts[i].y, rotation: seated.parts[i].rotation }));
+  }
+  partsNeedSeating = false;
+  playerBody = buildCellBody(currentRecord({ withPreview: state.editor }), {
+    role: state.editor ? "editor" : "player",
+    seed: 1,
+    rimColor: 0xbff8ff,
+  });
   playerBody.rig.setFrozen(state.editor);
   player.add(playerBody.root);
   boundary = playerBody.outline;
@@ -529,7 +721,12 @@ function rebuildPlayer() {
     if (state.editor) {
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(i === state.selectedPart ? 0.25 : 0.17, 0.025, 6, 20),
-        new THREE.MeshBasicMaterial({ color: i === state.selectedPart ? 0xffe38b : 0x7fe8ed, transparent: true, opacity: 0.95, depthTest: false }),
+        new THREE.MeshBasicMaterial({
+          color: i === state.selectedPart ? 0xffe38b : 0x7fe8ed,
+          transparent: true,
+          opacity: 0.95,
+          depthTest: false,
+        }),
       );
       ring.position.set(p.x, p.y, 0.7);
       ring.renderOrder = 7;
@@ -559,9 +756,15 @@ function rebuildPlayer() {
       handle.renderOrder = 9;
       handle.userData.nodeIndex = i;
       handleGroup.add(handle);
+      if (i !== state.selectedNode) return;
       const r = new THREE.Mesh(
         new THREE.TorusGeometry(n.r, 0.022, 7, 32),
-        new THREE.MeshBasicMaterial({ color: i === state.selectedNode ? 0xffcf71 : 0x85e8f0, transparent: true, opacity: 0.82, depthTest: false }),
+        new THREE.MeshBasicMaterial({
+          color: i === state.selectedNode ? 0xffcf71 : 0x85e8f0,
+          transparent: true,
+          opacity: 0.82,
+          depthTest: false,
+        }),
       );
       r.position.set(n.x, n.y, 0.84);
       r.renderOrder = 8;
@@ -610,6 +813,14 @@ function snapToSurface(x, y) {
   const outline = boundary.length ? boundary : playerBody?.outline || [];
   if (!outline.length) return { x, y, angle: Math.atan2(y, x) };
   const hit = surfacePoint(outline, x, y);
+  // Near the very front or back, settle on the tip itself: mouths and tails sit on the spine, unmirrored.
+  const head = nodes[nodes.length - 1].x,
+    tail = nodes[0].x;
+  if (Math.abs(hit.y) < 0.3 && (hit.x >= head - 0.05 || hit.x <= tail + 0.05)) {
+    const front = hit.x >= head - 0.05,
+      tipX = front ? Math.max(...outline.map((p) => p.x)) : Math.min(...outline.map((p) => p.x));
+    return { x: tipX, y: 0, angle: front ? 0 : Math.PI };
+  }
   return { x: hit.x, y: hit.y, angle: hit.angle };
 }
 let nextPairId = 1;
@@ -703,25 +914,6 @@ function removeSelectedPart() {
   }
   removePartAt(state.selectedPart, false);
 }
-function partIsOutsideHull(x, y) {
-  let inside = false,
-    minDist = Infinity;
-  const poly = boundary;
-  if (!poly || poly.length < 3) return false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const a = poly[i],
-      b = poly[j],
-      vx = b.x - a.x,
-      vy = b.y - a.y,
-      den = vx * vx + vy * vy,
-      t = den ? THREE.MathUtils.clamp(((x - a.x) * vx + (y - a.y) * vy) / den, 0, 1) : 0,
-      dx = x - (a.x + t * vx),
-      dy = y - (a.y + t * vy);
-    minDist = Math.min(minDist, Math.hypot(dx, dy));
-    if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
-  }
-  return !inside && minDist > 0.16;
-}
 function restoreEditState(s) {
   const data = JSON.parse(s);
   nodes = data.nodes;
@@ -792,6 +984,169 @@ function drawSwatches(id, values, current, cb) {
   });
 }
 let partThumbs = new Map();
+let catalogDrag = null;
+/*
+ * Touching a part card can mean two things on a phone: scroll the drawer, or pull the part out.
+ * Cards take the gesture themselves (touch-action: none) and decide: a steep vertical swipe scrolls
+ * the drawer (with a little momentum), a sideways or diagonal pull, or a short hold, picks the part up.
+ */
+const CATALOG_HOLD_MS = 260;
+function beginCatalogDrag(e, def, usable = true) {
+  if (!state.editor || e.button > 0) return;
+  // Locked cards can still be swiped to scroll, but never picked up.
+  if (!usable && e.pointerType === "mouse") return;
+  const touch = e.pointerType !== "mouse",
+    list = $("#partsPanel .catalog");
+  catalogDrag = {
+    def,
+    touch,
+    list,
+    startX: e.clientX,
+    startY: e.clientY,
+    // Phones show the parts as a sideways strip; desktop as a tall grid.
+    horizontal: !!list && list.scrollWidth > list.clientWidth + 2,
+    startScroll: list ? (list.scrollWidth > list.clientWidth + 2 ? list.scrollLeft : list.scrollTop) : 0,
+    lastY: e.clientY,
+    lastX: e.clientX,
+    lastT: performance.now(),
+    velocity: 0,
+    mode: null,
+    active: false,
+    spot: null,
+    ghost: null,
+    suppressClick: false,
+    hold: 0,
+    usable,
+  };
+  if (touch) {
+    const drag = catalogDrag;
+    drag.hold = setTimeout(() => {
+      if (catalogDrag === drag && !drag.mode && drag.usable) {
+        drag.mode = "drag";
+        if (navigator.vibrate)
+          try {
+            navigator.vibrate(8);
+          } catch (err) {}
+        activateCatalogDrag(drag, drag.startX, drag.startY);
+      }
+    }, CATALOG_HOLD_MS);
+  }
+  window.addEventListener("pointermove", moveCatalogDrag);
+  window.addEventListener("pointerup", endCatalogDrag);
+  window.addEventListener("pointercancel", cancelCatalogDrag);
+}
+function activateCatalogDrag(drag, x, y) {
+  drag.active = true;
+  drag.suppressClick = true;
+  // On a phone the drawer covers the cell: tuck it away once a part is picked up.
+  if (drag.touch && !drag.horizontal) document.body.classList.remove("show-parts");
+  state.selected = drag.def.id;
+  document.body.classList.add("dragging-catalog");
+  const ghost = document.createElement("img");
+  ghost.className = "partDragGhost";
+  ghost.alt = "";
+  ghost.src = partThumbs.get(drag.def.id) || "";
+  ghost.style.left = x + "px";
+  ghost.style.top = y + "px";
+  document.body.appendChild(ghost);
+  drag.ghost = ghost;
+}
+function setPreview(spot) {
+  const id = catalogDrag.def.id,
+    def = catalogDrag.def;
+  previewParts = spot ? [{ id, def, x: spot.x, y: spot.y, rotation: spot.angle, scale: 1 }] : [];
+  if (spot && state.symmetry && Math.abs(spot.y) > 0.12)
+    previewParts.push({ id, def, x: spot.x, y: -spot.y, rotation: -spot.angle, scale: 1 });
+  scheduleRebuildPlayer();
+}
+function moveCatalogDrag(e) {
+  const drag = catalogDrag;
+  if (!drag) return;
+  const dx = e.clientX - drag.startX,
+    dy = e.clientY - drag.startY;
+  if (drag.mode === "scroll") {
+    e.preventDefault();
+    const now = performance.now();
+    const along = drag.horizontal ? e.clientX - drag.lastX : e.clientY - drag.lastY;
+    drag.velocity = along / Math.max(1, now - drag.lastT);
+    drag.lastY = e.clientY;
+    drag.lastX = e.clientX;
+    drag.lastT = now;
+    if (drag.list) drag.list[drag.horizontal ? "scrollLeft" : "scrollTop"] = drag.startScroll - (drag.horizontal ? dx : dy);
+    return;
+  }
+  if (!drag.mode) {
+    if (Math.hypot(dx, dy) < 8) return;
+    clearTimeout(drag.hold);
+    // Swiping along the list scrolls it; pulling across it picks the part up.
+    const alongList = drag.horizontal ? Math.abs(dx) > Math.abs(dy) * 1.2 : Math.abs(dy) > Math.abs(dx) * 1.6;
+    drag.mode = (drag.touch && alongList) || !drag.usable ? "scroll" : "drag";
+    if (drag.mode === "scroll") {
+      drag.suppressClick = true;
+      drag.lastY = e.clientY;
+      drag.lastX = e.clientX;
+      drag.lastT = performance.now();
+      return;
+    }
+  }
+  if (!drag.active) activateCatalogDrag(drag, e.clientX, e.clientY);
+  e.preventDefault();
+  drag.ghost.style.left = e.clientX + "px";
+  drag.ghost.style.top = e.clientY + "px";
+  const overCanvas = document.elementFromPoint(e.clientX, e.clientY) === canvas;
+  let spot = null;
+  if (overCanvas && boundary.length) {
+    const p = localFromWorld(toWorld(e)),
+      hit = snapToSurface(p.x, p.y);
+    if (pointInPolygon(boundary, p.x, p.y) || Math.hypot(p.x - hit.x, p.y - hit.y) < 0.9) spot = hit;
+  }
+  drag.ghost.style.opacity = spot ? "0" : "1";
+  const changed = !spot !== !drag.spot || (spot && drag.spot && Math.hypot(spot.x - drag.spot.x, spot.y - drag.spot.y) > 0.01);
+  drag.spot = spot;
+  if (changed) setPreview(spot);
+}
+function finishCatalogDrag() {
+  window.removeEventListener("pointermove", moveCatalogDrag);
+  window.removeEventListener("pointerup", endCatalogDrag);
+  window.removeEventListener("pointercancel", cancelCatalogDrag);
+  catalogDrag?.ghost?.remove();
+  document.body.classList.remove("dragging-catalog");
+  if (previewParts.length) {
+    previewParts = [];
+    scheduleRebuildPlayer();
+  }
+}
+function glideCatalog(list, velocity, horizontal) {
+  let v = velocity * 16; // px per frame
+  const step = () => {
+    if (Math.abs(v) < 0.4) return;
+    if (horizontal) list.scrollLeft -= v;
+    else list.scrollTop -= v;
+    v *= 0.93;
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+function endCatalogDrag() {
+  const drag = catalogDrag;
+  if (drag) clearTimeout(drag.hold);
+  if (drag?.mode === "scroll" && drag.list) glideCatalog(drag.list, drag.velocity, drag.horizontal);
+  finishCatalogDrag();
+  if (!drag || (!drag.active && !drag.suppressClick)) {
+    catalogDrag = null;
+    return;
+  }
+  if (drag.active && drag.spot) addPart(drag.def.id, drag.spot.x, drag.spot.y);
+  // Keep the object until the card's click fires so the click can be swallowed.
+  setTimeout(() => {
+    if (catalogDrag === drag) catalogDrag = null;
+  }, 0);
+}
+function cancelCatalogDrag() {
+  if (catalogDrag) clearTimeout(catalogDrag.hold);
+  finishCatalogDrag();
+  catalogDrag = null;
+}
 function renderCatalog() {
   const el = $("#catalog");
   el.innerHTML = "";
@@ -808,17 +1163,18 @@ function renderCatalog() {
         "<b>" +
         d.name +
         "</b><small>" +
-        (ok ? "DNA " + d.cost : "Find meteor / elite") +
+        (ok ? "DNA " + d.cost : unlockHint(d.id, (id) => SPECIES[id]?.name || id)) +
         "</small>";
       const thumb = partThumbs.get(d.id);
       if (thumb) {
         const img = document.createElement("img");
         img.className = "partThumb";
+        img.draggable = false;
         img.alt = "";
         img.src = thumb;
         b.prepend(img);
       }
-      b.title = d.desc;
+      b.title = ok ? d.desc : "Locked. " + unlockHint(d.id, (id) => SPECIES[id]?.name || id);
       b.onclick = () => {
         state.selected = d.id;
         $("#partDescription").innerHTML =
@@ -831,18 +1187,26 @@ function renderCatalog() {
           " DNA · <strong>Complexity:</strong> " +
           d.complex +
           "%" +
-          (d.diet ? "<br><strong>Diet:</strong> " + d.diet : "");
+          (d.diet ? "<br><strong>Diet:</strong> " + d.diet : "") +
+          (ok ? "" : "<br><strong>Locked:</strong> " + unlockHint(d.id, (id) => SPECIES[id]?.name || id));
+        if (isTouchUI()) toast(d.name + (ok ? " · " + d.cost + " DNA" : " · " + unlockHint(d.id, (id) => SPECIES[id]?.name || id)));
         renderCatalog();
         updateHUD();
       };
-      b.addEventListener("dragstart", (e) => {
-        if (!ok) {
-          e.preventDefault();
-          return;
-        }
-        e.dataTransfer.setData("text/plain", d.id);
-        state.selected = d.id;
-      });
+      b.draggable = false;
+      b.addEventListener("dragstart", (e) => e.preventDefault());
+      b.addEventListener("pointerdown", (e) => beginCatalogDrag(e, d, ok));
+      b.addEventListener(
+        "click",
+        (e) => {
+          if (catalogDrag?.suppressClick) {
+            e.stopImmediatePropagation();
+            e.preventDefault();
+            catalogDrag = null;
+          }
+        },
+        true,
+      );
       el.appendChild(b);
     });
   document.querySelectorAll("[data-cat]").forEach((b) => b.classList.toggle("active", b.dataset.cat === state.category));
@@ -920,9 +1284,10 @@ function updateSporeEditorChrome() {
   $("#cellName").value = state.cellName || $("#cellName").value || "Karlets";
   $("#editorSymmetryTop").classList.toggle("active", state.symmetry);
 }
+let objectiveFade = 0;
 function updateHUD() {
   const s = stats();
-  state.maxHealth = 100 + s.healthBonus * 10;
+  state.maxHealth = 80 + s.healthBonus * 10;
   state.health = Math.min(state.health, state.maxHealth);
   $("#dnaCount").textContent = state.dna;
   const dnab = $("#editorDNABalance");
@@ -941,8 +1306,15 @@ function updateHUD() {
     $("#complexityFill").style.width = used + "%";
     $("#dnaVsCost").textContent = state.dna + " DNA · next " + (defs.find((d) => d.id === state.selected)?.cost || 0);
   }
-  $("#tierLabel").textContent = "SCALE TIER " + state.tier + " / 4";
+  const stage = stageFor(state.tier);
+  $("#tierLabel").textContent = "STAGE " + state.tier + " / " + LAST_TIER;
+  $("#tierLabel").title = stage.name;
+  $("#stageName").textContent = "STAGE " + state.tier + " · " + stage.name.toUpperCase();
+  updateDietMeter(state.plants, state.meat);
   const hasJet = parts.some((p) => p.id === "jet");
+  // Keep the HUD lean: stamina only matters with a Jet, and the growth bar at the top already shows food.
+  $("#staminaFill").closest(".metric").hidden = !hasJet;
+  $("#foodFill").closest(".metric").hidden = true;
   $("#touchBoost").classList.toggle("lockedAbility", !hasJet);
   $("#touchBoost").title = hasJet ? "Jet boost · spends stamina" : "Unlock a Jet in the Cell Editor to boost";
   $("#touchMate").classList.toggle("readyAbility", state.food >= state.foodGoal && !state.mateSignal);
@@ -967,19 +1339,32 @@ function updateHUD() {
   const objective = state.mateSignal
     ? ["MATE", "Follow the heart and touch your mate."]
     : state.food >= state.foodGoal
-      ? ["READY", state.tier >= 4 ? "Press ♡ to finish the Cell Stage." : "Press ♡ to call a mate."]
+      ? ["READY", state.tier >= LAST_TIER ? "Call a mate to evolve your final generation." : "Call a mate to start the next generation."]
       : !hasMouth
         ? ["NEEDS MOUTH", "Open the cell editor and attach a mouth part to eat."]
-        : ["FORAGE", "Eat " + (state.foodGoal - state.food) + " more food particle" + (state.foodGoal - state.food === 1 ? "" : "s") + " to attract a mate."];
+        : [
+            "FORAGE",
+            "Eat " +
+              (state.foodGoal - state.food) +
+              " more food particle" +
+              (state.foodGoal - state.food === 1 ? "" : "s") +
+              " to attract a mate.",
+          ];
+  const box = $("#objectiveText").closest(".hudbox");
+  if ($("#objectiveText").textContent !== objective[1]) {
+    box.classList.add("fresh");
+    clearTimeout(objectiveFade);
+    objectiveFade = setTimeout(() => box.classList.remove("fresh"), 6000);
+  }
   $("#objectiveStep").textContent = objective[0];
   $("#objectiveText").textContent = objective[1];
+  $("#landBtn").hidden = !progress.landReady;
+  $("#touchLand").hidden = !progress.landReady;
   $("#callMateBtn").textContent = state.mateSignal ? "♥" : "♡";
   $("#callMateBtn").title = state.mateSignal ? "Follow the heart" : "Call a mate when growth is full";
   $("#mateCue").classList.toggle("show", state.food >= state.foodGoal || state.mateSignal);
   $("#mateCueTitle").textContent = state.mateSignal ? "♥" : state.food >= state.foodGoal ? "✦" : "";
   $("#mateCueText").textContent = "";
-  const discoveryLabel = $("#discoveryCount")?.previousElementSibling;
-  if (discoveryLabel) discoveryLabel.textContent = "✦";
   const dietLabel = $("#dietLabel");
   if (dietLabel) {
     if (dietLabel.parentElement.childNodes[0]) dietLabel.parentElement.childNodes[0].nodeValue = "";
@@ -1007,57 +1392,11 @@ function updateHUD() {
         '%"></i></div></div>',
     )
     .join("");
-  updateRadar();
-}
-function updateRadar() {
-  const el = $("#radar"),
-    active = new Set(),
-    R = 50,
-    s = stats(),
-    range = 12 + s.sight * 1.6;
-  let playerDot = el.querySelector(".radarDot.player");
-  if (!playerDot) {
-    playerDot = document.createElement("i");
-    playerDot.className = "radarDot player";
-    el.appendChild(playerDot);
-  }
-  function dot(obj, col) {
-    if (!obj || !obj.userData || !obj.userData.alive) return;
-    const dx = obj.position.x - player.position.x,
-      dy = obj.position.y - player.position.y,
-      d = Math.hypot(dx, dy);
-    if (d > range) return;
-    const key = obj.uuid;
-    active.add(key);
-    let n = radarDotCache.get(key);
-    if (!n) {
-      n = document.createElement("i");
-      radarDotCache.set(key, n);
-    }
-    n.className = "radarDot" + (obj.userData.alpha || obj.userData.epic ? " alpha" : "");
-    n.style.left = 50 + (dx / range) * R * 0.82 + "%";
-    n.style.top = 50 - (dy / range) * R * 0.82 + "%";
-    n.style.background = col;
-    n.style.color = col;
-    n.style.width = obj.userData.alpha || obj.userData.epic ? "8px" : "5px";
-    n.style.height = obj.userData.alpha || obj.userData.epic ? "8px" : "5px";
-    n.style.boxShadow = obj.userData.alpha || obj.userData.epic ? "0 0 8px #ff293f" : "none";
-    if (n.parentElement !== el) el.appendChild(n);
-  }
-  food.forEach((f) => dot(f, f.userData.type === "plant" ? "#65ef9b" : "#f2ba85"));
-  enemies.forEach((e) => dot(e, e.userData.alpha || e.userData.epic ? "#ff293f" : e.userData.diet === "meat" ? "#ff647a" : "#f5f5f4"));
-  meteors.forEach((m) => dot(m, "#ffd56d"));
-  if (state.mate) dot(state.mate, "#ff9ddd");
-  for (const [key, node] of radarDotCache) {
-    if (!active.has(key)) {
-      node.remove();
-      radarDotCache.delete(key);
-    }
-  }
 }
 function configureEditorViewport() {
   const aspect = innerWidth / innerHeight;
-  cameraZoom = Math.max(10.5, 10.8 / aspect);
+  // Upright phones: frame the cell across the narrow width instead of the tall height.
+  cameraZoom = aspect < 1 ? Math.max(7.5, 6.2 / aspect) : Math.max(10.5, 10.8 / aspect);
   cameraZoomTarget = cameraZoom;
   editorCenterX = !isTouchUI() ? cameraZoom * aspect * 0.12 : 0;
   player.position.set(editorCenterX, 0, 1);
@@ -1067,7 +1406,19 @@ function configureEditorViewport() {
   camera.lookAt(editorCenterX, 0, 0);
   updateCamera();
 }
+const hasMouth = () => parts.some((p) => p.def.cat === "Mouths");
 function setEditor(on) {
+  const wasEditing = state.editor;
+  // As in Spore, the editor opens for your first cell and after each mating, never mid-swim.
+  if (on && !state.editor && !progress.editorPass) {
+    toast("Find a mate to evolve: the editor opens when your next generation is born.");
+    return;
+  }
+  if (!on && state.editor && !hasMouth()) {
+    toast("Your cell needs a mouth first: drag on the Filter (plants) or the Jaw (meat).");
+    if (isTouchUI()) document.body.classList.add("show-parts");
+    return;
+  }
   if (on === state.editor) return;
   $("#worldWaypoint").style.display = "none";
   $("#gameReticle").style.display = "none";
@@ -1111,9 +1462,32 @@ function setEditor(on) {
     updateCamera();
   }
   if (!on) editorEntrySnapshot = null;
+  if (!on) setTimeout(refreshKin, 0);
+  if (!on && progress.firstBuild) {
+    // The first design decides what the soup serves up, so refill it for the chosen mouth.
+    progress.firstBuild = false;
+    spawnWorld();
+    showControlHint(
+      isTouchUI()
+        ? "Drag on the water to swim · eat food your mouth can handle · tap MATE when the growth bar fills."
+        : "WASD/arrows or click-hold water to swim · eat food your mouth can handle · M to call a mate.",
+    );
+  }
+  if (on) {
+    progress.editorOpenedAt = gameTime;
+    progress.unlockedSinceEditor = 0;
+  } else if (wasEditing) {
+    progress.editorPass = false;
+    recordGeneration();
+    if (state.runStarted) saveGame(true);
+  }
+  if (!on && progress.pendingBanner) {
+    startGrowthPullback(progress.pendingBanner);
+    progress.pendingBanner = 0;
+  }
   state.editor = on;
   editorStage.visible = on;
-  [foodGroup, npcGroup, hazardGroup].forEach((g) => (g.visible = !on));
+  [sceneryGroup, foodGroup, npcGroup, hazardGroup, meteorGroup, currentGroup].forEach((g) => (g.visible = !on));
   $("#partsPanel").style.display = on ? "flex" : "none";
   $("#editorPanel").style.display = "none";
   $("#gameHUD").style.display = on ? "none" : "flex";
@@ -1129,7 +1503,8 @@ function setEditor(on) {
   updateHUD();
   if (on) {
     updateSporeEditorChrome();
-    document.body.classList.toggle("show-parts", !isTouchUI());
+    // The parts drawer is open from the start, on phones too: it is what the editor is for.
+    document.body.classList.add("show-parts");
   }
   toast(on ? "Cell creator · drag the spine itself to sculpt the organism." : "Back to the primordial soup.");
   if (!on && state.runStarted)
@@ -1191,13 +1566,6 @@ function pauseGame() {
         },
       },
       {
-        label: "Edit cell",
-        action: () => {
-          state.paused = false;
-          setEditor(true);
-        },
-      },
-      {
         label: "Save & resume",
         action: () => {
           saveGame();
@@ -1230,8 +1598,10 @@ function showDialog(title, text, buttons) {
 }
 function addFood(type, x, y, kind = "particle") {
   const g = createFoodModel(type, kind);
+  g.rotation.z = Math.random() * TAU;
   g.position.set(x, y, 0.2);
   g.userData = {
+    renderKey: g.userData.renderKey,
     type: type,
     kind: kind,
     alive: true,
@@ -1301,20 +1671,26 @@ function makeNPC(options = {}) {
   const body = buildCellBody(record, {
     role: options.mate ? "mate" : "npc",
     seed: 1 + Math.floor(Math.random() * 3),
-    rimColor: options.mate ? 0xffc6e8 : threat ? 0xff7a66 : 0xa6ffc9,
+    rimColor: options.mate ? 0xffc6e8 : options.kin ? 0x9ff3ff : threat ? 0xff7a66 : 0xa6ffc9,
+    shadow: getQuality() === "high",
     eyeColor: species?.eyeColor,
   });
   const g = new THREE.Group();
   g.add(body.root);
   const widest = Math.max(...record.body.nodes.map((n) => n.r));
   const overlayY = widest * 0.62 + 0.55;
-  const dietSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: dietBadge(diet === "omni" ? "meat" : diet), transparent: true, depthTest: false }));
+  const dietSprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: dietBadge(diet === "omni" ? "meat" : diet), transparent: true, depthTest: false }),
+  );
   dietSprite.material.userData.shared = false;
   dietSprite.scale.set(0.24, 0.24, 1);
   dietSprite.renderOrder = 20;
   g.add(dietSprite);
   const healthGroup = new THREE.Group();
-  const back = new THREE.Mesh(healthBarGeometries.back, new THREE.MeshBasicMaterial({ color: 0x10202c, transparent: true, opacity: 0.8, depthTest: false }));
+  const back = new THREE.Mesh(
+    healthBarGeometries.back,
+    new THREE.MeshBasicMaterial({ color: 0x10202c, transparent: true, opacity: 0.8, depthTest: false }),
+  );
   back.renderOrder = 20;
   healthGroup.add(back);
   const bar = new THREE.Mesh(healthBarGeometries.bar, new THREE.MeshBasicMaterial({ color: 0x66ee8c, depthTest: false }));
@@ -1338,6 +1714,8 @@ function makeNPC(options = {}) {
     alpha: alpha,
     elite: alpha,
     mate: !!options.mate,
+    kin: !!options.kin,
+    retarget: Math.random() * 0.4,
     state: "idle",
     phase: phase,
     target: null,
@@ -1345,11 +1723,15 @@ function makeNPC(options = {}) {
     bar: bar,
     healthGroup: healthGroup,
     dietSprite: dietSprite,
-    velocity: new THREE.Vector2(Math.cos(initialAngle) * (0.12 + Math.random() * 0.2), Math.sin(initialAngle) * (0.12 + Math.random() * 0.2)),
+    velocity: new THREE.Vector2(
+      Math.cos(initialAngle) * (0.12 + Math.random() * 0.2),
+      Math.sin(initialAngle) * (0.12 + Math.random() * 0.2),
+    ),
     color: record.colors.base,
   };
   g.scale.setScalar(size);
-  g.position.set(options.x ?? (Math.random() - 0.5) * 44 * worldSize, options.y ?? (Math.random() - 0.5) * 28 * worldSize, 0.2);
+  const spot = options.x === undefined ? ringSpot() : { x: options.x, y: options.y };
+  g.position.set(spot.x, spot.y, 0.2);
   g.rotation.z = initialAngle;
   npcGroup.add(g);
   enemies.push(g);
@@ -1376,11 +1758,18 @@ function eat(f) {
   state.foodSinceMate++;
   if (type === "plant") state.plants++;
   else state.meat++;
-  state.dna += f.userData.kind === "chunk" ? 2 : 1;
-  state.scale = Math.min(1.65, state.scale + 0.0055);
+  // DNA trickles in: about one strand per three bites of plant, a little faster for meat chunks.
+  state.dnaProgress = (state.dnaProgress || 0) + (f.userData.kind === "chunk" ? 0.6 : 0.34);
+  if (state.dnaProgress >= 1) {
+    state.dna += Math.floor(state.dnaProgress);
+    state.dnaProgress %= 1;
+  }
+  // You grow a little with every bite, up to the size of the next stage's start.
+  const base = stageScale(state.tier);
+  state.scale = Math.min(base * 1.18, state.scale + (0.066 / state.foodGoal) * base);
   player.scale.setScalar(state.scale);
-  cameraZoomTarget = Math.min(12 + stats().sight * 1.7, cameraZoomTarget + 0.055);
-  state.health = Math.min(state.maxHealth, state.health + 3);
+  cameraZoomTarget = Math.min(9 * base * 1.15 + stats().sight * 0.5, cameraZoomTarget + 0.04 * base);
+  state.health = Math.min(state.maxHealth, state.health + 2);
   updateHUD();
   saveGame(true);
   if (!wasReady && state.food >= state.foodGoal) {
@@ -1392,24 +1781,20 @@ function eat(f) {
         navigator.vibrate([14, 24, 14]);
       } catch (e) {}
   }
-  setTimeout(() => {
-    if (!f.parent) return;
-    const bx = 22 * worldSize,
-      by = 14 * worldSize;
-    f.position.set(
-      THREE.MathUtils.clamp(player.position.x + (Math.random() - 0.5) * 38 * worldSize, -bx, bx),
-      THREE.MathUtils.clamp(player.position.y + (Math.random() - 0.5) * 24 * worldSize, -by, by),
-      0.2,
-    );
-    f.userData.base.set(f.position.x, f.position.y);
-    f.userData.alive = true;
-    f.visible = true;
-  }, 2400);
+  respawnFood(f, 7500);
 }
 function dropMeat(x, y, amount = 3) {
   for (let i = 0; i < amount; i++) {
     const f = addFood("meat", x + (Math.random() - 0.5) * 0.8, y + (Math.random() - 0.5) * 0.8, "chunk");
     f.userData.value = 2;
+    f.userData.temporary = true;
+    // Uneaten meat rots away.
+    setTimeout(() => {
+      if (f.parent && f.userData.alive) {
+        f.userData.alive = false;
+        f.userData.temporary = "gone";
+      }
+    }, 15000);
   }
 }
 function killNPC(e, playerKill = true) {
@@ -1420,10 +1805,13 @@ function killNPC(e, playerKill = true) {
   const elite = e.userData.alpha || e.userData.epic;
   spawnBurst(e.position.x, e.position.y, e.userData.color || 0xff9c9c, elite ? 34 : 20);
   if (elite) spawnBurst(e.position.x, e.position.y, 0xffda83, 18);
-  dropMeat(e.position.x, e.position.y, elite ? 5 : 2);
+  dropMeat(e.position.x, e.position.y, elite ? 6 : Math.max(2, Math.min(5, Math.round(1 + (e.userData.size / stageScale(state.tier)) * 2))));
+  dropPartOrb(e);
   if (playerKill) {
+    progress.kills++;
+    if (elite) spawnFloatLabel(e.position.x, e.position.y + 0.4, "+3 DNA", 0xffe5a2);
     playSfx("death");
-    state.dna += elite ? 5 : 2;
+    state.dna += elite ? 3 : 0;
     state.eliteKills += elite ? 1 : 0;
     if (elite) {
       meteorUnlock();
@@ -1438,11 +1826,24 @@ function killNPC(e, playerKill = true) {
     disposeTree(e);
     const ix = enemies.indexOf(e);
     if (ix >= 0) enemies.splice(ix, 1);
-    if (!state.editor) makeNPC({ size: (0.3 + Math.random() * 0.6) * (1 + (state.tier - 1) * 0.08) });
   }, 2500);
 }
-function damageNPC(e, dmg, stun = false) {
+/** Shove a cell away from a point. Lighter cells fly further; the speed cap lifts briefly so it shows. */
+/** Spore-style hit reaction: a quick shove of about a body length that fades in a fraction of a second. */
+function knockNPC(e, from, strength) {
+  const u = e.userData;
+  const dx = e.position.x - from.x,
+    dy = e.position.y - from.y;
+  const d = Math.hypot(dx, dy) || 1;
+  const push = (strength * 4.2) / Math.max(0.6, Math.sqrt(u.size));
+  if (!u.knockVel) u.knockVel = new THREE.Vector2();
+  u.knockVel.x += (dx / d) * push;
+  u.knockVel.y += (dy / d) * push;
+  u.knockVel.clampLength(0, 9);
+}
+function damageNPC(e, dmg, stun = false, from = null) {
   if (!e.userData.alive) return;
+  if (from && !e.userData.epic) knockNPC(e, from, 1 + Math.min(2.5, dmg * 0.2));
   e.userData.health -= dmg;
   const b = e.userData.bar;
   if (b) {
@@ -1454,11 +1855,25 @@ function damageNPC(e, dmg, stun = false) {
   if (e.userData.health <= 0) killNPC(e, true);
   else e.userData.rig.hit(0.8);
 }
-function hurt(amount, reason) {
-  if (state.damageCooldown > 0) return;
+function hurt(amount, reason, from = null) {
+  if (state.damageCooldown > 0 || state.courtship) return;
   const s = stats(),
     damage = Math.max(1, amount - s.armour * 1.5);
   state.health -= damage;
+  if (from) {
+    // Spore's knockback: a short sharp shove away from the biter (about a body length) and the
+    // biter bounces back too. You keep control; it's over in a fraction of a second.
+    const dx = player.position.x - from.x,
+      dy = player.position.y - from.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const push = (6 + Math.min(4, damage * 0.25)) * Math.sqrt(Math.max(0.6, state.scale));
+    knockVel.x += (dx / d) * push;
+    knockVel.y += (dy / d) * push;
+    knockVel.clampLength(0, 11 * Math.sqrt(state.scale));
+    state.knock = 0.15;
+    const attacker = enemies.find((e) => e.position === from);
+    if (attacker) knockNPC(attacker, player.position, 0.6);
+  }
   state.damageCooldown = 0.65;
   state.shake = 0.42;
   $("#damageFlash").style.opacity = ".85";
@@ -1470,31 +1885,54 @@ function hurt(amount, reason) {
       navigator.vibrate(24);
     } catch (e) {}
   updateHUD();
-  if (state.health <= 0) {
-    state.health = Math.max(45, state.maxHealth * 0.55);
-    state.food = Math.max(0, state.food - 2);
-    player.position.set(0, 0, 1);
-    velocity.set(0, 0);
-    enemies
-      .filter((e) => e.userData.alive)
-      .forEach((e) => {
-        if (distance2D(e.position, player.position) < 4) e.position.add(new THREE.Vector3(3, 2, 0));
-      });
-    spawnBurst(player.position.x, player.position.y, 0x7debf8, 26);
-    playSfx("death");
-    updateHUD();
-  }
+  if (state.health <= 0) dieAndRespawn(reason);
 }
-function downloadCellJson() {
-  const blob = new Blob([cellToJson(currentRecord())], { type: "application/json" }),
-    a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = (state.cellName || "cell").replace(/[^a-z0-9-_]+/gi, "-") + ".spore-cell.json";
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+/** Spore-style death: your cell dies, a new one of your species hatches nearby, and you lose ground. */
+function dieAndRespawn(reason) {
+  progress.deaths++;
+  const lostFood = Math.min(state.food, Math.ceil(state.foodGoal * 0.4)),
+    lostDna = Math.min(state.dna, 5 + state.tier * 2);
+  state.food -= lostFood;
+  state.dna -= lostDna;
+  spawnBurst(player.position.x, player.position.y, 0xff7d8a, 30);
+  playSfx("death");
+  // Hatch a few body-lengths away from the nearest hunter, with a moment of protection.
+  const threat = enemies.filter((e) => e.userData.alive && e.userData.diet === "meat" && !e.userData.kin).sort((a, b) => distance2D(a.position, player.position) - distance2D(b.position, player.position))[0];
+  const away = threat ? new THREE.Vector2(player.position.x - threat.position.x, player.position.y - threat.position.y).normalize() : new THREE.Vector2(1, 0);
+  player.position.x += away.x * 9 * state.scale;
+  player.position.y += away.y * 9 * state.scale;
+  velocity.set(0, 0);
+  jetVel.set(0, 0);
+  knockVel.set(0, 0);
+  state.health = state.maxHealth * 0.7;
+  state.damageCooldown = 2.5;
+  state.shake = 0.6;
+  spawnBurst(player.position.x, player.position.y, 0x7debf8, 26);
+  updateHUD();
+  showDialog(
+    "Your cell died",
+    (reason || "Something got you.") +
+      " A new cell of your species hatches nearby. You lost " +
+      lostFood +
+      " growth and " +
+      lostDna +
+      " DNA. Keep away from red-rimmed hunters until you can fight back.",
+    [{ label: "Keep going", primary: true, action: () => {} }],
+  );
+}
+/** Asked before leaving the water, since it ends the Cell Stage. */
+function promptLand() {
+  if (!progress.landReady || state.editor || state.paused || document.querySelector(".surfaceFx")) return;
+  showDialog("Leave the water?", "Your cell grows legs and crawls onto land to begin the Creature Stage.\nYou can come back to the soup later from the menu.", [
+    { label: "Not yet", action: () => {} },
+    { label: "🦎 Go to land", primary: true, action: completeCellStage },
+  ]);
 }
 function completeCellStage() {
   const record = currentRecord();
+  const card = progress.dietCard || dietPath(state.plants, state.meat);
+  progress.dietCard = card;
+  progress.cellStageComplete = true;
   storeCellRecord(localStorage, record);
   writeHandoff(localStorage, record, {
     plants: state.plants,
@@ -1503,23 +1941,253 @@ function completeCellStage() {
     eliteKills: state.eliteKills,
     dna: state.dna,
     unlocked: [...unlocked],
+    dietCard: card,
+    consequenceTraits: [{ stage: "cell", card }],
   });
-  showDialog(
-    "CELL STAGE COMPLETE",
-    "Your cell has been saved for the Creature Stage. Download a copy to keep it, keep exploring, or refine it in the editor first.",
-    [
-      { label: "Download my cell", primary: true, action: downloadCellJson },
-      { label: "Keep exploring", action: () => {} },
-      { label: "Edit cell", action: () => setEditor(true) },
-    ],
-  );
+  saveGame(true);
+  playSfx("hatch");
+  playSurfacing(() => startCreatureStage(false, true));
+}
+/** End of the Cell Stage: the camera pulls back, light floods down from the surface, and the cell
+    rises toward it. The screen whites out and the Creature Stage fades up from it. */
+function playSurfacing(then) {
+  if (document.querySelector(".surfaceFx")) return;
+  hideTip();
+  state.paused = true;
+  const fx = document.createElement("div");
+  fx.className = "surfaceFx";
+  fx.innerHTML = "<i></i><i></i><i></i>";
+  document.body.appendChild(fx);
+  requestAnimationFrame(() => fx.classList.add("rise"));
+  const start = performance.now(),
+    zoom0 = cameraZoomTarget,
+    scale0 = player.scale.x;
+  const tick = () => {
+    const k = Math.min(1, (performance.now() - start) / 2600);
+    // The cell grows toward the camera as it swims up, with bubbles streaming off it.
+    cameraZoomTarget = zoom0 * (1 + k * 0.35);
+    player.scale.setScalar(scale0 * (1 + k * k * 1.6));
+    angle += 0.012;
+    if (Math.random() < 0.5) spawnBurst(player.position.x + (Math.random() - 0.5) * 2, player.position.y + (Math.random() - 0.5) * 2, 0xdff6ff, 2);
+    if (k < 1) requestAnimationFrame(tick);
+    else {
+      player.scale.setScalar(scale0);
+      cameraZoomTarget = zoom0;
+      then();
+      fx.classList.add("out");
+      setTimeout(() => fx.remove(), 1400);
+    }
+  };
+  requestAnimationFrame(tick);
+}
+/* ---- Creature Stage -------------------------------------------------------------
+   The cell crawls onto the island. Cell DNA and parts stay in the water (Spore's rule); the body
+   shape, colours and diet carry over. The stage owns its own scene; main.js lends it the renderer,
+   the joystick and the sound, and keeps the species history. */
+let creatureStage = null,
+  creatureEditor = null;
+const creatureMoveInput = () => {
+  const keyY = (input.ArrowUp || input.w ? 1 : 0) - (input.ArrowDown || input.s ? 1 : 0),
+    keyX = (input.ArrowRight || input.d ? 1 : 0) - (input.ArrowLeft || input.a ? 1 : 0);
+  return { x: THREE.MathUtils.clamp(keyX + state.joystick.x, -1, 1), y: THREE.MathUtils.clamp(keyY + state.joystick.y, -1, 1) };
+};
+function loadCreatureSave() {
+  try {
+    const raw = localStorage.getItem(CREATURE_SAVE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+function creatureSnapshot(record, size) {
+  try {
+    return renderCellSnapshot(
+      renderer,
+      record,
+      (rec) => {
+        const b = buildCreatureBody(rec, { quality: "medium" });
+        b.update(0, 0);
+        return { root: b.root, rig: { dispose: () => b.dispose() } };
+      },
+      size,
+    );
+  } catch (e) {
+    return null;
+  }
+}
+function startCreatureStage(resume = false, intro = false) {
+  if (creatureStage) return;
+  const save = resume ? loadCreatureSave() : null;
+  stickEnd();
+  hideTip();
+  state.paused = true;
+  document.body.classList.add("creatureMode");
+  audio.setAmbient("land");
+  const cellCard = progress.dietCard || dietPath(state.plants, state.meat);
+  const fresh = !save;
+  const record = save?.record || creatureFromCell(currentRecord(), state.cellName);
+  creatureStage = createCreatureStage({
+    renderer,
+    record,
+    cellCard,
+    save,
+    quality: getQuality(),
+    getInput: creatureMoveInput,
+    sfx: playSfx,
+    isTouch: isTouchUI,
+    onMate: (d) => openCreatureEditorFor({ ...d, mated: true }, false),
+    onGeneration: endCreatureGeneration,
+    onCard: (id) => {
+      const card = CREATURE_CARDS[id];
+      progress.creatureCard = id;
+      popCard({ kind: "Creature card · " + card.trait + " consequence trait", title: card.title + ": " + card.ability, text: card.text, icon: card.icon, color: card.color });
+      saveGame(true);
+    },
+    onUnlock: (part, source) => popCard({ kind: "New part · " + source, title: part.name, text: part.desc, icon: "🦴", color: "#f5c75a" }),
+    onHistory: openPath,
+    onSettings: openGameSettings,
+    onTribe: () => startTribeStage(),
+    onSaved: () => markSaved(localStorage),
+    portrait: (rec) => creatureSnapshot(rec, { width: 120, height: 90 }),
+    reducedMotion: () => settings.reducedMotion,
+    onExit: () => stopCreatureStage(),
+    intro: fresh && intro,
+    onIntroDone: () => {
+      document.body.classList.remove("cinematic");
+      arrive();
+    },
+  });
+  // Arrival: design the first land generation before setting off (after the crawl-out, if any).
+  const arrive = () => {
+    const s = creatureStage.debug.P;
+    openCreatureEditorFor({ record: s.record, unlocked: new Set([...s.record.parts.map((p) => p.id), s.record.foot]), dna: s.dna }, true);
+  };
+  if (fresh && intro) document.body.classList.add("cinematic");
+  if (fresh && !intro) arrive();
+}
+function openCreatureEditorFor(d, arrival) {
+  if (!creatureStage || creatureEditor) return;
+  creatureStage.setPaused(true);
+  document.body.classList.add("creatureEditing");
+  stickEnd();
+  creatureEditor = openCreatureEditor({
+    renderer,
+    record: d.record,
+    unlocked: d.unlocked,
+    dna: d.dna,
+    quality: getQuality(),
+    sfx: playSfx,
+    onDone: (record, dnaLeft) => {
+      closeCreatureEditor();
+      creatureStage.applyDesign(record, dnaLeft);
+      beginCreatureGeneration();
+    },
+    onCancel: () => {
+      closeCreatureEditor();
+      if (arrival || d.mated) beginCreatureGeneration();
+    },
+  });
+}
+function closeCreatureEditor() {
+  creatureEditor = null;
+  document.body.classList.remove("creatureEditing");
+  creatureStage?.setPaused(false);
+}
+/** A creature generation ends at mating: fill in what it achieved. */
+function endCreatureGeneration(entry) {
+  const last = progress.history.at(-1);
+  if (last?.stage === "creature" && !last.ended) Object.assign(last, { alliances: entry.alliances, extinctions: entry.extinctions, deaths: entry.deaths, ended: true });
+  storeHistory();
+}
+/** The design leaving the editor is the new living generation. */
+function beginCreatureGeneration() {
+  if (!creatureStage) return;
+  const P = creatureStage.debug.P;
+  // The last cell generation ends here: close its record with what it ate and fought.
+  progress.history.forEach((g) => {
+    if (g.ended) return;
+    if (g.stage !== "creature")
+      Object.assign(g, {
+        plants: Math.max(0, state.plants - (progress.genStart?.plants || 0)),
+        meat: Math.max(0, state.meat - (progress.genStart?.meat || 0)),
+        kills: Math.max(0, progress.kills - (progress.genStart?.kills || 0)),
+        deaths: Math.max(0, progress.deaths - (progress.genStart?.deaths || 0)),
+      });
+    g.ended = true;
+  });
+  progress.history.push({
+    gen: progress.history.length + 1,
+    stage: "creature",
+    brain: P.brain,
+    diet: P.diet,
+    parts: P.record.parts.length + P.record.legs.length * 2,
+    alliances: 0,
+    extinctions: 0,
+    deaths: 0,
+    thumb: creatureSnapshot(P.record),
+    ended: false,
+  });
+  storeHistory();
+}
+function stopCreatureStage(toSoup = true) {
+  if (!creatureStage) return;
+  creatureEditor = null;
+  document.querySelector(".crEditor")?.remove();
+  creatureStage.dispose();
+  creatureStage = null;
+  document.body.classList.remove("creatureEditing", "cinematic");
+  stickEnd();
+  if (toSoup !== true) return; // handing over to another land stage
+  document.body.classList.remove("creatureMode");
+  audio.setAmbient("cell");
+  state.paused = false;
+  updateCamera();
+  toast("Back in the primordial soup. Your land creature is saved.");
+}
+/* ---- Tribe Stage (early prototype) ----------------------------------------------------
+   Your creature's species, settled in a village. Reached from the Creature Stage's menu; it keeps
+   its own save, and leaving it drops you back into the Creature Stage where you left off. */
+let tribeStage = null;
+function startTribeStage() {
+  if (tribeStage) return;
+  const record = creatureStage ? creatureStage.record : loadCreatureSave()?.record;
+  if (!record) {
+    toast("Reach land first: the Tribe Stage starts from your creature.");
+    return;
+  }
+  if (creatureStage) {
+    creatureStage.save();
+    stopCreatureStage(false);
+  }
+  stickEnd();
+  hideTip();
+  state.paused = true;
+  document.body.classList.add("creatureMode", "tribeMode");
+  audio.setAmbient("land");
+  tribeStage = createTribeStage({
+    renderer,
+    record,
+    save: loadTribeSave(),
+    quality: getQuality(),
+    sfx: playSfx,
+    onSettings: openGameSettings,
+    onSaved: () => markSaved(localStorage),
+    portrait: (rec) => creatureSnapshot(rec, { width: 96, height: 96 }),
+    onExit: () => {
+      stopTribeStage();
+      startCreatureStage(true);
+    },
+  });
+}
+function stopTribeStage() {
+  if (!tribeStage) return;
+  tribeStage.save();
+  tribeStage.dispose();
+  tribeStage = null;
+  document.body.classList.remove("tribeMode");
 }
 function callMate() {
   if (state.editor || state.paused) return;
-  if (state.tier >= 4 && state.food >= state.foodGoal) {
-    completeCellStage();
-    return;
-  }
   if (state.food < state.foodGoal) {
     const bar = $("#growthBar");
     bar.classList.remove("needsFoodPulse");
@@ -1530,26 +2198,131 @@ function callMate() {
   }
   if (state.mateSignal && state.mate) return;
   state.mateSignal = true;
-  state.mateTimer = 25;
-  const direction = Math.random() * Math.PI * 2,
-    matDist = Math.min(8, Math.max(4, 12 * worldSize)),
-    mateX = THREE.MathUtils.clamp(player.position.x + Math.cos(direction) * matDist, -22.5 * worldSize, 22.5 * worldSize),
-    mateY = THREE.MathUtils.clamp(player.position.y + Math.sin(direction) * matDist, -13.5 * worldSize, 13.5 * worldSize);
-  const mateRecord = snapPartsToSurface(mutateCellRecord(mirrorCellRecord(currentRecord()), makeRng((Math.random() * 1e9) | 0), 0.6), { faceOutward: true });
-  const m = makeNPC({ record: mateRecord, size: state.scale * 0.97, mate: true, x: mateX, y: mateY });
+  state.mateTimer = 30;
+  // Your mate is one of your own species: the nearest relative, or a new one arriving from off screen.
+  let m = null,
+    best = viewRadius() * 1.6;
+  enemies.forEach((e) => {
+    if (!e.userData.kin || !e.userData.alive) return;
+    const d = distance2D(e.position, player.position);
+    if (d < best) {
+      best = d;
+      m = e;
+    }
+  });
+  if (!m) {
+    const a = Math.random() * TAU,
+      r = Math.min(viewRadius() * 0.9, 8);
+    m = spawnKin({ x: player.position.x + Math.cos(a) * r, y: player.position.y + Math.sin(a) * r });
+  }
   m.userData.mate = true;
   m.userData.state = "mate";
   m.userData.health = 999;
-  m.userData.velocity.set(0, 0);
   const heart = makeHeartSprite();
   heart.position.set(0, 0.85, 0.9);
   m.add(heart);
+  m.userData.heart = heart;
   state.mate = m;
+  state.mateCallPulse = 0;
   $("#mateCueTitle").textContent = "♥";
-  $("#mateCueText").textContent = "";
+  $("#mateCueText").textContent = "Calling…";
   $("#mateCue").classList.add("show");
-  playSfx("mate");
+  playMateSong();
   spawnBurst(m.position.x, m.position.y, 0xff9ed7, 14);
+}
+/* ---- Mate call and courtship ------------------------------------------------------
+   Spore-style: your cell sings a call that ripples out through the water, a relative answers and
+   swims to you, the two circle each other in a courtship dance, and an egg forms. */
+const mateRings = [];
+const mateRingGeometry = new THREE.RingGeometry(0.92, 1, 48);
+function emitMateRing(x, y, color = 0xff8fcf) {
+  const ring = new THREE.Mesh(mateRingGeometry, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.7, depthWrite: false }));
+  ring.position.set(x, y, 0.15);
+  ring.userData.life = 0;
+  scene.add(ring);
+  mateRings.push(ring);
+}
+function updateMateRings(dt) {
+  for (let i = mateRings.length - 1; i >= 0; i--) {
+    const r = mateRings[i];
+    r.userData.life += dt;
+    const k = r.userData.life / 1.8;
+    r.scale.setScalar(0.4 + k * 6 * state.scale);
+    r.material.opacity = 0.65 * (1 - k);
+    if (k >= 1) {
+      scene.remove(r);
+      r.material.dispose();
+      mateRings.splice(i, 1);
+    }
+  }
+}
+function playMateSong() {
+  playSfx("mate");
+}
+/** The mate swims to you; when you meet, start the courtship dance. Runs every frame while calling. */
+function updateMateCall(dt, time) {
+  const m = state.mate,
+    u = m.userData;
+  if (state.courtship) return updateCourtship(dt, time);
+  state.mateCallPulse -= dt;
+  if (state.mateCallPulse <= 0) {
+    state.mateCallPulse = 1.3;
+    emitMateRing(player.position.x, player.position.y);
+  }
+  const dx = player.position.x - m.position.x,
+    dy = player.position.y - m.position.y,
+    d = Math.hypot(dx, dy);
+  // The mate answers: it swims toward you with an eager, wiggling approach and calls back.
+  u.stroke = (u.stroke ?? 0) + dt * 6;
+  const arrive = Math.min(1, d / 2.5);
+  m.rotation.z = steerHeading(u.velocity, m.rotation.z, (dx / (d || 1)) * 5 * arrive, (dy / (d || 1)) * 5 * arrive, dt, { turnRate: 3.2, stroke: strokePulse(u.stroke) });
+  u.velocity.multiplyScalar(Math.max(0, 1 - 1.6 * dt));
+  u.velocity.clampLength(0, 2.6);
+  m.position.x += u.velocity.x * dt;
+  m.position.y += u.velocity.y * dt;
+  if (u.heart) u.heart.scale.setScalar(0.6 + Math.sin(time * 7) * 0.08);
+  u.answerTimer = (u.answerTimer ?? 0.6) - dt;
+  if (u.answerTimer <= 0) {
+    u.answerTimer = 1.3;
+    emitMateRing(m.position.x, m.position.y, 0xffc4ea);
+  }
+  $("#mateCueText").textContent = d < 5 ? "Swim to your mate" : "Your mate is answering… " + Math.ceil(state.mateTimer) + "s";
+  if (d < playerRadius() + (u.radius || 0.4) + 0.45) {
+    state.courtship = { t: 0, cx: (player.position.x + m.position.x) / 2, cy: (player.position.y + m.position.y) / 2, a: Math.atan2(-dy, -dx), zoom: cameraZoomTarget };
+    velocity.set(0, 0);
+    jetVel.set(0, 0);
+    knockVel.set(0, 0);
+    u.velocity.set(0, 0);
+    cameraZoomTarget *= 0.62;
+    $("#mateCueText").textContent = "Courtship…";
+    playMateSong();
+  }
+}
+const COURTSHIP_TIME = 2.6;
+function updateCourtship(dt, time) {
+  const c = state.courtship,
+    m = state.mate;
+  c.t += dt;
+  const k = Math.min(1, c.t / COURTSHIP_TIME);
+  // The pair circle one another, drawing closer, then nuzzle.
+  const radius = (playerRadius() + (m.userData.radius || 0.4)) * (0.55 - 0.3 * k);
+  const spin = c.a + k * Math.PI * 3;
+  player.position.x = c.cx + Math.cos(spin) * radius;
+  player.position.y = c.cy + Math.sin(spin) * radius;
+  m.position.x = c.cx - Math.cos(spin) * radius;
+  m.position.y = c.cy - Math.sin(spin) * radius;
+  angle = spin + Math.PI / 2 + 0.4;
+  m.rotation.z = spin - Math.PI / 2 + 0.4;
+  if (Math.random() < dt * 9) spawnBurst(c.cx + (Math.random() - 0.5) * radius * 2, c.cy + (Math.random() - 0.5) * radius * 2, 0xff9ed7, 3);
+  if (Math.random() < dt * 1.6) emitMateRing(c.cx, c.cy, 0xffd0ef);
+  if (c.t >= COURTSHIP_TIME) {
+    cameraZoomTarget = c.zoom;
+    state.courtship = null;
+    // The egg: a glowing burst at the meeting point before the new generation hatches.
+    spawnBurst(c.cx, c.cy, 0xfff1b8, 30);
+    emitMateRing(c.cx, c.cy, 0xfff1b8);
+    finishMate();
+  }
 }
 function makeHeartSprite() {
   const canvas = document.createElement("canvas");
@@ -1580,51 +2353,62 @@ function finishMate() {
       navigator.vibrate([18, 35, 18]);
     } catch (e) {}
   state.mateSignal = false;
+  state.courtship = null;
   if (state.mate) {
     state.mate.userData.alive = false;
     disposeTree(state.mate);
     enemies = enemies.filter((e) => e !== state.mate);
     state.mate = null;
   }
-  state.dna += 10;
-  state.tier = Math.min(4, state.tier + 1);
+  state.dna += 6;
+  state.mate = null;
+  state.mateSignal = false;
+  state.courtship = null;
+  state.mateTimer = 0;
+  if (state.tier >= LAST_TIER) {
+    // The final generation: edit it like any other. Leaving the water is a separate choice
+    // (the Land button), so mating again later just reopens the editor.
+    const first = !progress.landReady;
+    state.food = 0;
+    state.foodSinceMate = 0;
+    state.health = state.maxHealth;
+    progress.landReady = true;
+    progress.editorPass = true;
+    spawnBurst(player.position.x, player.position.y, 0x80edff, 34);
+    spawnFloatLabel(player.position.x, player.position.y + 0.5, "+6 DNA", 0xffe7a2);
+    saveGame(true);
+    updateHUD();
+    setEditor(true);
+    if (first) toast("Your cell is fully grown. Edit it, then tap Land whenever you're ready to leave the water.");
+    return;
+  }
+  state.tier = Math.min(LAST_TIER, state.tier + 1);
+  const stage = stageFor(state.tier);
   state.food = 0;
-  state.foodGoal = state.tier === 2 ? 10 : state.tier === 3 ? 12 : 14;
+  state.foodGoal = stage.foodGoal;
   state.foodSinceMate = 0;
-  state.health = state.maxHealth;
-  state.scale = Math.min(1.65, state.scale + 0.12);
-  state.epicTimer = 70 + Math.random() * 35;
+  state.scale = Math.max(state.scale, stage.scale);
+  state.epicTimer = EPIC_INTERVAL();
   state.eliteTimer = 28 + Math.random() * 20;
   worldSize *= 1.4;
   player.scale.setScalar(state.scale);
-  state.mate = null;
-  state.mateSignal = false;
-  state.mateTimer = 0;
   velocity.set(0, 0);
-  player.position.set(0, 0, 1);
-  angle = 0;
-  player.rotation.z = 0;
-  cameraZoomTarget = 9 * Math.pow(1.36, state.tier - 1);
+  jetVel.set(0, 0);
+  knockVel.set(0, 0);
+  cameraZoomTarget = 9 * stage.scale;
   state.shake = 0.5;
-  spawnBurst(0, 0, 0x80edff, 34);
-  spawnFloatLabel(0, 0, "GENERATION " + state.tier, 0xcaf9ff);
-  spawnFloatLabel(0.1, -0.5, "+10 DNA", 0xffe7a2);
+  spawnBurst(player.position.x, player.position.y, 0x80edff, 34);
+  spawnFloatLabel(player.position.x, player.position.y + 0.5, "+6 DNA", 0xffe7a2);
   autoSaveTimer = 28;
   spawnWorld();
-  saveGame(true);
+  state.health = state.maxHealth;
+  (stage.rewards || []).forEach((id) => unlockPart(id, "Reward for reaching the " + stage.name + " stage"));
+  // As in Spore, a new generation starts in the editor; the camera pulls back when you swim off.
+  progress.pendingBanner = state.tier;
+  progress.editorPass = true;
+  saveGame(true); // saved with the edit still owed, so reloading here reopens the editor
   updateHUD();
-  if (state.tier >= 4) {
-    completeCellStage();
-  } else
-    showDialog(
-      "A new generation!",
-      "Mating complete. +10 DNA. The soup expands, the camera pulls back, and new scale-tier organisms enter the ecosystem. Edit your cell before returning to the broth.",
-      [
-        { label: "Enter cell editor", primary: true, action: () => setEditor(true) },
-        { label: "Keep swimming", action: () => {} },
-      ],
-    );
-  updateHUD();
+  setEditor(true);
 }
 let velocity = new THREE.Vector2(),
   angle = 0,
@@ -1695,6 +2479,7 @@ function hitNodeRadius(pos) {
   let best = -1,
     err = 0.14;
   nodes.forEach((n, i) => {
+    if (i !== state.selectedNode) return;
     const d = Math.abs(localNodeWorld(n).distanceTo(pos) - n.r * state.scale);
     if (d < err) {
       err = d;
@@ -1707,10 +2492,68 @@ function setCanvasCoords(pos) {
   const p = localFromWorld(pos);
   return snapToSurface(p.x, p.y);
 }
+/* ---- Touch joystick ----------------------------------------------------
+   Touch anywhere on the water and the stick appears under your thumb; drag to swim that way.
+   The fixed stick in the corner still works and shows where it lives. */
+const STICK_DEAD_ZONE = 0.15;
+const touchStick = { pointer: null, cx: 0, cy: 0, floating: false };
+function stickStart(e, cx, cy, floating) {
+  touchStick.pointer = e.pointerId;
+  touchStick.cx = cx;
+  touchStick.cy = cy;
+  touchStick.floating = floating;
+  const stick = $("#moveStick");
+  if (floating) {
+    const r = stick.getBoundingClientRect();
+    stick.classList.add("floating");
+    stick.style.left = cx - r.width / 2 + "px";
+    stick.style.top = cy - r.height / 2 + "px";
+    stick.style.bottom = "auto";
+  }
+  state.mouseActive = false;
+  stickMove(e);
+}
+function stickMove(e) {
+  if (touchStick.pointer !== e.pointerId) return;
+  const stick = $("#moveStick"),
+    knob = $("#moveStickKnob");
+  const max = Math.max(38, stick.getBoundingClientRect().width * 0.42),
+    dx = e.clientX - touchStick.cx,
+    dy = e.clientY - touchStick.cy,
+    mag = Math.hypot(dx, dy),
+    f = mag > max ? max / mag : 1;
+  state.joystick.x = (dx * f) / max;
+  state.joystick.y = (-dy * f) / max;
+  knob.style.left = "calc(50% + " + dx * f + "px)";
+  knob.style.top = "calc(50% + " + dy * f + "px)";
+  state.mouseActive = false;
+  if (mag > 4) dismissControlHint();
+}
+function stickEnd(e) {
+  if (e && e.pointerId !== undefined && touchStick.pointer !== e.pointerId) return;
+  touchStick.pointer = null;
+  state.joystick.x = 0;
+  state.joystick.y = 0;
+  const stick = $("#moveStick"),
+    knob = $("#moveStickKnob");
+  knob.style.left = "50%";
+  knob.style.top = "50%";
+  if (touchStick.floating) {
+    stick.classList.remove("floating");
+    stick.style.left = stick.style.top = stick.style.bottom = "";
+  }
+  touchStick.floating = false;
+}
 function onPointerDown(e) {
   if ($("#intro").style.display !== "none" || $("#hatchCinematic").style.display === "flex" || $("#dialogOverlay").style.display === "flex")
     return;
+  // On land, the left half of the screen is the joystick and the right half turns the camera.
+  if (tribeStage || creatureEditor || (creatureStage && (e.pointerType === "mouse" || e.clientX > innerWidth * 0.5))) return;
   canvas.setPointerCapture(e.pointerId);
+  if (!state.editor && e.pointerType !== "mouse") {
+    if (touchStick.pointer === null) stickStart(e, e.clientX, e.clientY, true);
+    return;
+  }
   const pos = toWorld(e);
   if (!state.editor) {
     dismissControlHint();
@@ -1747,7 +2590,9 @@ function onPointerDown(e) {
       rebuildPlayer();
       return;
     }
-    const pi = hitPlayerPart(pos);
+    let pi = hitPlayerPart(pos);
+    const nearNode = hitNode(pos);
+    if (pi >= 0 && nearNode >= 0 && localNodeWorld(nodes[nearNode]).distanceTo(pos) < localNodeWorld(parts[pi]).distanceTo(pos)) pi = -1;
     if (pi >= 0) {
       if (state.stack && state.selected) {
         const old = parts[pi];
@@ -1789,6 +2634,10 @@ function onPointerDown(e) {
   }
 }
 function onPointerMove(e) {
+  if (touchStick.pointer === e.pointerId) {
+    stickMove(e);
+    return;
+  }
   const pos = toWorld(e);
   state.pointerScreen = { x: e.clientX, y: e.clientY };
   state.mouseWorld.copy(pos);
@@ -1806,69 +2655,69 @@ function onPointerMove(e) {
   }
   if (!dragging) return;
   if (dragging.kind === "node") {
-    let n = nodes[dragging.index];
-    if (!n) return;
-    const p = localFromWorld(pos);
-    if (!dragging.extended && (dragging.index === 0 || dragging.index === nodes.length - 1)) {
-      const i = dragging.index,
-        neighbor = nodes[i === 0 ? 1 : i - 1],
-        base = dragging.startNode;
-      const out = new THREE.Vector2(base.x - neighbor.x, base.y - neighbor.y).normalize();
-      const delta = new THREE.Vector2(p.x - base.x, p.y - base.y);
-      if (delta.dot(out) > 0.72 && nodes.length < 8) {
-        if (i === 0) {
-          nodes.unshift({ x: p.x, y: p.y, r: Math.max(0.24, base.r * 0.8) });
-          dragging.index = 0;
-        } else {
-          nodes.push({ x: p.x, y: p.y, r: Math.max(0.24, base.r * 0.8) });
-          dragging.index = nodes.length - 1;
+    const i = dragging.index;
+    if (!nodes[i]) return;
+    const p = localFromWorld(pos),
+      before = anchorPartsToSpine();
+    const first = i === 0,
+      last = i === nodes.length - 1;
+    if (first || last) {
+      // Dragging an end stretches the cell: new vertebrae appear as it grows, and merge away as it shrinks.
+      const neighbor = nodes[first ? 1 : i - 1];
+      let x = THREE.MathUtils.clamp(p.x, -SPINE.maxX, SPINE.maxX);
+      x = first ? Math.min(x, neighbor.x - SPINE.minGap) : Math.max(x, neighbor.x + SPINE.minGap);
+      nodes[i].x = x;
+      if (Math.abs(x - neighbor.x) > SPINE.maxGap && nodes.length < 8) {
+        const r = neighbor.r * 0.8 + nodes[i].r * 0.2;
+        nodes.splice(first ? 1 : i, 0, { x: (x + neighbor.x) / 2, y: 0, r: Math.min(1.15, r) });
+        if (!first) dragging.index = nodes.length - 1;
+        playSfx("click");
+      } else if (Math.abs(x - neighbor.x) <= SPINE.minGap + 0.001 && nodes.length > 2) {
+        const outer = first ? nodes[2] : nodes[nodes.length - 3];
+        if (!outer || Math.abs(x - outer.x) > SPINE.minGap) {
+          nodes.splice(first ? 1 : i - 1, 1);
+          if (!first) dragging.index = nodes.length - 1;
         }
-        dragging.extended = true;
-        n = nodes[dragging.index];
-        state.selectedNode = dragging.index;
-        toast("Spine extended · new vertebra added");
-      } else if (delta.dot(out) < -0.72 && nodes.length > 2) {
-        if (i === 0) {
-          nodes.shift();
-          dragging.index = 0;
-        } else {
-          nodes.pop();
-          dragging.index = nodes.length - 1;
-        }
-        dragging.extended = true;
-        n = nodes[dragging.index];
-        state.selectedNode = dragging.index;
-        toast("Spine shortened · terminal vertebra removed");
       }
+      state.selectedNode = dragging.index;
+    } else {
+      const lo = nodes[i - 1].x + SPINE.minGap,
+        hi = nodes[i + 1].x - SPINE.minGap;
+      nodes[i].x = lo < hi ? THREE.MathUtils.clamp(p.x, lo, hi) : (lo + hi) / 2;
     }
-    n.x = Math.max(-4.2, Math.min(4.2, p.x));
-    n.y = Math.max(-2.8, Math.min(2.8, p.y));
+    nodes.forEach((n) => (n.y = 0));
+    carryPartsWithSpine(before);
     scheduleRebuildPlayer();
   } else if (dragging.kind === "radius") {
     const n = nodes[dragging.index];
     if (n) {
       const p = localFromWorld(pos);
-      n.r = THREE.MathUtils.clamp(new THREE.Vector2(p.x - n.x, p.y - n.y).length(), 0.22, 1.55);
+      const before = anchorPartsToSpine();
+      n.r = THREE.MathUtils.clamp(new THREE.Vector2(p.x - n.x, p.y - n.y).length(), 0.22, 1.15);
+      carryPartsWithSpine(before);
       scheduleRebuildPlayer();
     }
   } else if (dragging.kind === "part") {
     const p = localFromWorld(pos),
       a = parts[dragging.index];
     if (a) {
-      a.x = p.x;
-      a.y = p.y;
+      const rect = $("#editorTrash").getBoundingClientRect(),
+        overTrash = e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
+      const hit = snapToSurface(p.x, p.y);
+      const far = !pointInPolygon(boundary, p.x, p.y) && Math.hypot(p.x - hit.x, p.y - hit.y) > 0.75;
+      dragging.outside = far || overTrash;
       const mate = parts.find((q, j) => j !== dragging.index && a.pairId && q.pairId === a.pairId);
-      if (state.symmetry && mate) {
-        mate.x = p.x;
-        mate.y = -p.y;
-        mate.rotation = -a.rotation;
-      } else if (mate && !state.symmetry) {
+      if (dragging.outside) {
+        a.x = p.x;
+        a.y = p.y;
+      } else {
+        Object.assign(a, { x: hit.x, y: hit.y, rotation: hit.angle });
+        if (state.symmetry && mate) Object.assign(mate, { x: hit.x, y: -hit.y, rotation: -hit.angle });
+      }
+      if (mate && !state.symmetry) {
         a.pairId = nextPairId++;
         mate.pairId = nextPairId++;
       }
-      const rect = $("#editorTrash").getBoundingClientRect(),
-        overTrash = e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
-      dragging.outside = partIsOutsideHull(a.x, a.y) || overTrash;
       $("#editorTrash").classList.toggle("ready", dragging.outside);
       $("#editorTrash").querySelector("span:last-child").textContent = dragging.outside ? "RELEASE TO REMOVE" : "DRAG OFF CELL TO REMOVE";
       scheduleRebuildPlayer();
@@ -1885,6 +2734,7 @@ function onPointerMove(e) {
   }
 }
 function onPointerUp(e) {
+  if (touchStick.pointer === e.pointerId) stickEnd(e);
   const old = dragging;
   if (old && old.kind === "part" && old.outside) {
     removePartAt(old.index, true);
@@ -1936,7 +2786,9 @@ canvas.addEventListener(
       } else {
         const n = nodes[state.selectedNode];
         if (n) {
+          const before = anchorPartsToSpine();
           n.r = THREE.MathUtils.clamp(n.r - Math.sign(e.deltaY) * 0.05, 0.25, 1.15);
+          carryPartsWithSpine(before);
           $("#radiusSlider").value = n.r;
           rebuildPlayer();
         }
@@ -1948,20 +2800,17 @@ canvas.addEventListener(
   },
   { passive: false },
 );
-canvas.addEventListener("dragover", (e) => e.preventDefault());
-canvas.addEventListener("drop", (e) => {
-  e.preventDefault();
-  if (!state.editor) return;
-  const id = e.dataTransfer.getData("text/plain");
-  const p = setCanvasCoords(toWorld(e));
-  addPart(id, p.x, p.y);
-});
 function updateCamera() {
   const aspect = innerWidth / innerHeight;
-  camera.left = (-cameraZoom * aspect) / 2;
-  camera.right = (cameraZoom * aspect) / 2;
-  camera.top = cameraZoom / 2;
-  camera.bottom = -cameraZoom / 2;
+  // Zoom describes the short side of the screen, so a phone held upright sees as much water across
+  // as a landscape screen sees top to bottom (plus a little extra above and below).
+  const portrait = aspect < 1 && !state.editor;
+  const halfH = portrait ? (cameraZoom * 0.62) / aspect : cameraZoom / 2,
+    halfW = portrait ? cameraZoom * 0.62 : (cameraZoom * aspect) / 2;
+  camera.left = -halfW;
+  camera.right = halfW;
+  camera.top = halfH;
+  camera.bottom = -halfH;
   camera.updateProjectionMatrix();
 }
 function isTouchUI() {
@@ -1976,6 +2825,10 @@ function targetAngle() {
   return Math.atan2(state.mouseWorld.y - player.position.y, state.mouseWorld.x - player.position.x);
 }
 function updateAI(dt, time) {
+  const playerMouths = parts
+    .filter((p) => p.def.cat === "Mouths")
+    .map((p) => ({ id: p.id, pos: localNodeWorld(p), reach: (p.id === "proboscis" ? 0.82 : p.id === "jaw" ? 0.62 : 0.42) * state.scale * (p.scale || 1) }));
+  const playerSpikes = parts.filter((p) => p.id === "spike").map((p) => ({ pos: localNodeWorld(p), reach: 0.68 * state.scale * (p.scale || 1) }));
   const s = stats(),
     playerThreat = s.damage > 0 || s.diet !== "plant",
     playerSize = state.scale * (1 + parts.length * 0.03);
@@ -1995,7 +2848,7 @@ function updateAI(dt, time) {
     if (e.visible) {
       const farAway = distance2D(e.position, player.position) > 13;
       u.rig.setDetail(farAway ? 0 : 1);
-      u.rig.update(dt, time, { speed: u.mate ? 0.3 : u.velocity.length() });
+      u.rig.update(dt, time, { speed: state.courtship && e === state.mate ? 1.2 : u.velocity.length() });
       // Keep the health bar and diet badge upright above the cell, whatever way it is facing.
       const up = u.overlayY;
       u.healthGroup.rotation.z = -e.rotation.z;
@@ -2004,24 +2857,7 @@ function updateAI(dt, time) {
     }
     if (u.mate) return;
     if (u.epic) {
-      e.position.x += u.velocity.x * dt;
-      e.position.y += u.velocity.y * dt;
-      if (e.position.x > player.position.x + cameraZoom * 1.2) {
-        e.position.x = player.position.x - cameraZoom * 1.2;
-        e.position.y = player.position.y + (Math.random() - 0.5) * cameraZoom;
-        u.hitCooldown = 0;
-      }
-      u.hitCooldown = Math.max(0, (u.hitCooldown || 0) - dt);
-      const impactDistance = distance2D(e.position, player.position);
-      if (impactDistance < u.size + state.scale && u.hitCooldown <= 0) {
-        hurt(WORLD_TUNING.epicDamage, "The macro-predator struck!");
-        spawnBurst(player.position.x, player.position.y, 0xff6f86, 18);
-        const shove = new THREE.Vector2(player.position.x - e.position.x, player.position.y - e.position.y);
-        if (shove.length() < 0.01) shove.set(1, 0);
-        shove.normalize();
-        velocity.addScaledVector(shove, 3.2);
-        u.hitCooldown = 3;
-      }
+      updateEpic(e, u, dt);
       return;
     }
     if (u.stunned > 0) {
@@ -2039,188 +2875,231 @@ function updateAI(dt, time) {
     e.rotation.y += (THREE.MathUtils.clamp(u.velocity.x * 0.055, -0.12, 0.12) - e.rotation.y) * (1 - Math.exp(-dt * 3));
     const playerDist = distance2D(e.position, player.position),
       isSmall = u.size < playerSize * 0.88,
-      isBig = u.size > playerSize * 1.18 || u.alpha,
       playerBigger = playerSize > u.size * 1.18;
+    if (!u.radius) u.radius = cellRadius(u.body.extent, u.size);
+    // Behaviours add up to one desired acceleration; the cell then turns and swims toward it.
+    const desire = aiDesire.set(0, 0);
     let target = null,
       targetFood = null,
-      prey = null;
-    if (u.diet === "meat") {
-      let nearest = Infinity;
-      enemies.forEach((other) => {
-        if (other === e || !other.userData.alive || other.userData.mate || other.userData.epic || other.userData.size >= u.size * 0.78)
-          return;
-        const d = e.position.distanceTo(other.position);
-        if (d < nearest && d < 7) {
-          nearest = d;
-          prey = other;
-        }
-      });
-      if (prey) {
-        target = prey.position;
-        u.state = "hunt";
-      } else if (playerDist < 9 && isBig) {
-        target = player.position;
-        u.state = "hunt";
+      prey = null,
+      pace = 1.2;
+    // One pass over neighbours: prey to hunt, predators to fear, schoolmates to swim with.
+    let threat = null,
+      threatD = Infinity,
+      preyD = Infinity,
+      school = 0,
+      cx = 0,
+      cy = 0,
+      ax = 0,
+      ay = 0;
+    for (const other of enemies) {
+      if (other === e) continue;
+      const o = other.userData;
+      if (!o.alive || o.mate) continue;
+      const dx = other.position.x - e.position.x,
+        dy = other.position.y - e.position.y;
+      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) continue;
+      const d = Math.hypot(dx, dy);
+      const sameKind = (u.kin && o.kin) || (u.species && o.species === u.species);
+      if (u.diet === "meat" && !o.epic && !sameKind && o.size < u.size * 0.78 && d < 7 && d < preyD) {
+        preyD = d;
+        prey = other;
+      }
+      if (!sameKind && (o.epic || (o.diet === "meat" && o.size > u.size * 1.25)) && d < 3.5 + o.size * 2 && d < threatD) {
+        threatD = d;
+        threat = other;
+      }
+      if (sameKind && d < 4.5) {
+        cx += other.position.x;
+        cy += other.position.y;
+        ax += o.velocity.x;
+        ay += o.velocity.y;
+        school++;
       }
     }
-    if (!target && isSmall && (playerThreat || playerBigger) && playerDist < 8 && u.diet !== "meat") {
+    if (prey) {
+      // Aim where the prey is going, not where it is.
+      target = leadTarget(e.position, prey.position, prey.userData.velocity, u.velocity.length() + 1);
+      u.state = "hunt";
+    } else if (u.diet === "meat" && !u.kin && u.size > state.scale * 0.7 && playerDist < 10 + state.tier * 1.5) {
+      target = leadTarget(e.position, player.position, velocity, u.velocity.length() + 1);
+      u.state = "hunt";
+    }
+    u.fleeTimer = Math.max(0, (u.fleeTimer || 0) - dt);
+    const fearPlayer = !u.kin && (u.fleeTimer > 0 || (isSmall && (playerThreat || playerBigger) && playerDist < 8 && u.diet !== "meat"));
+    if (!target && !u.kin && (fearPlayer || threat)) {
       u.state = "flee";
-      const away = new THREE.Vector2(e.position.x - player.position.x, e.position.y - player.position.y);
-      if (away.length() < 0.01) away.set(Math.random() - 0.5, Math.random() - 0.5);
-      away.normalize();
-      u.velocity.x += away.x * dt * 7.5;
-      u.velocity.y += away.y * dt * 7.5;
+      const from = fearPlayer && (!threat || playerDist < threatD) ? player.position : threat.position;
+      let fx = e.position.x - from.x,
+        fy = e.position.y - from.y;
+      const fl = Math.hypot(fx, fy) || 1;
+      // Panicked zig-zag: real prey jinks rather than fleeing in a straight line.
+      const jink = Math.sin(time * 4.3 + u.phase * 3) * 0.55,
+        c = Math.cos(jink),
+        sn = Math.sin(jink);
+      fx /= fl;
+      fy /= fl;
+      desire.x += (fx * c - fy * sn) * 7.5;
+      desire.y += (fx * sn + fy * c) * 7.5;
     } else if (!target) {
       u.state = "forage";
       let best = null,
         bestFood = null,
         bd = Infinity;
-      food.forEach((f) => {
-        if (!f.userData.alive) return;
-        const canEat = u.diet === "plant" ? f.userData.type === "plant" : f.userData.type === "meat";
-        if (!canEat) return;
-        const d = f.position.distanceTo(e.position);
-        if (d < bd) {
-          bd = d;
-          best = f.position;
-          bestFood = f;
-        }
-      });
+      // Food search is the costliest step for a crowd: reuse the last pick between rescans.
+      u.retarget -= dt;
+      const cached = u.foodTarget && u.foodTarget.userData.alive ? u.foodTarget : null;
+      if (cached && u.retarget > 0) {
+        bestFood = cached;
+        best = cached.position;
+        bd = cached.position.distanceTo(e.position);
+      } else
+        food.forEach((f) => {
+          if (!f.userData.alive) return;
+          const canEat = u.diet === "plant" ? f.userData.type === "plant" : f.userData.type === "meat";
+          if (!canEat) return;
+          const d = f.position.distanceTo(e.position);
+          if (d < bd) {
+            bd = d;
+            best = f.position;
+            bestFood = f;
+          }
+        });
+      if (!cached || u.retarget <= 0) {
+        u.foodTarget = bestFood;
+        u.retarget = 0.5 + Math.random() * 0.3;
+      }
       if (best && bd < 9) {
         target = best;
         targetFood = bestFood;
       } else {
+        // Wander: a slowly drifting heading, with the odd pause to rest.
         u.state = "idle";
-        u.velocity.x += Math.cos(time * 0.55 + u.phase) * dt * 0.55;
-        u.velocity.y += Math.sin(time * 0.48 + u.phase) * dt * 0.55;
+        u.wander = (u.wander ?? e.rotation.z) + (Math.random() - 0.5) * dt * 3.2;
+        if ((u.rest = (u.rest || 0) - dt) <= 0) {
+          desire.x += Math.cos(u.wander) * 0.85;
+          desire.y += Math.sin(u.wander) * 0.85;
+          if (Math.random() < dt * 0.09) u.rest = 0.8 + Math.random() * 2.2;
+        }
       }
+    }
+    if (u.kin && !target && playerDist > 3 && playerDist < 9) {
+      desire.x += ((player.position.x - e.position.x) / playerDist) * 0.5;
+      desire.y += ((player.position.y - e.position.y) / playerDist) * 0.5;
+    }
+    if (school && u.state !== "hunt") {
+      // Schooling: drift toward the group and match its heading.
+      const k = u.state === "flee" ? 0.4 : 1;
+      desire.x += ((cx / school - e.position.x) * 0.45 + (ax / school - u.velocity.x) * 0.7) * k;
+      desire.y += ((cy / school - e.position.y) * 0.45 + (ay / school - u.velocity.y) * 0.7) * k;
     }
     if (target) {
-      const steer = new THREE.Vector2(target.x - e.position.x, target.y - e.position.y);
-      if (steer.length() > 0.01) {
-        steer.normalize();
-        const pace = u.state === "hunt" ? 2.25 : 1.2;
-        u.velocity.x += steer.x * dt * pace * 2.4;
-        u.velocity.y += steer.y * dt * pace * 2.4;
-        e.rotation.z = Math.atan2(steer.y, steer.x);
+      const tx = target.x - e.position.x,
+        ty = target.y - e.position.y,
+        tl = Math.hypot(tx, ty);
+      if (tl > 0.01) {
+        pace = (u.state === "hunt" ? 2.6 : 1.2) * (0.8 + 0.3 * u.size);
+        // Ease off when arriving at food instead of overshooting it.
+        const arrive = u.state === "hunt" ? 1 : Math.min(1, 0.35 + tl / 1.4);
+        desire.x += (tx / tl) * pace * 2.4 * arrive;
+        desire.y += (ty / tl) * pace * 2.4 * arrive;
       }
     }
-    u.velocity.multiplyScalar(Math.max(0, 1 - 1.18 * dt));
-    u.velocity.clampLength(0, u.alpha ? 3.1 : 2.35);
+    u.stroke = (u.stroke ?? u.phase) + dt * (3.5 + u.velocity.length() * 2.2);
+    const turnRate = (u.alpha ? 3.6 : 2.7) / Math.sqrt(Math.max(0.45, u.size)) + (u.state === "flee" ? 1 : 0);
+    e.rotation.z = steerHeading(u.velocity, e.rotation.z, desire.x, desire.y, dt, { turnRate, stroke: strokePulse(u.stroke) });
+    u.velocity.multiplyScalar(Math.max(0, 1 - 1.05 * dt));
+    // Bigger cells are faster in absolute terms, and hunters put on a burst when they chase.
+    const cap = (u.alpha ? 3.1 : 2.35) * (0.8 + 0.3 * u.size) * (u.state === "hunt" ? 1.18 : 1);
+    u.velocity.clampLength(0, cap);
     e.position.x += u.velocity.x * dt;
     e.position.y += u.velocity.y * dt;
-    if (u.velocity.lengthSq() > 0.08) {
-      const desired = Math.atan2(u.velocity.y, u.velocity.x),
-        delta = THREE.MathUtils.euclideanModulo(desired - e.rotation.z + Math.PI, Math.PI * 2) - Math.PI;
-      e.rotation.z += THREE.MathUtils.clamp(delta, -dt * (u.alpha ? 3.6 : 2.5), dt * (u.alpha ? 3.6 : 2.5));
+    if (u.knockVel && u.knockVel.lengthSq() > 1e-4) {
+      e.position.x += u.knockVel.x * dt;
+      e.position.y += u.knockVel.y * dt;
+      u.knockVel.multiplyScalar(Math.exp(-KNOCK_FADE * dt));
     }
     if (targetFood && e.position.distanceTo(targetFood.position) < 0.46 && targetFood.userData.alive) {
       u.rig.eat();
       spawnBurst(targetFood.position.x, targetFood.position.y, u.diet === "plant" ? 0x8effb7 : 0xffc19b, 6);
       targetFood.userData.alive = false;
       targetFood.visible = false;
-      setTimeout(() => {
-        if (targetFood.parent) {
-          targetFood.position.set(
-            THREE.MathUtils.clamp(e.position.x + (Math.random() - 0.5) * 18 * worldSize, -22 * worldSize, 22 * worldSize),
-            THREE.MathUtils.clamp(e.position.y + (Math.random() - 0.5) * 12 * worldSize, -14 * worldSize, 14 * worldSize),
-            0.2,
-          );
-          targetFood.userData.base.set(targetFood.position.x, targetFood.position.y);
-          targetFood.userData.alive = true;
-          targetFood.visible = true;
-        }
-      }, 2800);
+      respawnFood(targetFood, 2800);
     }
-    if (prey && prey.userData.alive && e.position.distanceTo(prey.position) < 0.68) {
+    if (prey && prey.userData.alive && e.position.distanceTo(prey.position) < u.radius + (prey.userData.radius || 0.3) + 0.18) {
       u.state = "attack";
       u.attackCooldown -= dt;
       if (u.attackCooldown <= 0) {
         prey.userData.health -= u.alpha ? 4 : 1.7;
         u.attackCooldown = 0.7;
+        knockNPC(prey, e.position, 1.1);
         if (prey.userData.health <= 0) killNPC(prey, false);
       }
     }
-    const maxNX = 23.7 * worldSize,
-      maxNY = 14.7 * worldSize;
-    if (e.position.x > maxNX) {
-      e.position.x = maxNX;
-      u.velocity.x = -Math.abs(u.velocity.x) * 0.45;
-      u.phase += Math.PI * 0.7;
-    } else if (e.position.x < -maxNX) {
-      e.position.x = -maxNX;
-      u.velocity.x = Math.abs(u.velocity.x) * 0.45;
-      u.phase += Math.PI * 0.7;
-    }
-    if (e.position.y > maxNY) {
-      e.position.y = maxNY;
-      u.velocity.y = -Math.abs(u.velocity.y) * 0.45;
-      u.phase += Math.PI * 0.45;
-    } else if (e.position.y < -maxNY) {
-      e.position.y = -maxNY;
-      u.velocity.y = Math.abs(u.velocity.y) * 0.45;
-      u.phase += Math.PI * 0.45;
-    }
     const dPlayer = distance2D(e.position, player.position),
-      mouthParts = parts.filter((p) => p.def.cat === "Mouths"),
-      mouthTouch = mouthParts.some(
-        (p) =>
-          localNodeWorld(p).distanceTo(new THREE.Vector2(e.position.x, e.position.y)) <
-          (p.id === "proboscis" ? 0.82 : p.id === "jaw" ? 0.62 : 0.42) * state.scale * (p.scale || 1),
-      ),
-      spikeParts = parts.filter((p) => p.id === "spike"),
-      spikeTouch = spikeParts.some(
-        (p) => localNodeWorld(p).distanceTo(new THREE.Vector2(e.position.x, e.position.y)) < 0.68 * state.scale * (p.scale || 1),
-      );
-    if (dPlayer < 0.72 * state.scale || mouthTouch || spikeTouch) {
-      if (s.diet !== "plant" && mouthTouch && isSmall && !u.alpha && !u.epic) {
-        killNPC(e, true);
-        state.food++;
-        state.meat++;
-        state.dna += 1;
-        state.scale = Math.min(1.65, state.scale + 0.0055);
-        player.scale.setScalar(state.scale);
-        updateHUD();
-        playSfx("eat");
-        spawnBurst(e.position.x, e.position.y, 0x8ff0d4, 16);
-        spawnFloatLabel(e.position.x, e.position.y, "+DNA", 0xffe5a2);
-      } else if (mouthTouch && s.diet !== "plant") {
+      // Whole-body hitboxes: anywhere on either cell counts, not just the centres.
+      nearEnough = dPlayer < 4 * state.scale + u.size * 2,
+      them = nearEnough ? npcCapsule(e) : null,
+      within = (m) => pointCapsuleGap(m.pos.x, m.pos.y, them) < m.reach * 0.5,
+      touching = nearEnough && capsuleGap(updatePlayerCapsule(), them) < 0.08 * state.scale,
+      mouthParts = playerMouths,
+      mouthTouch = nearEnough && playerMouths.some(within),
+      spikeTouch = nearEnough && playerSpikes.some(within);
+    if (!u.kin && (touching || mouthTouch || spikeTouch)) {
+      const biter = mouthParts.find((p) => p.id === "jaw") || mouthParts.find((p) => p.id === "proboscis");
+      if (mouthTouch && biter && s.diet !== "plant" && progress.biteCooldown <= 0) {
+        // A bite hurts; it doesn't swallow. Damage grows with the mouth, attack parts and your size.
+        const bite = ((biter.id === "jaw" ? 3.2 : 2.1) + s.damage * 0.35) * state.scale;
+        progress.biteCooldown = 0.5;
+        playerBody?.rig.eat();
+        playSfx("damage");
+        spawnBurst(e.position.x, e.position.y, 0xff7d7d, 8);
+        const away = new THREE.Vector2(e.position.x - player.position.x, e.position.y - player.position.y).normalize();
+        e.position.x += away.x * 0.35;
+        e.position.y += away.y * 0.35;
+        u.velocity.addScaledVector(away, 1.6);
+        u.fleeTimer = u.diet === "meat" && !isSmall ? 0 : 2.6; // prey panics; predators fight back
+        damageNPC(e, bite, u.epic);
+      }
+      if (spikeTouch && (u.spikeCooldown = (u.spikeCooldown || 0) - dt) <= 0) {
+        u.spikeCooldown = 0.8;
+        damageNPC(e, 1.4 * state.scale, false, player.position);
+        spawnBurst(e.position.x, e.position.y, 0xffc27d, 5);
+      }
+      // Hunters bite back if they are anywhere near your size.
+      const hunter = u.diet === "meat" && u.size > state.scale * 0.7;
+      if (u.alive && hunter && touching) {
         u.state = "attack";
         u.attackCooldown -= dt;
         if (u.attackCooldown <= 0) {
-          const dmg = mouthParts.some((p) => p.id === "jaw") ? 5 : 2;
-          damageNPC(e, dmg, u.epic);
-          u.attackCooldown = 0.6;
+          const ratio = THREE.MathUtils.clamp(u.size / state.scale, 0.6, 2.2);
+          const damage = Math.round((7 + state.tier * 2) * ratio * (u.alpha ? 1.8 : 1) * (u.epic ? 2.2 : 1));
+          u.rig.eat?.();
+          hurt(damage, "A " + (SPECIES[u.species]?.name || "predator") + " bit you!", e.position);
+          u.attackCooldown = 0.8;
         }
-      } else if (dPlayer < 0.72 * state.scale && u.diet === "meat" && isBig) {
-        u.state = "attack";
-        u.attackCooldown -= dt;
-        if (u.attackCooldown <= 0) {
-          hurt(u.alpha ? 13 : 7, "A carnivore bit your cell!");
-          u.attackCooldown = 1;
-        }
-      } else if (dPlayer < 0.72 * state.scale && u.diet === "plant" && isSmall && playerThreat) {
-        u.state = "flee";
       }
     }
-    if (u.healthGroup) u.healthGroup.visible = dPlayer < 7 || u.health < u.maxHealth;
-    if (u.dietSprite) u.dietSprite.visible = dPlayer < 13 || u.alpha;
+    if (u.healthGroup) u.healthGroup.visible = u.health < u.maxHealth && dPlayer < 12;
+    if (u.dietSprite) u.dietSprite.visible = (dPlayer < 9 && !u.kin) || u.alpha;
   });
+  resolveCellCollisions();
   if (state.mateSignal && state.mate && state.mate.userData.alive) {
-    const m = state.mate,
-      d = distance2D(m.position, player.position);
-    m.position.x += Math.sin(time * 1.2) * dt * 0.4;
-    m.position.y += Math.cos(time * 0.9) * dt * 0.4;
-    if (d < 1.25 * state.scale) {
-      finishMate();
-      return;
-    }
+    const m = state.mate;
+    updateMateCall(dt, time);
+    if (!state.mateSignal) return;
+    if (state.courtship) return;
     state.mateTimer -= dt;
     if (state.mateTimer <= 0) {
       state.mateSignal = false;
-      m.userData.alive = false;
-      disposeTree(m);
-      enemies = enemies.filter((e) => e !== m);
+  state.courtship = null;
+      m.userData.mate = false;
+      m.userData.health = m.userData.maxHealth;
+      if (m.userData.heart) {
+        m.remove(m.userData.heart);
+        disposeTree(m.userData.heart);
+        m.userData.heart = null;
+      }
       state.mate = null;
       $("#mateCue").classList.remove("show");
       spawnBurst(m.position.x, m.position.y, 0xffa5db, 8);
@@ -2241,20 +3120,8 @@ function updateWaypoint() {
     el.style.display = "none";
     return;
   }
-  const candidates = [];
-  if (state.mateSignal && state.mate && state.mate.userData.alive) candidates.push({ obj: state.mate, kind: "mate", priority: 0 });
-  else {
-    enemies.forEach((e) => {
-      if (e.userData.alive && (e.userData.epic || e.userData.alpha))
-        candidates.push({ obj: e, kind: "danger", priority: e.userData.epic ? 0 : 1 });
-    });
-    meteors.forEach((m) => {
-      if (m.userData.alive) candidates.push({ obj: m, kind: "meteor", priority: 2 });
-    });
-    food.forEach((f) => {
-      if (f.userData.alive && compatible(f.userData.type)) candidates.push({ obj: f, kind: "food", priority: 3 });
-    });
-  }
+  // Immersion: only your mate gets a guide arrow; food, shards and threats you find by looking.
+  const candidates = state.mateSignal && state.mate && state.mate.userData.alive ? [{ obj: state.mate, kind: "mate", priority: 0 }] : [];
   candidates.sort(
     (a, b) => a.priority - b.priority || distance2D(a.obj.position, player.position) - distance2D(b.obj.position, player.position),
   );
@@ -2283,7 +3150,8 @@ function updateWaypoint() {
   $("#waypointSubtitle").textContent = "";
 }
 function updateVisibility() {
-  const sight = 8 + stats().sight * 1.9;
+  // Eyes extend sight, but it always reaches at least most of the screen, even on a tall phone.
+  const sight = Math.max(8 + stats().sight * 1.9, viewRadius() * 0.85);
   food.forEach((f) => {
     f.visible = !!f.userData.alive && distance2D(f.position, player.position) < sight;
   });
@@ -2296,23 +3164,65 @@ function updateVisibility() {
   hazards.forEach((h) => {
     h.visible = distance2D(h.position, player.position) < sight + 3;
   });
+  // Scenery is not hidden by sight: it is culled only once it is off screen.
+  const view = viewRadius() + 1.5;
+  debris.forEach((d) => (d.visible = distance2D(d.position, player.position) < view));
+  colonies.forEach((c) => (c.mesh.visible = distance2D(c.mesh.position, player.position) < view + 1));
+}
+function updateScenery(dt, time) {
+  const reach = 0.9 * state.scale;
+  debris.forEach((d) => {
+    if (!d.visible) return;
+    const u = d.userData;
+    d.rotation.z += u.spin * dt;
+    if (u.rise) d.position.y += u.rise * dt; // bubbles drift slowly upwards
+    d.position.x += Math.sin(time * 0.3 + u.phase) * dt * 0.05;
+    d.position.y += Math.cos(time * 0.25 + u.phase) * dt * 0.04;
+    // Swimming through debris nudges it aside.
+    const dx = d.position.x - player.position.x,
+      dy = d.position.y - player.position.y,
+      dist = Math.hypot(dx, dy),
+      min = reach + u.radius;
+    if (dist < min && dist > 0.001) {
+      const push = ((min - dist) / min) * dt * 3;
+      d.position.x += (dx / dist) * push + velocity.x * dt * 0.4;
+      d.position.y += (dy / dist) * push + velocity.y * dt * 0.4;
+    }
+  });
 }
 
 function updateFood(dt, time) {
   const s = stats(),
     mouths = parts.filter((p) => p.def.cat === "Mouths");
-  const mouthWorld = (p) => localNodeWorld(p);
+  // Mouth positions once per frame, not once per food item.
+  const mouthPos = new Map(mouths.map((m) => [m, localNodeWorld(m)]));
+  const mouthWorld = (p) => mouthPos.get(p);
+  const near = (2.4 + Math.max(...nodes.map((n) => Math.abs(n.x))) ) * state.scale;
   food.forEach((f) => {
     if (!f.userData.alive) return;
+    // Food out of sight only needs its drift; nothing it does there is visible or reachable.
+    if (!f.visible && !f.userData.colony) {
+      f.position.x += Math.sin(time + f.userData.phase) * dt * 0.09;
+      return;
+    }
     f.rotation.z += dt * 0.5;
-    f.position.x += Math.sin(time + f.userData.phase) * dt * 0.09;
-    f.position.y += Math.cos(time * 0.8 + f.userData.phase) * dt * 0.07;
-    currents.forEach((cur) => {
-      if (f.position.distanceTo(cur.position) < 3) {
-        f.position.x += cur.userData.force.x * dt * 0.4;
-        f.position.y += cur.userData.force.y * dt * 0.4;
-      }
-    });
+    if (f.userData.colony) {
+      // Buds ride their frond's sway until a mouth pulls them free.
+      const b = f.userData.base;
+      f.position.x += (b.x + Math.sin(time * 1.3 + f.userData.phase) * 0.05 - f.position.x) * Math.min(1, dt * 2);
+      f.position.y += (b.y + Math.cos(time * 1.1 + f.userData.phase) * 0.05 - f.position.y) * Math.min(1, dt * 2);
+    } else {
+      f.position.x += Math.sin(time + f.userData.phase) * dt * 0.09;
+      f.position.y += Math.cos(time * 0.8 + f.userData.phase) * dt * 0.07;
+    }
+    if (!f.userData.colony)
+      currents.forEach((cur) => {
+        if (f.position.distanceTo(cur.position) < 3) {
+          f.position.x += cur.userData.force.x * dt * 0.4;
+          f.position.y += cur.userData.force.y * dt * 0.4;
+        }
+      });
+    if (Math.abs(f.position.x - player.position.x) > near || Math.abs(f.position.y - player.position.y) > near) return;
     const fp = new THREE.Vector2(f.position.x, f.position.y);
     if (!mouths.length) {
       if (distance2D(f.position, player.position) < 1.35 * state.scale && time > state.dietHintAt) {
@@ -2325,6 +3235,7 @@ function updateFood(dt, time) {
       const nearMouth = mouths.some((m) => mouthWorld(m).distanceTo(fp) < 1.45 * state.scale);
       if (nearMouth && time > state.dietHintAt) {
         state.dietHintAt = time + 6;
+        progress.wrongFoodAt = gameTime;
         spawnBurst(f.position.x, f.position.y, s.diet === "plant" ? 0xe89c9c : 0xffd0a0, 4);
       }
       return;
@@ -2356,12 +3267,13 @@ function updateFood(dt, time) {
     m.userData.life -= dt;
     if (distance2D(m.position, player.position) < 0.85 * state.scale) {
       spawnBurst(m.position.x, m.position.y, 0xffdd80, 20);
-      spawnFloatLabel(m.position.x, m.position.y, "+2 DNA", 0xffe27b);
+      const shardDna = 1;
+      spawnFloatLabel(m.position.x, m.position.y, "+" + shardDna + " DNA", 0xffe27b);
       playSfx("meteor");
-      state.dna += 2;
+      state.dna += shardDna;
       state.discoveries++;
       const unlockedPart = meteorUnlock();
-      m.userData.alive = false;
+          m.userData.alive = false;
       disposeTree(m);
       updateHUD();
       saveGame(true);
@@ -2450,8 +3362,8 @@ function createVent() {
     g.add(bubble);
   }
   g.position.set(
-    THREE.MathUtils.clamp(player.position.x + (Math.random() - 0.5) * 18 * worldSize, -22 * worldSize, 22 * worldSize),
-    THREE.MathUtils.clamp(player.position.y + (Math.random() - 0.5) * 12 * worldSize, -13 * worldSize, 13 * worldSize),
+    player.position.x + (Math.random() - 0.5) * 18 * worldSize,
+    player.position.y + (Math.random() - 0.5) * 12 * worldSize,
     -0.1,
   );
   g.userData = { timer: 4, active: false };
@@ -2463,35 +3375,93 @@ function createVent() {
   }
 }
 
-/* ---- World population -------------------------------------------------
-   Every count lives in WORLD_TUNING so the balance can be tuned in one place.
-   Index 0 is tier 1. Culling by sight radius (updateVisibility) keeps the
-   number of drawn objects low even when the larger tiers hold more entities. */
+/* ---- Infinite world ----------------------------------------------------
+   The soup has no edges. Everything lives in a disc around the player that is a little larger than
+   the screen; whatever drifts out of the disc is recycled into the ring just outside the view
+   (mostly ahead of where the player is swimming), so the population stays dense wherever you go
+   without the cost of creating and destroying meshes. Index 0 of each list is tier 1. */
 const WORLD_TUNING = {
-  foodParticles: [38, 54, 74, 96],
-  meatChunks: [3, 5, 7, 9],
-  npcs: [9, 12, 15, 17],
-  clouds: [0, 2, 3, 4],
-  currents: [2, 3, 4, 5],
-  meteors: [2, 2, 3, 3],
-  maxLiveMeteors: [3, 4, 5, 5],
+  // Spore-like density: a few cells in view at a time, food you have to look for.
+  foodParticles: [14, 16, 18, 20],
+  meatChunks: [2, 2, 3, 3],
+  colonies: [3, 4, 4, 5],
+  debris: [14, 16, 18, 20],
+  npcs: [6, 7, 8, 9],
+  kin: [2, 2, 3, 3],
+  clouds: [1, 1, 2, 2],
+  currents: [1, 2, 2, 2],
+  meteors: [1, 1, 1, 2],
+  maxLiveMeteors: [2, 2, 3, 3],
   maxVents: (tier) => 3 + tier,
   plantShare: { plant: 0.7, meat: 0.38, omni: 0.55 },
-  epicLifetime: 48,
   epicDamage: 50,
+  regionSize: 40,
 };
+/** Mobile GPUs get a smaller crowd; the same disc, just sparser. */
+const crowdScale = () => (getQuality() === "low" ? 0.7 : getQuality() === "medium" ? 0.85 : 1);
+const tuned = (list) => Math.max(1, Math.round(list[tierIndex()] * crowdScale()));
 const tierIndex = () => Math.min(3, Math.max(0, state.tier - 1));
-const randomInWorld = (margin = 1.2) => ({
-  x: (Math.random() - 0.5) * 2 * (23 * worldSize - margin),
-  y: (Math.random() - 0.5) * 2 * (14 * worldSize - margin),
-});
+const TAU = Math.PI * 2;
+function viewRadius() {
+  return Math.hypot(camera.right - camera.left, camera.top - camera.bottom) / 2;
+}
+const activeRadius = () => viewRadius() * 1.8 + 2;
+const despawnRadius = () => viewRadius() * 2.3 + 3;
+/** Uniform point in the active disc, at least `minR` from the player. */
+function discSpot(minR = 0, maxR = activeRadius()) {
+  const a = Math.random() * TAU,
+    r = Math.sqrt(minR * minR + Math.random() * (maxR * maxR - minR * minR));
+  return { x: player.position.x + Math.cos(a) * r, y: player.position.y + Math.sin(a) * r };
+}
+/** Point in the ring just off screen, biased towards the direction of travel. */
+function ringSpot() {
+  const moving = velocity.lengthSq() > 0.1;
+  const a =
+    moving && Math.random() < 0.7 ? Math.atan2(velocity.y, velocity.x) + (Math.random() - 0.5) * Math.PI * 1.3 : Math.random() * TAU;
+  const minR = viewRadius() + 1.2,
+    maxR = activeRadius(),
+    r = minR + Math.random() * (maxR - minR);
+  return { x: player.position.x + Math.cos(a) * r, y: player.position.y + Math.sin(a) * r };
+}
+const randomInWorld = () => discSpot(3);
+
+/** Each 40-unit region has its own residents, drawn from the current stage's roster and fixed by the world seed. */
+const regionCache = new Map();
+const regionKey = (x, y) => Math.floor(x / WORLD_TUNING.regionSize) + "," + Math.floor(y / WORLD_TUNING.regionSize);
+function regionSpecies(x, y) {
+  const key = state.tier + ":" + regionKey(x, y);
+  if (!regionCache.has(key)) {
+    const [rx, ry] = regionKey(x, y).split(",").map(Number);
+    const rng = makeRng((state.worldSeed ^ Math.imul(rx, 73856093) ^ Math.imul(ry, 19349663) ^ Math.imul(state.tier, 83492791)) >>> 0);
+    const { residents } = stageFor(state.tier);
+    const shuffled = (list) => [...list].sort(() => rng() - 0.5);
+    const plants = shuffled(residents.plant),
+      hunters = shuffled(residents.meat);
+    const chosen = [plants[0], ...(rng() < 0.7 && plants[1] ? [plants[1]] : []), hunters[0], ...(rng() < 0.65 && hunters[1] ? [hunters[1]] : [])];
+    regionCache.set(key, chosen.filter(Boolean));
+  }
+  return regionCache.get(key);
+}
+/** A species' size in world units: its own size range, measured against the stage it belongs to. */
+function speciesSize(id) {
+  const sp = SPECIES[id];
+  const [lo, hi] = sp.size || [0.7, 1.1];
+  return (lo + Math.random() * (hi - lo)) * stageScale(sp.tier || state.tier);
+}
 
 function clearWorldEntities() {
   state.worldGeneration++;
-  for (const list of [food, enemies, meteors, hazards, currents, floatingMeat]) {
+  for (const list of [food, enemies, meteors, hazards, currents, floatingMeat, debris]) {
     list.forEach((o) => disposeTree(o));
     list.length = 0;
   }
+  colonies.forEach((c) => disposeTree(c.mesh));
+  colonies.length = 0;
+  partOrbs.forEach((o) => {
+    meteorGroup.remove(o);
+    o.material.dispose();
+  });
+  partOrbs.length = 0;
   vents.forEach((v) => disposeTree(v.mesh));
   vents.length = 0;
   particles.forEach((o) => disposeTree(o));
@@ -2499,7 +3469,209 @@ function clearWorldEntities() {
   epics.length = 0;
   state.mate = null;
   state.mateSignal = false;
+  state.courtship = null;
   $("#mateCue").classList.remove("show");
+}
+
+function addDebris(spot) {
+  const d = createDebris(Math.random, timeUniform);
+  d.position.set(spot.x, spot.y, -0.25);
+  sceneryGroup.add(d);
+  debris.push(d);
+  return d;
+}
+function addColony(spot) {
+  const { mesh, tips } = createPlantColony(Math.random, timeUniform);
+  mesh.position.set(spot.x, spot.y, -0.12);
+  sceneryGroup.add(mesh);
+  const colony = { mesh, tips, buds: [] };
+  tips.forEach((t, i) => {
+    const bud = addFood("plant", spot.x + t.x, spot.y + t.y, "particle");
+    bud.userData.colony = colony;
+    bud.userData.slot = i;
+    colony.buds.push(bud);
+  });
+  colonies.push(colony);
+  return colony;
+}
+function placeColony(colony, spot) {
+  colony.mesh.position.set(spot.x, spot.y, -0.12);
+  colony.buds.forEach((bud, i) => {
+    const t = colony.tips[i];
+    bud.position.set(spot.x + t.x, spot.y + t.y, 0.2);
+    bud.userData.base.set(bud.position.x, bud.position.y);
+    bud.userData.alive = true;
+  });
+}
+/** Put a loose piece of food back into the world off screen (or regrow a colony bud in place). */
+function respawnFood(f, delay) {
+  const generation = state.worldGeneration;
+  setTimeout(
+    () => {
+      if (generation !== state.worldGeneration || !f.parent || f.userData.alive) return;
+      if (f.userData.temporary) {
+        disposeTree(f);
+        food = food.filter((o) => o !== f);
+        return;
+      }
+      const colony = f.userData.colony;
+      if (colony) {
+        const t = colony.tips[f.userData.slot];
+        f.position.set(colony.mesh.position.x + t.x, colony.mesh.position.y + t.y, 0.2);
+      } else {
+        const p = ringSpot();
+        f.position.set(p.x, p.y, 0.2);
+      }
+      f.userData.base.set(f.position.x, f.position.y);
+      f.userData.alive = true;
+    },
+    f.userData.colony ? delay * 7 : delay,
+  );
+}
+/**
+ * Most arrivals are local residents. Some are last stage's species, now small prey, and once in a
+ * while one of the next stage's giants drifts through.
+ */
+function spawnRegionNPC(spot, pack = null) {
+  const roll = pack ? 1 : Math.random(),
+    prey = preyFor(state.tier),
+    giants = stageFor(state.tier).giants;
+  let species;
+  if (roll < 0.22 && prey.length) species = prey[Math.floor(Math.random() * prey.length)];
+  else if (roll < 0.3 && giants.length && !enemies.some((e) => e.userData.alive && e.userData.giant)) species = giants[Math.floor(Math.random() * giants.length)];
+  else if (pack) species = pack;
+  else {
+    const residents = regionSpecies(spot.x, spot.y);
+    species = residents[Math.floor(Math.random() * residents.length)];
+  }
+  const e = makeNPC({ x: spot.x, y: spot.y, species, diet: SPECIES[species]?.diet, size: speciesSize(species) });
+  const native = SPECIES[species]?.tier || state.tier;
+  e.userData.giant = native > state.tier;
+  e.userData.prey = native < state.tier;
+  // Local hunters often travel in small packs.
+  if (!pack && SPECIES[species]?.diet === "meat" && native === state.tier && Math.random() < 0.18) {
+    const extra = 1 + (Math.random() < 0.4 ? 1 : 0);
+    for (let i = 0; i < extra; i++) spawnRegionNPC({ x: spot.x + (Math.random() - 0.5) * 3, y: spot.y + (Math.random() - 0.5) * 3 }, species);
+  }
+  return e;
+}
+
+/* ---- Your own species ------------------------------------------------
+   Kin are built from your current cell with a light mutation, so they look like relatives, share
+   your diet, never attack you and swim in loose groups. Your mate is chosen from them. */
+function kinRecord() {
+  return snapPartsToSurface(mutateCellRecord(currentRecord(), makeRng((Math.random() * 1e9) | 0), 0.45), { faceOutward: true });
+}
+function spawnKin(spot, opts = {}) {
+  return makeNPC({ record: kinRecord(), kin: true, size: state.scale * (0.85 + Math.random() * 0.2), x: spot.x, y: spot.y, ...opts });
+}
+function spawnKinGroup(spot) {
+  const n = 1 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < n; i++) spawnKin({ x: spot.x + (Math.random() - 0.5) * 2.2, y: spot.y + (Math.random() - 0.5) * 2.2 });
+}
+/** After the editor, relatives evolve with you: rebuild every kin in place from the new design. */
+function refreshKin() {
+  enemies
+    .filter((e) => e.userData.kin && e.userData.alive && !e.userData.mate)
+    .forEach((e) => {
+      const { x, y } = e.position;
+      e.userData.alive = false;
+      disposeTree(e);
+      enemies = enemies.filter((o) => o !== e);
+      spawnKin({ x, y });
+    });
+}
+
+function spawnWorld() {
+  clearWorldEntities();
+  const diet = stats().diet,
+    plantShare = WORLD_TUNING.plantShare[diet] ?? 0.55;
+  for (let n = 0; n < tuned(WORLD_TUNING.foodParticles); n++) {
+    const p = discSpot(1);
+    addFood(Math.random() < plantShare ? "plant" : "meat", p.x, p.y, "particle");
+  }
+  for (let n = 0; n < tuned(WORLD_TUNING.meatChunks); n++) {
+    const p = discSpot(2);
+    addFood("meat", p.x, p.y, "chunk");
+  }
+  for (let n = 0; n < tuned(WORLD_TUNING.colonies); n++) addColony(discSpot(3));
+  for (let n = 0; n < tuned(WORLD_TUNING.debris); n++) addDebris(discSpot(1.5));
+  // Keep the arrival area calm: no cell spawns right on top of the player.
+  for (let n = 0; n < tuned(WORLD_TUNING.npcs); n++) spawnRegionNPC(discSpot(6));
+  for (let n = 0; n < tuned(WORLD_TUNING.kin);) {
+    spawnKinGroup(discSpot(4, viewRadius() * 1.2));
+    n = enemies.filter((e) => e.userData.kin).length;
+  }
+  for (let n = 0; n < WORLD_TUNING.currents[tierIndex()]; n++) createCurrent();
+  for (let n = 0; n < WORLD_TUNING.clouds[tierIndex()]; n++) createToxicCloud();
+  for (let n = 0; n < WORLD_TUNING.meteors[tierIndex()]; n++) spawnMeteor();
+  state.eliteTimer = Math.min(state.eliteTimer, 28 + Math.random() * 14);
+  updateVisibility();
+}
+
+/** Recycle whatever has drifted out of the active disc into the ring ahead, and top up the cast. */
+function maintainWorld() {
+  const here = regionKey(player.position.x, player.position.y);
+  if (!progress.regions.has(here)) {
+    progress.regions.add(here);
+    }
+  const far = despawnRadius(),
+    px = player.position.x,
+    py = player.position.y;
+  const isFar = (o) => Math.hypot(o.position.x - px, o.position.y - py) > far;
+  for (const f of food) {
+    if (f.userData.colony || !isFar(f)) continue;
+    if (f.userData.temporary) {
+      f.userData.alive = false;
+      f.userData.temporary = "gone";
+      continue;
+    }
+    const p = ringSpot();
+    f.position.set(p.x, p.y, 0.2);
+    f.userData.base.set(p.x, p.y);
+    f.userData.alive = true;
+  }
+  const gone = food.filter((f) => f.userData.temporary === "gone");
+  if (gone.length) {
+    gone.forEach((f) => disposeTree(f));
+    food = food.filter((f) => f.userData.temporary !== "gone");
+  }
+  for (const c of colonies) if (isFar(c.mesh)) placeColony(c, ringSpot());
+  for (const d of debris) {
+    if (!isFar(d)) continue;
+    const p = ringSpot();
+    d.position.set(p.x, p.y, -0.25);
+    d.rotation.z = Math.random() * TAU;
+  }
+  for (const list of [currents, hazards]) {
+    for (const h of list) {
+      if (!isFar(h)) continue;
+      const p = ringSpot();
+      h.position.x = p.x;
+      h.position.y = p.y;
+    }
+  }
+  meteors.forEach((m) => {
+    if (m.userData.alive && isFar(m)) {
+      m.userData.alive = false;
+      disposeTree(m);
+    }
+  });
+  meteors = meteors.filter((m) => m.userData.alive);
+  // Cells that wander off are released; fresh ones arrive from the ring, chosen by local region.
+  const leaving = enemies.filter((e) => e.userData.alive && !e.userData.mate && !e.userData.epic && isFar(e));
+  if (leaving.length) {
+    leaving.forEach((e) => {
+      e.userData.alive = false;
+      disposeTree(e);
+    });
+    enemies = enemies.filter((e) => !leaving.includes(e));
+  }
+  const live = enemies.filter((e) => e.userData.alive && !e.userData.epic && !e.userData.mate);
+  const kinCount = live.filter((e) => e.userData.kin).length,
+    otherCount = live.length - kinCount - live.filter((e) => e.userData.alpha).length;
+  for (let n = Math.min(3, tuned(WORLD_TUNING.npcs) - otherCount); n > 0; n--) spawnRegionNPC(ringSpot());
+  if (kinCount < tuned(WORLD_TUNING.kin) && Math.random() < 0.2) spawnKinGroup(ringSpot());
 }
 
 function createCurrent() {
@@ -2517,7 +3689,11 @@ function createCurrent() {
   g.position.set(pos.x, pos.y, 0);
   g.rotation.z = heading;
   const strength = 0.9 + Math.random() * 0.7;
-  g.userData = { phase: Math.random() * 6, force: new THREE.Vector2(Math.cos(heading), Math.sin(heading)).multiplyScalar(strength), baseHeading: heading };
+  g.userData = {
+    phase: Math.random() * 6,
+    force: new THREE.Vector2(Math.cos(heading), Math.sin(heading)).multiplyScalar(strength),
+    baseHeading: heading,
+  };
   currentGroup.add(g);
   currents.push(g);
   return g;
@@ -2529,7 +3705,12 @@ function createToxicCloud() {
   for (let i = 0; i < puffs; i++) {
     const puff = new THREE.Mesh(
       new THREE.SphereGeometry(0.35 + Math.random() * 0.35, 14, 10),
-      new THREE.MeshBasicMaterial({ color: i % 2 ? 0x8cf67a : 0xb4e85a, transparent: true, opacity: 0.1 + Math.random() * 0.08, depthWrite: false }),
+      new THREE.MeshBasicMaterial({
+        color: i % 2 ? 0x8cf67a : 0xb4e85a,
+        transparent: true,
+        opacity: 0.1 + Math.random() * 0.08,
+        depthWrite: false,
+      }),
     );
     const a = (i / puffs) * Math.PI * 2;
     puff.position.set(Math.cos(a) * 0.55, Math.sin(a) * 0.4, 0);
@@ -2544,32 +3725,6 @@ function createToxicCloud() {
   return g;
 }
 
-function spawnWorld() {
-  clearWorldEntities();
-  const i = tierIndex(),
-    diet = stats().diet,
-    plantShare = WORLD_TUNING.plantShare[diet] ?? 0.55;
-  for (let n = 0; n < WORLD_TUNING.foodParticles[i]; n++) {
-    const p = randomInWorld();
-    addFood(Math.random() < plantShare ? "plant" : "meat", p.x, p.y, "particle");
-  }
-  for (let n = 0; n < WORLD_TUNING.meatChunks[i]; n++) {
-    const p = randomInWorld();
-    addFood("meat", p.x, p.y, "chunk");
-  }
-  for (let n = 0; n < WORLD_TUNING.npcs[i]; n++) {
-    const p = randomInWorld(2);
-    // Keep the arrival area calm: no NPC may spawn right on top of the player.
-    if (Math.hypot(p.x - player.position.x, p.y - player.position.y) < 6) p.x += p.x < player.position.x ? -7 : 7;
-    makeNPC({ x: THREE.MathUtils.clamp(p.x, -22 * worldSize, 22 * worldSize), y: p.y });
-  }
-  for (let n = 0; n < WORLD_TUNING.currents[i]; n++) createCurrent();
-  for (let n = 0; n < WORLD_TUNING.clouds[i]; n++) createToxicCloud();
-  for (let n = 0; n < WORLD_TUNING.meteors[i]; n++) spawnMeteor();
-  state.eliteTimer = Math.min(state.eliteTimer, 28 + Math.random() * 14);
-  updateVisibility();
-}
-
 function createMeteorMesh() {
   const g = new THREE.Group();
   const core = new THREE.Mesh(
@@ -2578,11 +3733,21 @@ function createMeteorMesh() {
   );
   core.scale.set(1, 0.85, 0.8);
   g.add(core);
-  const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.2, 0), material(0xfff3c4, 0.1, { emissive: 0xffe08a, emissiveIntensity: 0.7 }));
+  const shard = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.2, 0),
+    material(0xfff3c4, 0.1, { emissive: 0xffe08a, emissiveIntensity: 0.7 }),
+  );
   shard.position.set(0.22, 0.2, 0.1);
   g.add(shard);
   const glow = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: softGlowTexture, color: 0xffd36a, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending }),
+    new THREE.SpriteMaterial({
+      map: softGlowTexture,
+      color: 0xffd36a,
+      transparent: true,
+      opacity: 0.8,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }),
   );
   glow.scale.set(1.9, 1.9, 1);
   g.add(glow);
@@ -2607,9 +3772,45 @@ function spawnMeteor() {
   return m;
 }
 
+/* ---- Growing up a stage ----------------------------------------------------------
+   No banner: as in Spore, the camera pulls back to show how much bigger the world has become while
+   time slows and the HUD steps aside, then settles in at the new size. */
+let growth = null;
+function startGrowthPullback(tier) {
+  const reduced = settings.reducedMotion;
+  growth = { t: 0, dur: reduced ? 1.6 : 3.6, from: cameraZoom, to: cameraZoomTarget, peak: reduced ? 0.3 : 1.05, zoom: cameraZoom };
+  document.body.classList.add("growthPullback");
+  playSfx("growth");
+  // Screen readers still hear which stage this is.
+  const live = $("#growthAnnounce");
+  const stage = GROWTH_STAGES[tier - 1];
+  if (live && stage) live.textContent = "Stage " + tier + " of " + LAST_TIER + ": " + stage.name;
+}
+/** Advances the pull-back; returns the (slowed) time step for the world. */
+function updateGrowthPullback(dt) {
+  const g = growth;
+  g.t += dt;
+  const k = Math.min(1, g.t / g.dur);
+  const ease = k * k * (3 - 2 * k);
+  const bell = Math.pow(Math.sin(Math.PI * k), 1.4); // out and back again
+  g.zoom = (g.from + (g.to - g.from) * ease) * (1 + g.peak * bell);
+  if (k >= 1) {
+    growth = null;
+    cameraZoom = g.to;
+    document.body.classList.remove("growthPullback");
+  }
+  return dt * (1 - 0.7 * bell);
+}
+
+/* ---- Epic cells -------------------------------------------------------------
+   Spore's epic cells: a rare, enormous predator that comes in from the edge of the screen and
+   chases you. It is a little slower than you at full speed but turns like a whale, so keep swimming
+   and dodge. Survive until it gives up and swims off, and a meteor shard falls from its wake. */
+const EPIC_INTERVAL = () => 150 + Math.random() * 90;
+const EPIC_CHASE = 26; // seconds it hunts you before giving up
 function spawnEpic() {
   if (enemies.some((e) => e.userData.alive && e.userData.epic)) return null;
-  const size = 2.5 + state.tier * 0.35;
+  const size = stageScale(state.tier) * 2.6;
   const e = makeNPC({ size, alpha: true, diet: "meat", color: 0x9a3b73, nucleusColor: 0x40163a, x: 0, y: 0 });
   const u = e.userData;
   u.epic = true;
@@ -2617,40 +3818,166 @@ function spawnEpic() {
   u.elite = true;
   u.health = u.maxHealth = 60;
   u.hitCooldown = 0;
-  const heading = Math.random() < 0.5 ? 0 : Math.PI;
-  const speed = 1.1 + Math.random() * 0.5;
-  u.velocity.set(Math.cos(heading) * speed, Math.sin(heading) * speed * 0.15);
+  u.chase = EPIC_CHASE;
+  u.leaving = false;
+  u.deathsAtSpawn = progress.deaths;
+  // In from just past the edge of the view, already heading your way.
+  const a = Math.random() * TAU,
+    r = viewRadius() * 1.1 + size;
+  e.position.set(player.position.x + Math.cos(a) * r, player.position.y + Math.sin(a) * r, 0.2);
+  u.velocity.set(-Math.cos(a), -Math.sin(a)).multiplyScalar(1.2);
   e.rotation.z = Math.atan2(u.velocity.y, u.velocity.x);
-  e.position.set(player.position.x - Math.cos(heading) * cameraZoom * 1.1, player.position.y + (Math.random() - 0.5) * cameraZoom * 0.6, 0.2);
   epics.push(e);
+  playSfx("looming");
+  state.shake = Math.max(state.shake, 0.35);
   spawnFloatLabel(player.position.x, player.position.y + 1.4, "SOMETHING HUGE IS COMING", 0xff9aa9);
-  const generation = state.worldGeneration;
-  setTimeout(() => {
-    if (generation !== state.worldGeneration || !u.alive) return;
+  return e;
+}
+const wrapAngle = (a) => THREE.MathUtils.euclideanModulo(a + Math.PI, TAU) - Math.PI;
+function updateEpic(e, u, dt) {
+  const top = 2.1 + Math.min(1.05, stats().speed * 0.24);
+  const dx = player.position.x - e.position.x,
+    dy = player.position.y - e.position.y,
+    d = Math.hypot(dx, dy);
+  u.chase -= dt;
+  // It gives up when time runs out, or once it has caught you (you respawn elsewhere).
+  if (!u.leaving && (u.chase <= 0 || progress.deaths !== u.deathsAtSpawn)) u.leaving = true;
+  const heading = Math.atan2(u.velocity.y, u.velocity.x);
+  let speed = u.velocity.length();
+  let turnTo = heading;
+  if (!u.leaving) {
+    turnTo = Math.atan2(dy, dx);
+    speed = Math.min(top * 0.86, speed + 1.5 * dt);
+  } else {
+    // Swim off: turn away from you and speed up until out of sight.
+    turnTo = Math.atan2(-dy, -dx);
+    // Slow while it wheels round, then away at full pace.
+    const facingAway = Math.cos(wrapAngle(turnTo - heading)) > 0.3;
+    speed = facingAway ? Math.min(top * 1.4, speed + 2 * dt) : Math.max(top * 0.45, speed - 2.5 * dt);
+  }
+  const turned = heading + THREE.MathUtils.clamp(wrapAngle(turnTo - heading), -0.85 * dt, 0.85 * dt);
+  u.velocity.set(Math.cos(turned) * speed, Math.sin(turned) * speed);
+  e.position.x += u.velocity.x * dt;
+  e.position.y += u.velocity.y * dt;
+  e.rotation.z = turned;
+  u.hitCooldown = Math.max(0, (u.hitCooldown || 0) - dt);
+  if (!u.leaving && d < u.size * 0.85 + state.scale * 0.6 && u.hitCooldown <= 0) {
+    hurt(WORLD_TUNING.epicDamage, "The epic cell caught you!", e.position);
+    spawnBurst(player.position.x, player.position.y, 0xff6f86, 18);
+    const shove = new THREE.Vector2(dx, dy);
+    if (shove.length() < 0.01) shove.set(1, 0);
+    knockVel.addScaledVector(shove.normalize(), 6 + u.size);
+    u.hitCooldown = 2.5;
+  }
+  if (u.leaving && d > viewRadius() * 1.7 + u.size) {
+    const survived = progress.deaths === u.deathsAtSpawn;
     u.alive = false;
     disposeTree(e);
     enemies = enemies.filter((o) => o !== e);
     epics.splice(epics.indexOf(e), 1);
-  }, WORLD_TUNING.epicLifetime * 1000);
-  return e;
+    if (survived) dropEpicShard();
+  }
+}
+/** The reward for outlasting an epic: a shard lands just ahead of you. */
+function dropEpicShard() {
+  const m = createMeteorMesh();
+  const ahead = 2.2 * state.scale;
+  m.position.set(player.position.x + Math.cos(angle) * ahead, player.position.y + Math.sin(angle) * ahead, 0.25);
+  m.userData = { alive: true, life: 60, phase: Math.random() * 6 };
+  meteorGroup.add(m);
+  meteors.push(m);
+  spawnBurst(m.position.x, m.position.y, 0xffdd80, 26);
+  playSfx("shard");
 }
 
-/** Reward for a meteor fragment or an elite kill: unlock one new part. Returns its definition or null. */
+/* ---- Part unlocks ------------------------------------------------------
+   As in Spore, parts are found rather than bought outright: in meteor shards, in the bodies of cells
+   that carry them, and as a reward for reaching a new stage. Once found, a part costs DNA to add. */
+function unlockPart(id, source) {
+  const d = defs.find((x) => x.id === id);
+  if (!d || unlocked.has(id)) return null;
+  unlocked.add(id);
+  progress.unlockedSinceEditor++;
+  playSfx("unlock");
+  popCard({ kind: "NEW PART", img: partThumbs.get(id), title: d.name, text: source + ". " + d.desc, color: "#f5c75a" });
+  renderCatalog();
+  saveGame(true);
+  return d;
+}
+/** Reward for a meteor shard or an elite kill: one part from this stage's meteor pool. */
 function meteorUnlock() {
-  const locked = defs.filter((d) => !unlocked.has(d.id));
-  if (!locked.length) {
-    state.dna += 3;
-    spawnFloatLabel(player.position.x, player.position.y + 0.8, "+3 DNA", 0xffe7a2);
+  const locked = defs.filter((d) => !unlocked.has(d.id)).map((d) => d.id);
+  const pool = meteorPool(state.tier, locked);
+  if (!pool.length) {
+    state.dna += 2;
+    spawnFloatLabel(player.position.x, player.position.y + 0.8, "+2 DNA", 0xffe7a2);
     return null;
   }
-  const affordable = locked.filter((d) => d.unlock <= 5 + (state.tier - 1) * 4);
-  const pool = affordable.length ? affordable : locked;
-  const pick = pool[Math.floor(Math.random() * pool.length)];
-  unlocked.add(pick.id);
-  playSfx("unlock");
-  toast("New part discovered: " + pick.name);
-  renderCatalog();
-  return pick;
+  return unlockPart(pool[Math.floor(Math.random() * pool.length)], "Found in a meteor shard");
+}
+
+const orbTextures = new Map();
+function orbTexture(id) {
+  if (!orbTextures.has(id)) {
+    const c = document.createElement("canvas");
+    c.width = c.height = 128;
+    const ctx = c.getContext("2d");
+    const g = ctx.createRadialGradient(64, 64, 8, 64, 64, 62);
+    g.addColorStop(0, "#fff8d8");
+    g.addColorStop(0.45, "#f5c75acc");
+    g.addColorStop(1, "#f5c75a00");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 128, 128);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const thumb = partThumbs.get(id);
+    if (thumb) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 22, 30, 84, 63);
+        tex.needsUpdate = true;
+      };
+      img.src = thumb;
+    }
+    orbTextures.set(id, tex);
+  }
+  return orbTextures.get(id);
+}
+/** A dead cell may leave behind one of its parts that the player has not found yet. */
+function dropPartOrb(e) {
+  const sp = SPECIES[e.userData.species];
+  if (!sp) return;
+  const candidates = [...new Set(sp.parts.map((p) => p.id))].filter((id) => !unlocked.has(id) && !partOrbs.some((o) => o.userData.id === id));
+  if (!candidates.length || Math.random() > (e.userData.alpha ? 1 : 0.22)) return;
+  const id = candidates[Math.floor(Math.random() * candidates.length)];
+  const orb = new THREE.Sprite(new THREE.SpriteMaterial({ map: orbTexture(id), transparent: true, depthWrite: false }));
+  const size = 0.9 * Math.sqrt(stageScale(state.tier));
+  orb.scale.set(size, size, 1);
+  orb.position.set(e.position.x, e.position.y, 0.6);
+  orb.renderOrder = 15;
+  orb.userData = { id, from: sp.name, life: 45, phase: Math.random() * 6, size };
+  meteorGroup.add(orb);
+  partOrbs.push(orb);
+}
+function updatePartOrbs(dt, time) {
+  for (let i = partOrbs.length - 1; i >= 0; i--) {
+    const o = partOrbs[i],
+      u = o.userData;
+    u.life -= dt;
+    const pulse = 1 + Math.sin(time * 4 + u.phase) * 0.08;
+    o.scale.set(u.size * pulse, u.size * pulse, 1);
+    o.material.opacity = Math.min(1, u.life / 3);
+    const picked = distance2D(o.position, player.position) < 0.9 * state.scale;
+    if (picked) {
+      spawnBurst(o.position.x, o.position.y, 0xffdf86, 18);
+      unlockPart(u.id, "Taken from a " + u.from);
+    }
+    if (picked || u.life <= 0 || unlocked.has(u.id)) {
+      meteorGroup.remove(o);
+      o.material.dispose();
+      partOrbs.splice(i, 1);
+    }
+  }
 }
 function animateCell(time, dt) {
   const speed = velocity.length(),
@@ -2677,33 +4004,62 @@ function updateGame(dt, time) {
   animateCell(time, dt);
   if (state.mouseActive && state.pointerScreen)
     state.mouseWorld.copy(toWorld({ clientX: state.pointerScreen.x, clientY: state.pointerScreen.y }));
-  cameraZoom += (cameraZoomTarget - cameraZoom) * (1 - Math.exp(-dt * 2.25));
+  if (growth) cameraZoom = growth.zoom;
+  else cameraZoom += (cameraZoomTarget - cameraZoom) * (1 - Math.exp(-dt * 2.25));
   const s = stats(),
     keyForward = (input.ArrowUp || input.w ? 1 : 0) - (input.ArrowDown || input.s ? 1 : 0),
     keyTurn = (input.ArrowRight || input.d ? 1 : 0) - (input.ArrowLeft || input.a ? 1 : 0),
     joy = state.joystick || { x: 0, y: 0 },
-    forward = THREE.MathUtils.clamp(keyForward + joy.y + (pointerThrust ? 0.75 : 0), -1, 1),
-    turn = THREE.MathUtils.clamp(keyTurn + joy.x, -1, 1);
+    joyMag = Math.min(1, Math.hypot(joy.x, joy.y)),
+    joyActive = joyMag > STICK_DEAD_ZONE,
+    turn = THREE.MathUtils.clamp(keyTurn, -1, 1);
+  let forward = THREE.MathUtils.clamp(keyForward + (pointerThrust ? 0.75 : 0), -1, 1);
   if (forward !== 0 || turn !== 0) dismissControlHint();
   if (keyForward !== 0 || keyTurn !== 0 || Math.abs(joy.x) + Math.abs(joy.y) > 0.05) state.mouseActive = false;
   let desiredTurn = turn * s.turn * 0.9;
-  if (state.mouseActive) {
+  if (joyActive) {
+    // Direction steering: the cell turns to face where the stick points (screen and world share axes)
+    // and swims that way. The turn rate is proportional to the remaining angle, so it settles on the
+    // heading instead of overshooting, and thrust is held back until the cell is roughly facing it.
+    const delta = THREE.MathUtils.euclideanModulo(Math.atan2(joy.y, joy.x) - angle + Math.PI, TAU) - Math.PI;
+    const maxTurn = 1.9 + s.turn * 0.8; // the turning stat still matters, but no cell feels unsteerable
+    desiredTurn = THREE.MathUtils.clamp(delta * 4, -maxTurn, maxTurn);
+    // Angular inertia: the spin builds up and dies down instead of snapping.
+    turnVelocity += (desiredTurn - turnVelocity) * (1 - Math.exp(-dt * 5.5));
+    if (Math.abs(delta) < Math.abs(turnVelocity * dt)) turnVelocity = delta / Math.max(dt, 1e-3);
+    const throttle = (joyMag - STICK_DEAD_ZONE) / (1 - STICK_DEAD_ZONE);
+    forward = Math.max(forward, throttle * (0.2 + 0.8 * Math.max(0, Math.cos(delta))));
+  } else if (state.mouseActive) {
     const delta = THREE.MathUtils.euclideanModulo(targetAngle() - angle + Math.PI, Math.PI * 2) - Math.PI;
     desiredTurn = THREE.MathUtils.clamp(delta * 2.35, -s.turn * 1.35, s.turn * 1.35);
-    turnVelocity += (desiredTurn - turnVelocity) * (1 - Math.exp(-dt * 5.2));
+    turnVelocity += (desiredTurn - turnVelocity) * (1 - Math.exp(-dt * 3.6));
   } else {
-    turnVelocity += (desiredTurn - turnVelocity) * (1 - Math.exp(-dt * (turn !== 0 ? 5.8 : 1.35)));
+    // Let go and the spin eases out over a moment instead of stopping dead.
+    turnVelocity += (desiredTurn - turnVelocity) * (1 - Math.exp(-dt * (turn !== 0 ? 4.2 : 3.4)));
   }
+  if (state.knock > 0) {
+    state.knock -= dt;
+    forward *= 0.6;
+  }
+  if (state.courtship) forward = 0;
   angle += turnVelocity * dt;
   const bodyLength = Math.abs(nodes[nodes.length - 1].x - nodes[0].x),
     bodyMass = 1 + nodes.reduce((sum, n) => sum + n.r * n.r, 0) * 0.11 + bodyLength * 0.1 + parts.length * 0.025,
     thrust = (s.speed * 1.72) / bodyMass;
-  velocity.x += Math.cos(angle) * forward * thrust * dt;
-  velocity.y += Math.sin(angle) * forward * thrust * dt;
+  // Flagellum strokes: thrust pulses slightly, so a cell surges and glides rather than sliding.
+  strokePhase += dt * (5 + velocity.length() * 2);
+  const stroke = 0.75 + 0.5 * Math.max(0, Math.sin(strokePhase)) ** 2;
+  velocity.x += Math.cos(angle) * forward * thrust * stroke * dt;
+  velocity.y += Math.sin(angle) * forward * thrust * stroke * dt;
   state.stamina = Math.min(100, state.stamina + dt * 9);
-  if (input[" "] && state.jetCooldown <= 0 && state.stamina >= 35 && parts.some((p) => p.id === "jet")) {
-    velocity.x += Math.cos(angle) * 6;
-    velocity.y += Math.sin(angle) * 6;
+  const wantsJet = input[" "] || state.jetQueued;
+  state.jetQueued = false;
+  if (wantsJet && state.jetCooldown <= 0 && state.stamina >= 35 && parts.some((p) => p.id === "jet")) {
+    // The burst rides on top of normal swimming and glides out over about half a second.
+    const burst = 7.5 * Math.sqrt(state.scale);
+    jetVel.x += Math.cos(angle) * burst;
+    jetVel.y += Math.sin(angle) * burst;
+    state.shake = Math.max(state.shake || 0, 0.12);
     state.stamina -= 35;
     state.jetCooldown = 1.5;
     playSfx("jet");
@@ -2715,8 +4071,10 @@ function updateGame(dt, time) {
   const waterDrag = 0.34 + parts.length * 0.012 + (parts.some((p) => p.id === "armour") ? 0.13 : 0);
   velocity.multiplyScalar(Math.exp(-waterDrag * dt));
   velocity.clampLength(0, 2.1 + Math.min(1.05, s.speed * 0.24));
-  player.position.x += velocity.x * dt;
-  player.position.y += velocity.y * dt;
+  player.position.x += (velocity.x + jetVel.x + knockVel.x) * dt;
+  player.position.y += (velocity.y + jetVel.y + knockVel.y) * dt;
+  jetVel.multiplyScalar(Math.exp(-JET_FADE * dt));
+  knockVel.multiplyScalar(Math.exp(-KNOCK_FADE * dt));
   player.rotation.z = angle;
   const speedForward = velocity.x * Math.cos(angle) + velocity.y * Math.sin(angle),
     speedLateral = -velocity.x * Math.sin(angle) + velocity.y * Math.cos(angle);
@@ -2727,28 +4085,9 @@ function updateGame(dt, time) {
     spawnWake();
     wakeCooldown = 0.12;
   }
-  const bx = 24 * worldSize,
-    by = 15 * worldSize;
-  if (player.position.x > bx) {
-    player.position.x = bx;
-    velocity.x = -Math.abs(velocity.x) * 0.22;
-  } else if (player.position.x < -bx) {
-    player.position.x = -bx;
-    velocity.x = Math.abs(velocity.x) * 0.22;
-  }
-  if (player.position.y > by) {
-    player.position.y = by;
-    velocity.y = -Math.abs(velocity.y) * 0.22;
-  } else if (player.position.y < -by) {
-    player.position.y = -by;
-    velocity.y = Math.abs(velocity.y) * 0.22;
-  }
   const poisonParts = parts.filter((p) => p.id === "poison");
   if (poisonParts.length && Math.random() < dt * 3) {
-    const g = new THREE.Mesh(
-      new THREE.SphereGeometry(0.09, 8, 7),
-      new THREE.MeshBasicMaterial({ color: 0x8cf67a, transparent: true, opacity: 0.65 }),
-    );
+    const g = new THREE.Mesh(poisonPuffGeometry, new THREE.MeshBasicMaterial({ color: 0x8cf67a, transparent: true, opacity: 0.65 }));
     g.position.set(player.position.x - Math.cos(angle) * 0.8, player.position.y - Math.sin(angle) * 0.8, 0.3);
     g.userData.life = 2;
     hazardGroup.add(g);
@@ -2758,11 +4097,10 @@ function updateGame(dt, time) {
     p.userData.life -= dt;
     p.material.opacity = Math.max(0, (p.userData.life / 2) * 0.6);
     enemies.forEach((e) => {
-      if (e.userData.alive && e.position.distanceTo(p.position) < 0.5) damageNPC(e, dt * 2);
+      if (e.userData.alive && !e.userData.kin && e.position.distanceTo(p.position) < 0.5) damageNPC(e, dt * 2);
     });
     if (p.userData.life <= 0) {
       hazardGroup.remove(p);
-      p.geometry.dispose();
       p.material.dispose();
     }
   });
@@ -2770,47 +4108,45 @@ function updateGame(dt, time) {
   state.damageCooldown = Math.max(0, state.damageCooldown - dt);
   state.electricCooldown = Math.max(0, state.electricCooldown - dt);
   if (parts.some((p) => p.id === "electric") && state.electricCooldown <= 0) {
-    const near = enemies.find((e) => e.userData.alive && !e.userData.mate && distance2D(e.position, player.position) < 2.1 * state.scale);
+    const near = enemies.find(
+      (e) => e.userData.alive && !e.userData.mate && !e.userData.kin && distance2D(e.position, player.position) < 2.1 * state.scale,
+    );
     if (near) {
-      const pulse = new THREE.Mesh(
-        new THREE.TorusGeometry(2.15, 0.05, 8, 48),
-        new THREE.MeshBasicMaterial({ color: 0x91a9ff, transparent: true, opacity: 0.8 }),
-      );
+      const pulse = new THREE.Mesh(electricPulseGeometry, new THREE.MeshBasicMaterial({ color: 0x91a9ff, transparent: true, opacity: 0.8 }));
       pulse.position.set(player.position.x, player.position.y, 0.8);
       scene.add(pulse);
       setTimeout(() => {
         scene.remove(pulse);
-        pulse.geometry.dispose();
         pulse.material.dispose();
       }, 300);
       enemies.forEach((e) => {
-        if (e.userData.alive && distance2D(e.position, player.position) < 2.4) damageNPC(e, 5, true);
+        if (e.userData.alive && distance2D(e.position, player.position) < 2.4) damageNPC(e, 5, true, player.position);
       });
       state.electricCooldown = 3.2;
     }
   }
-  const attachedSpikes = parts.filter((p) => p.id === "spike");
-  if (attachedSpikes.length)
-    enemies.forEach((e) => {
-      if (!e.userData.alive || e.userData.mate) return;
-      const touch = attachedSpikes.some(
-        (p) => localNodeWorld(p).distanceTo(new THREE.Vector2(e.position.x, e.position.y)) < 0.72 * state.scale * (p.scale || 1),
-      );
-      if (touch) {
-        e.userData.attackCooldown -= dt;
-        if (e.userData.attackCooldown <= 0) {
-          damageNPC(e, 2);
-          e.userData.attackCooldown = 0.45;
-        }
-      }
-    });
   updateFood(dt, time);
+  updateScenery(dt, time);
+  updatePartOrbs(dt, time);
+  progress.runTime += dt;
+  progress.distanceSwum += velocity.length() * dt;
+  progress.biteCooldown = Math.max(0, progress.biteCooldown - dt);
   updateAI(dt, time);
   updateHazards(dt, time);
   state.visibilityTimer = (state.visibilityTimer || 0) - dt;
   if (state.visibilityTimer <= 0) {
     updateVisibility();
     state.visibilityTimer = 0.35;
+  }
+  state.streamTimer -= dt;
+  if (state.streamTimer <= 0) {
+    // A red glow at the screen edge warns that a hunter your size or bigger is closing in.
+    const danger = enemies.some(
+      (e) => e.userData.alive && e.userData.diet === "meat" && !e.userData.kin && e.userData.size > state.scale * 0.7 && distance2D(e.position, player.position) < 5 + state.scale * 2,
+    );
+    document.body.classList.toggle("dangerNear", danger);
+    maintainWorld();
+    state.streamTimer = 0.3;
   }
   state.meteorTimer -= dt;
   if (state.meteorTimer <= 0) {
@@ -2824,30 +4160,26 @@ function updateGame(dt, time) {
   }
   state.eliteTimer -= dt;
   if (state.eliteTimer <= 0) {
-    const alpha = makeNPC({ size: 1.15 + (state.tier - 1) * 0.12, alpha: true, diet: "meat" });
+    const alpha = makeNPC({ size: stageScale(state.tier) * 1.35, alpha: true, diet: "meat" });
     spawnBurst(alpha.position.x, alpha.position.y, 0xff5a81, 18);
-    state.eliteTimer = 38 + Math.random() * 20;
+    state.eliteTimer = 26 + Math.random() * 14;
   }
-  state.epicTimer -= dt;
+  // Epic cells are rare, and only turn up once you're big enough to be worth chasing.
+  if (!state.courtship && !state.mateSignal) state.epicTimer -= dt;
   if (state.epicTimer <= 0) {
-    spawnEpic();
-    state.epicTimer = 95 + Math.random() * 45;
+    if (state.tier >= 2) spawnEpic();
+    state.epicTimer = EPIC_INTERVAL();
   }
   updateCamera();
   camera.position.x += (player.position.x - camera.position.x) * Math.min(1, dt * 2.5);
   camera.position.y += (player.position.y - camera.position.y) * Math.min(1, dt * 2.5);
-  if (state.shake > 0) {
+  if (state.shake > 0 && !settings.reducedMotion) {
     camera.position.x += Math.sin(time * 53) * state.shake * 0.6;
     camera.position.y += Math.cos(time * 47) * state.shake * 0.45;
   }
   camera.lookAt(camera.position.x, camera.position.y, 0);
-  if (state.mateSignal && state.mate) $("#mateCueText").textContent = "♥ " + Math.ceil(state.mateTimer) + "s";
+  updateMateRings(dt);
   if (state.food >= state.foodGoal && !state.mateSignal) $("#growthBar").classList.add("growthReady");
-  state.radarTimer = (state.radarTimer || 0) - dt;
-  if (state.radarTimer <= 0) {
-    updateRadar();
-    state.radarTimer = 0.25;
-  }
   state.waypointTimer = (state.waypointTimer || 0) - dt;
   if (state.waypointTimer <= 0) {
     updateWaypoint();
@@ -2880,8 +4212,9 @@ function bindUI() {
     renderCatalog();
     $("#paintTool").classList.remove("active");
     $("#buildTool").classList.add("active");
+    // The hammer always shows the parts (it never hides them), so "tap the hammer" can't backfire.
     document.body.classList.remove("show-genome");
-    if (isTouchUI()) toggleMobilePanel("parts");
+    document.body.classList.add("show-parts");
   };
   $("#paintTool").onclick = () => {
     state.paint = !state.paint;
@@ -2909,15 +4242,15 @@ function bindUI() {
   const cancelCellEdit = () => {
     if (editorEntrySnapshot) restoreEditState(editorEntrySnapshot);
     setEditor(false);
-    toast("Cell edits cancelled");
+    if (!state.editor) toast("Cell edits cancelled");
   };
   const acceptCellEdit = () => {
     state.cellName = ($("#cellName").value || "Karlets").trim().slice(0, 22);
     saveGame();
     setEditor(false);
-    toast("Cell edits accepted");
+    if (!state.editor) toast("Cell edits accepted");
   };
-  $("#editorSoupButton").onclick = cancelCellEdit;
+  $("#editorPartsButton").onclick = () => toggleMobilePanel("parts");
   $("#editorCancel").onclick = cancelCellEdit;
   $("#editorAccept").onclick = acceptCellEdit;
   $("#editorUndo").onclick = undoEdit;
@@ -2950,6 +4283,7 @@ function bindUI() {
     playSfx("hatch");
     state.pendingDiet = diet;
     state.mateSignal = false;
+  state.courtship = null;
     state.mate = null;
     state.paused = false;
     state.joystick = { x: 0, y: 0 };
@@ -2957,6 +4291,22 @@ function bindUI() {
     pointerThrust = false;
     state.foodSinceMate = 0;
     state.dietHintAt = 0;
+    state.foodGoal = GROWTH_STAGES[0].foodGoal;
+    Object.assign(progress, {
+      kills: 0,
+      regions: new Set(),
+      deaths: 0,
+      history: [],
+      genStart: { plants: 0, meat: 0, kills: 0, deaths: 0 },
+      editorPass: false,
+      unlockedSinceEditor: 0,
+      distanceSwum: 0,
+      runTime: 0,
+      dietCard: null,
+      cellStageComplete: false,
+      landReady: false,
+      pendingBanner: 0,
+    });
     state.cellName = "Karlets";
     state.baseColor = baseColors[0];
     state.patternColor = patternColors[0];
@@ -2967,7 +4317,7 @@ function bindUI() {
     state.dna = 25;
     state.tier = 1;
     state.food = 0;
-    state.foodGoal = 8;
+    state.foodGoal = GROWTH_STAGES[0].foodGoal;
     cameraZoom = 9;
     cameraZoomTarget = 9;
     state.plants = 0;
@@ -2981,33 +4331,18 @@ function bindUI() {
     state.paintStrokes = [];
     worldSize = 1;
     velocity.set(0, 0);
+    jetVel.set(0, 0);
+    knockVel.set(0, 0);
     angle = 0;
     unlocked.clear();
-    let cfg =
-      diet === "plant"
-        ? [
-            { id: "filter", x: 1.13, y: 0 },
-            { id: "cilia", x: -0.6, y: 0.68, pair: 101 },
-            { id: "cilia", x: -0.6, y: -0.68, pair: 101 },
-            { id: "eye", x: 0.38, y: 0.88, pair: 102 },
-            { id: "eye", x: 0.38, y: -0.88, pair: 102 },
-          ]
-        : diet === "meat"
-          ? [
-              { id: "jaw", x: 1.13, y: 0 },
-              { id: "flagellum", x: -1.2, y: 0 },
-              { id: "eye", x: 0.38, y: 0.88, pair: 102 },
-              { id: "eye", x: 0.38, y: -0.88, pair: 102 },
-            ]
-          : [
-              { id: "proboscis", x: 1.13, y: 0 },
-              { id: "cilia", x: -0.6, y: 0.68, pair: 101 },
-              { id: "cilia", x: -0.6, y: -0.68, pair: 101 },
-              { id: "eye", x: 0.38, y: 0.88, pair: 102 },
-              { id: "eye", x: 0.38, y: -0.88, pair: 102 },
-            ];
-    const ids = [...new Set(cfg.map((p) => p.id))];
-    ids.forEach((id) => unlocked.add(id));
+    // Every run starts the same way: a plain cell with cilia and eyes, and the player picks its mouth.
+    const cfg = [
+      { id: "cilia", x: -0.6, y: 0.68, pair: 101 },
+      { id: "cilia", x: -0.6, y: -0.68, pair: 101 },
+      { id: "eye", x: 0.38, y: 0.88, pair: 102 },
+      { id: "eye", x: 0.38, y: -0.88, pair: 102 },
+    ];
+    STARTER_UNLOCKS.forEach((id) => unlocked.add(id));
     parts = cfg.map((o) => ({
       id: o.id,
       def: defs.find((d) => d.id === o.id),
@@ -3019,8 +4354,9 @@ function bindUI() {
       source: o.pair ? "mirror" : "starter",
       pairId: o.pair || null,
     }));
-    state.selected = cfg[0].id;
-    state.category = "Mouths";
+    state.selected = null;
+    state.category = "All";
+    progress.firstBuild = true;
     spawnWorld();
     spawnMeteor();
     renderCatalog();
@@ -3029,36 +4365,11 @@ function bindUI() {
     $("#intro").style.display = "none";
     state.runStarted = true;
     saveGame(true);
-    toast("Egg hatched · " + (diet === "plant" ? "herbivore" : diet === "meat" ? "carnivore" : "omnivore") + " cell ready");
-    showControlHint(
-      isTouchUI()
-        ? "JOYSTICK to swim and turn · EAT compatible food · TAP MATE when the growth bar fills."
-        : "WASD/arrows or click-hold water to swim · steer with mouse · eat compatible food, then call a mate.",
-    );
-    if (openEditor) setEditor(true);
+    toast("Life begins. Build your first cell.");
+    progress.editorPass = true;
+    setEditor(true);
+    if (isTouchUI()) document.body.classList.add("show-parts");
   }
-  function selectEgg(diet) {
-    state.pendingDiet = diet;
-    [
-      ["eggPlant", "plant"],
-      ["eggCarn", "meat"],
-      ["eggOmni", "omni"],
-    ].forEach(([id, d]) => $("#" + id).classList.toggle("selectedEgg", d === diet));
-    const names = { plant: "Herbivore", meat: "Carnivore", omni: "Omnivore" };
-    $("#begin").textContent = "Hatch " + names[diet] + " egg";
-  }
-  $("#eggPlant").onclick = () => {
-    selectEgg("plant");
-    playSfx("click");
-  };
-  $("#eggCarn").onclick = () => {
-    selectEgg("meat");
-    playSfx("click");
-  };
-  $("#eggOmni").onclick = () => {
-    selectEgg("omni");
-    playSfx("click");
-  };
   let hatchTimer = null,
     hatchEditor = false;
   const startHatch = (diet, openEditor = false) => {
@@ -3068,7 +4379,7 @@ function bindUI() {
     const sceneCard = $("#hatchCinematic");
     sceneCard.dataset.diet = diet;
     $("#hatchEgg").dataset.diet = diet;
-    $("#hatchTitle").textContent = diet === "plant" ? "HERBIVORE AWAKENS" : diet === "meat" ? "CARNIVORE AWAKENS" : "OMNIVORE AWAKENS";
+    $("#hatchTitle").textContent = "LIFE BEGINS";
     sceneCard.style.display = "flex";
     playSfx("meteor");
     if (hatchTimer) clearTimeout(hatchTimer);
@@ -3088,63 +4399,43 @@ function bindUI() {
     chooseEgg(state.pendingDiet || "plant", hatchEditor);
   };
   $("#skipHatch").onclick = skipHatch;
-  $("#begin").onclick = () => startHatch(state.pendingDiet || "plant");
-  $("#introEditor").onclick = () => startHatch(state.pendingDiet || "plant", true);
-  selectEgg("plant");
+  $("#begin").onclick = () => {
+    audio.setAmbient("cell");
+    startHatch("plant");
+  };
   $("#pauseBtn").onclick = pauseGame;
   $("#touchPause").onclick = pauseGame;
   $("#touchMate").onclick = callMate;
-  const stick = $("#moveStick"),
-    knob = $("#moveStickKnob");
-  let stickPointer = null;
-  const updateStick = (e) => {
-    const r = stick.getBoundingClientRect(),
-      dx = e.clientX - (r.left + r.width / 2),
-      dy = e.clientY - (r.top + r.height / 2),
-      max = r.width * 0.31,
-      mag = Math.hypot(dx, dy) || 1,
-      f = Math.min(1, max / mag),
-      sx = dx * f,
-      sy = dy * f;
-    state.joystick.x = THREE.MathUtils.clamp(sx / max, -1, 1);
-    state.joystick.y = THREE.MathUtils.clamp(-sy / max, -1, 1);
-    knob.style.left = "calc(50% + " + sx + "px)";
-    knob.style.top = "calc(50% + " + sy + "px)";
-    state.mouseActive = false;
-    dismissControlHint();
-  };
-  const resetStick = () => {
-    stickPointer = null;
-    state.joystick.x = 0;
-    state.joystick.y = 0;
-    knob.style.left = "50%";
-    knob.style.top = "50%";
-  };
+  $("#touchLand").onclick = promptLand;
+  $("#landBtn").onclick = promptLand;
+  const stick = $("#moveStick");
   stick.addEventListener("pointerdown", (e) => {
     e.preventDefault();
-    stickPointer = e.pointerId;
     stick.setPointerCapture?.(e.pointerId);
-    updateStick(e);
+    const r = stick.getBoundingClientRect();
+    stickStart(e, r.left + r.width / 2, r.top + r.height / 2, false);
   });
-  stick.addEventListener("pointermove", (e) => {
-    if (stickPointer === e.pointerId) updateStick(e);
-  });
-  ["pointerup", "pointercancel", "lostpointercapture"].forEach((ev) => stick.addEventListener(ev, resetStick));
+  stick.addEventListener("pointermove", stickMove);
+  ["pointerup", "pointercancel", "lostpointercapture"].forEach((ev) => stick.addEventListener(ev, stickEnd));
   const boostButton = $("#touchBoost");
   boostButton.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     input[" "] = true;
+    state.jetQueued = true; // a quick tap can start and end between two frames
     dismissControlHint();
-    boostButton.setPointerCapture?.(e.pointerId);
+    try {
+      boostButton.setPointerCapture?.(e.pointerId);
+    } catch (err) {
+      /* the pointer may already be gone after a very quick tap */
+    }
   });
   ["pointerup", "pointercancel", "lostpointercapture"].forEach((ev) => boostButton.addEventListener(ev, () => (input[" "] = false)));
   $("#guideButton").onclick = () =>
     showDialog(
       "FIELD GUIDE",
-      "YOUR GOAL\nEat compatible food until the evolution bar is full. Collect meteor fragments to unlock parts and earn DNA.\n\nMOVEMENT\nWASD / arrows to swim. The mouse steers your cell on desktop. On touch screens, use the on-screen joystick: push up to swim, sideways to turn. Tap Boost if you have a Jet. Space / BOOST uses a Jet part and stamina.\n\nSURVIVAL\nSmall carnivores may hunt you. Avoid poison clouds, follow current rings carefully, and use spikes or electric organs to fight back.\n\nEVOLUTION\nPress M or tap MATE when the bar fills. Find the pink heart, swim into your mate, then edit your cell.",
+      "YOUR GOAL\nEat compatible food until the evolution bar is full. Collect meteor fragments to unlock parts and earn DNA.\n\nMOVEMENT\nWASD / arrows to swim. The mouse steers your cell on desktop. On touch screens, put your thumb anywhere on the water and drag the way you want to swim. Tap Boost if you have a Jet. Space / BOOST uses a Jet part and stamina.\n\nSURVIVAL\nSmall carnivores may hunt you. Avoid poison clouds, follow current rings carefully, and use spikes or electric organs to fight back.\n\nEVOLUTION\nPress M or tap MATE when the bar fills. One of your own species (the teal dots on the radar) answers: swim into them, then edit your cell. The soup goes on forever, and each area has its own resident species.",
       [
         { label: "Got it", primary: true, action: () => {} },
-        { label: "Open cell editor", action: () => setEditor(true) },
       ],
     );
   const zoomBy = (delta) => {
@@ -3153,11 +4444,8 @@ function bindUI() {
   };
   $("#zoomInBtn").onclick = () => zoomBy(-1);
   $("#zoomOutBtn").onclick = () => zoomBy(1);
-  const refreshQualityButton = () => {
-    const q = getQuality();
-    $("#qualityToggle").textContent = q === "low" ? "▢" : q === "medium" ? "◫" : "▣";
-    $("#qualityToggle").title = "Graphics quality: " + q + " (click to change)";
-  };
+  $("#pathToggle").onclick = openPath;
+  $("#settingsToggle").onclick = openGameSettings;
   $("#qualityToggle").onclick = () => {
     const order = Object.keys(QUALITY_PRESETS);
     applyQuality(order[(order.indexOf(getQuality()) + 1) % order.length]);
@@ -3167,6 +4455,7 @@ function bindUI() {
   refreshQualityButton();
   $("#soundToggle").onclick = () => {
     soundEnabled = !soundEnabled;
+    audio.setEnabled(soundEnabled);
     $("#soundToggle").textContent = soundEnabled ? "♫" : "♪";
     $("#soundToggle").title = soundEnabled ? "Sound effects on" : "Sound effects muted";
     toast(soundEnabled ? "Sound effects on" : "Sound effects muted");
@@ -3186,7 +4475,7 @@ function bindUI() {
     }
   };
   $("#callMateBtn").onclick = callMate;
-  $("#openEditorBtn").onclick = () => setEditor(true);
+  $("#openEditorBtn").hidden = true;
   $("#cancelEditor").onclick = () => setEditor(false);
   $("#finishEditor").onclick = () => setEditor(false);
   $("#deletePartBtn").onclick = removeSelectedPart;
@@ -3211,9 +4500,12 @@ function bindUI() {
       return;
     }
     saveUndo();
+    const before = anchorPartsToSpine();
     const n = nodes[nodes.length - 1],
       prev = nodes[nodes.length - 2];
-    nodes.push({ x: n.x + Math.max(0.25, n.x - prev.x), y: n.y + (n.y - prev.y), r: n.r });
+    nodes.push({ x: n.x + Math.min(SPINE.maxGap, Math.max(0.4, n.x - prev.x)), y: 0, r: n.r });
+    nodes = straightenSpine(nodes);
+    carryPartsWithSpine(before);
     state.selectedNode = nodes.length - 1;
     rebuildPlayer();
     toast("Vertebra added.");
@@ -3224,13 +4516,18 @@ function bindUI() {
       return;
     }
     saveUndo();
+    const before = anchorPartsToSpine();
     nodes.splice(state.selectedNode, 1);
+    nodes = straightenSpine(nodes);
+    carryPartsWithSpine(before);
     state.selectedNode = Math.min(state.selectedNode, nodes.length - 1);
     rebuildPlayer();
     toast("Vertebra removed.");
   };
   $("#radiusSlider").oninput = (e) => {
+    const before = anchorPartsToSpine();
     if (nodes[state.selectedNode]) nodes[state.selectedNode].r = +e.target.value;
+    carryPartsWithSpine(before);
     rebuildPlayer();
   };
   $("#lengthSlider").oninput = (e) => {
@@ -3238,7 +4535,9 @@ function bindUI() {
     const mid = (nodes[0].x + nodes[nodes.length - 1].x) / 2;
     const half = (nodes[nodes.length - 1].x - nodes[0].x) / 2;
     const f = want / (Math.abs(half) / 1.415 || 1);
+    const before = anchorPartsToSpine();
     nodes.forEach((n) => (n.x = mid + (n.x - mid) * f));
+    carryPartsWithSpine(before);
     rebuildPlayer();
   };
   $("#sizeSlider").oninput = (e) => {
@@ -3281,6 +4580,32 @@ function bindUI() {
       return false;
     }
   })();
+  if (loadCreatureSave()) {
+    const lb = document.createElement("button");
+    lb.textContent = "Continue on land";
+    lb.className = "primary";
+    lb.onclick = () => {
+      document.body.classList.add("inGameMode");
+      $("#intro").style.display = "none";
+      state.runStarted = true;
+      startCreatureStage(true);
+      playSfx("hatch");
+    };
+    $("#intro .options").prepend(lb);
+    if (loadTribeSave()) {
+      const tb = document.createElement("button");
+      tb.textContent = "Continue your tribe";
+      tb.className = "primary";
+      tb.onclick = () => {
+        document.body.classList.add("inGameMode");
+        $("#intro").style.display = "none";
+        state.runStarted = true;
+        startTribeStage();
+        playSfx("hatch");
+      };
+      $("#intro .options").prepend(tb);
+    }
+  }
   if (resumeExists) {
     const rb = document.createElement("button");
     rb.textContent = "Continue saved cell";
@@ -3297,6 +4622,8 @@ function bindUI() {
         6500,
       );
       toast("Saved cell resumed.");
+      // The page closed while a new generation was still in the editor: pick up there.
+      if (progress.editorPass) setEditor(true);
       playSfx("hatch");
     };
     $("#intro .options").prepend(rb);
@@ -3308,6 +4635,26 @@ function bindUI() {
     if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable))
       return;
     if ($("#intro").style.display !== "none" || $("#hatchCinematic").style.display === "flex") return;
+    if (tribeStage) return; // the tribe stage reads its own keys
+    if (creatureStage) {
+      // The land stage and its editor handle their own keys; movement goes through `input`.
+      if (creatureEditor || pathScreenOpen()) {
+        if (pathScreenOpen() && k === "Escape") $("#pathClose")?.click();
+        return;
+      }
+      input[k] = true;
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(k)) e.preventDefault();
+      return;
+    }
+    if (pathScreenOpen()) {
+      if (k === "Escape" || k === "c") $("#pathClose")?.click();
+      return;
+    }
+    if ($("#finale").classList.contains("show")) return;
+    if (k === "c" && !state.editor) {
+      openPath();
+      return;
+    }
     if ($("#dialogOverlay").style.display === "flex") {
       if (k === "Escape") {
         $("#dialogOverlay").style.display = "none";
@@ -3323,9 +4670,11 @@ function bindUI() {
     }
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(k)) e.preventDefault();
     if (k.toLowerCase() === "m" && !state.editor) callMate();
+    if (k.toLowerCase() === "l" && !state.editor && progress.landReady) promptLand();
+    if (k === " " && !e.repeat) state.jetQueued = true;
     if (k === "Tab") {
       e.preventDefault();
-      setEditor(!state.editor);
+      if (state.editor) setEditor(false);
     }
     if (k === "Escape" && state.editor) {
       if (editorEntrySnapshot) restoreEditState(editorEntrySnapshot);
@@ -3418,10 +4767,21 @@ function saveGame(silent = false) {
     })),
     discoveries: state.discoveries,
     eliteKills: state.eliteKills,
+    progress: {
+      kills: progress.kills,
+      regions: [...progress.regions],
+      deaths: progress.deaths,
+      genStart: progress.genStart,
+      dietCard: progress.dietCard,
+      cellStageComplete: progress.cellStageComplete,
+      landReady: progress.landReady,
+      editorPass: progress.editorPass && state.runStarted && state.tier > 1,
+    },
   };
   try {
     localStorage.setItem("johnny-spore-cell-stage", JSON.stringify(data));
     storeCellRecord(localStorage, currentRecord());
+    markSaved(localStorage);
     if (!silent) toast("Your cell and progress have been saved on this device.");
   } catch (e) {
     if (!silent) toast("Local saving unavailable in this browser.");
@@ -3453,12 +4813,28 @@ function loadGame() {
       stamina: d.stamina ?? 100,
     });
     state.paintStrokes = d.paintStrokes || [];
+    state.tier = Math.min(LAST_TIER, Math.max(1, state.tier));
+    state.foodGoal = stageFor(state.tier).foodGoal;
+    state.scale = Math.max(state.scale, stageScale(state.tier));
+    const pr = d.progress || {};
+    Object.assign(progress, {
+      kills: pr.kills ?? 0,
+      regions: new Set(pr.regions || []),
+      deaths: pr.deaths ?? 0,
+      genStart: pr.genStart || { plants: state.plants, meat: state.meat, kills: pr.kills ?? 0, deaths: pr.deaths ?? 0 },
+      history: loadHistory(),
+      dietCard: pr.dietCard ?? null,
+      cellStageComplete: !!pr.cellStageComplete,
+      landReady: !!pr.landReady || !!pr.cellStageComplete,
+      editorPass: !!pr.editorPass,
+      pendingBanner: pr.editorPass ? state.tier : 0,
+    });
     worldSize = Math.pow(1.4, state.tier - 1);
-    cameraZoom = 9 * Math.pow(1.36, state.tier - 1);
+    cameraZoom = 9 * stageScale(state.tier);
     cameraZoomTarget = cameraZoom;
     unlocked.clear();
-    (d.unlocked || ["filter", "cilia", "eye"]).forEach((id) => unlocked.add(id));
-    if (d.nodes && d.nodes.length >= 2) nodes = d.nodes;
+    (d.unlocked || STARTER_UNLOCKS).forEach((id) => unlocked.add(id));
+    if (d.nodes && d.nodes.length >= 2) nodes = straightenSpine(d.nodes);
     parts = (d.parts || [])
       .map((p) => ({
         id: p.id,
@@ -3534,15 +4910,46 @@ function boot() {
   updateCamera();
 }
 boot();
-if (new URLSearchParams(location.search).has("debug")) {
-  window.__spore = { state, renderer, scene, camera, player, setEditor, rebuildPlayer, callMate, finishMate, get enemies() { return enemies; }, get playerBody() { return playerBody; }, get parts() { return parts; }, get nodes() { return nodes; } };
+
+function adaptResolution(rawDt) {
+  if (rawDt > 0.25) return; // tab was hidden or the page stalled; not a real frame time
+  perf.time += rawDt;
+  perf.frames++;
+  if (perf.time < 2) return;
+  const avg = perf.time / perf.frames;
+  const before = perf.scale;
+  if (avg > 0.024) perf.scale = Math.max(0.6, perf.scale - 0.1);
+  else if (avg < 0.0155) perf.scale = Math.min(1, perf.scale + 0.05);
+  if (perf.scale !== before) renderer.setPixelRatio(basePixelRatio() * perf.scale);
+  perf.time = perf.frames = 0;
 }
 function frame(t) {
   requestAnimationFrame(frame);
+  adaptResolution((t - lastTime) / 1000);
   const dt = Math.min(0.04, Math.max(0.001, (t - lastTime) / 1000));
   lastTime = t;
   gameTime += dt;
   timeUniform.value = gameTime;
+  if (creatureEditor) {
+    creatureEditor.update(dt);
+    creatureEditor.render();
+    return;
+  }
+  if (tribeStage) {
+    tribeStage.update(dt);
+    tribeStage.render();
+    return;
+  }
+  if (creatureStage) {
+    creatureStage.update(dt);
+    creatureStage.render();
+    return;
+  }
+  tipClock -= dt;
+  if (tipClock <= 0) {
+    tipClock = 0.5;
+    tipEngine.tick(0.5, tipContext());
+  }
   if (
     !state.paused &&
     !state.editor &&
@@ -3550,7 +4957,7 @@ function frame(t) {
     $("#hatchCinematic").style.display !== "flex" &&
     $("#dialogOverlay").style.display !== "flex"
   ) {
-    updateGame(dt, gameTime);
+    updateGame(growth ? updateGrowthPullback(dt) : dt, gameTime);
   } else {
     if (state.editor) {
       player.rotation.z = Math.PI;
@@ -3559,23 +4966,251 @@ function frame(t) {
     } else handleGroup.visible = false;
   }
   background.update(gameTime, dt, camera);
-  renderer.render(scene, camera);
+  foodBatch.sync(food);
+  waterFx.render(scene, camera, gameTime, !state.editor);
 }
 requestAnimationFrame(frame);
+
+/* ---- Dynamic tutorials ---- */
+let tipClock = 1;
+const tipEngine = createTipEngine({
+  storage: (() => {
+    try {
+      return localStorage;
+    } catch (e) {
+      return null;
+    }
+  })(),
+  isTouch: () => isTouchUI(),
+  show: (tip, text) => showTip(text, tip.anchor, () => tipEngine.dismiss()),
+  hide: hideTip,
+});
+function tipContext() {
+  const near = (list, r, test = () => true) => list.some((o) => o.visible !== false && test(o) && distance2D(o.position, player.position) < r);
+  const s = stats(),
+    view = viewRadius();
+  const compatibleFood = (f) => f.userData.alive && (s.diet === "omni" || (s.diet === "plant" ? f.userData.type === "plant" : f.userData.type === "meat"));
+  const blocked =
+    $("#intro").style.display !== "none" ||
+    $("#hatchCinematic").style.display === "flex" ||
+    $("#dialogOverlay").style.display === "flex" ||
+    $("#finale").classList.contains("show") ||
+    pathScreenOpen();
+  return {
+    playing: !state.editor && !state.paused && !blocked,
+    editor: state.editor && !blocked,
+    time: state.editor ? gameTime - progress.editorOpenedAt : progress.runTime,
+    distanceSwum: progress.distanceSwum,
+    foodEaten: state.plants + state.meat,
+    diet: s.diet,
+    compatibleFoodNear: near(food, 6, compatibleFood),
+    touchedWrongFood: gameTime - progress.wrongFoodAt < 2,
+    predatorNear: near(enemies, 7, (e) => e.userData.alive && e.userData.diet === "meat" && !e.userData.kin && e.userData.size > state.scale * 0.85),
+    healthPct: state.health / state.maxHealth,
+    mateReady: state.food >= state.foodGoal,
+    mateSignal: state.mateSignal,
+    meteorNear: near(meteors, view, (m) => m.userData.alive),
+    partOrbNear: near(partOrbs, view),
+    shards: state.discoveries,
+    colonyNear: colonies.some((c) => distance2D(c.mesh.position, player.position) < 7),
+    kinNear: near(enemies, 7, (e) => e.userData.alive && e.userData.kin && !e.userData.mate),
+    giantNear: near(enemies, view, (e) => e.userData.alive && e.userData.giant),
+    unlockedSinceEditor: progress.unlockedSinceEditor,
+    generations: progress.history.length,
+    canBite: parts.some((p) => p.id === "jaw" || p.id === "proboscis"),
+    preyNear: near(enemies, 6, (e) => e.userData.alive && !e.userData.kin && e.userData.size < state.scale * 0.9),
+    pathOpened: progress.pathOpened,
+    hasMouth: hasMouth(),
+  };
+}
+
+/* ---- Species history ----------------------------------------------------
+   Like Spore's, the history keeps every generation's design (a snapshot image of the cell) and
+   what that generation did, plus the consequence trait each stage earns. */
+const HISTORY_KEY = "johnny-spore-history";
+function loadHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+  } catch (e) {
+    return [];
+  }
+}
+function storeHistory() {
+  // Snapshots are small images; keep the first design and the most recent ones if it grows long.
+  const list = progress.history.length > 14 ? [progress.history[0], ...progress.history.slice(-13)] : progress.history;
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  } catch (e) {
+    /* storage full or unavailable: history stays for this session */
+  }
+}
+/** Close the previous generation's record and add the design the player just made. */
+function recordGeneration() {
+  const now = { plants: state.plants, meat: state.meat, kills: progress.kills, deaths: progress.deaths };
+  const last = progress.history[progress.history.length - 1];
+  if (last && !last.ended) {
+    Object.assign(last, {
+      ended: true,
+      plants: now.plants - progress.genStart.plants,
+      meat: now.meat - progress.genStart.meat,
+      kills: now.kills - progress.genStart.kills,
+      deaths: now.deaths - progress.genStart.deaths,
+    });
+  }
+  progress.genStart = now;
+  let thumb = "";
+  try {
+    thumb = renderCellSnapshot(renderer, currentRecord(), (record) => buildCellBody(record, { role: "mate", shadow: false }));
+  } catch (err) {
+    console.warn("Snapshot failed", err);
+  }
+  progress.history.push({
+    gen: (last?.gen || 0) + 1,
+    tier: state.tier,
+    stageName: stageFor(state.tier).name,
+    diet: stats().diet,
+    parts: parts.length,
+    thumb,
+    ended: false,
+  });
+  storeHistory();
+}
+function openPath() {
+  if (creatureEditor) return;
+  if (creatureStage) {
+    creatureStage.setPaused(true);
+    const st = creatureStage.stats();
+    openHistoryScreen({
+      name: creatureStage.record.name,
+      tier: state.tier,
+      plants: state.plants,
+      meat: state.meat,
+      card: progress.dietCard,
+      creature: { brain: st.brain, alliances: st.alliances, extinctions: st.extinctions, deaths: st.deaths, dna: st.dna, card: st.card },
+      library: creatureStage.library(),
+      history: progress.history,
+      stats: progressStats(),
+      onClose: () => creatureStage?.setPaused(false),
+    });
+    return;
+  }
+  if (state.editor) return;
+  const wasPaused = state.paused;
+  state.paused = true;
+  progress.pathOpened = true;
+  hideTip();
+  openHistoryScreen({
+    name: state.cellName || "Karlets",
+    tier: state.tier,
+    plants: state.plants,
+    meat: state.meat,
+    card: progress.cellStageComplete ? progress.dietCard : null,
+    history: progress.history,
+    stats: progressStats(),
+    onClose: () => (state.paused = wasPaused),
+  });
+}
 function applyQuality(name) {
   setQuality(name);
   try {
     localStorage.setItem(QUALITY_KEY, getQuality());
   } catch (e) {}
-  renderer.setPixelRatio(Math.min(devicePixelRatio, QUALITY_PRESETS[getQuality()].pixelRatio));
+  renderer.setPixelRatio(basePixelRatio() * perf.scale);
   renderer.setSize(innerWidth, innerHeight);
   background.setQuality(getQuality());
+  waterFx.setQuality(getQuality());
   spawnWorld();
   rebuildPlayer();
 }
 window.addEventListener("resize", () => {
+  creatureStage?.resize();
+  tribeStage?.resize();
+  creatureEditor?.resize();
   renderer.setSize(innerWidth, innerHeight);
-  renderer.setPixelRatio(Math.min(devicePixelRatio, QUALITY_PRESETS[getQuality()].pixelRatio));
+  renderer.setPixelRatio(basePixelRatio() * perf.scale);
   if (state.editor) configureEditorViewport();
   else updateCamera();
 });
+if (new URLSearchParams(location.search).has("debug")) {
+  window.__spore = {
+    state,
+    renderer,
+    scene,
+    camera,
+    player,
+    setEditor,
+    rebuildPlayer,
+    callMate,
+    finishMate,
+    get enemies() {
+      return enemies;
+    },
+    get playerBody() {
+      return playerBody;
+    },
+    get parts() {
+      return parts;
+    },
+    get nodes() {
+      return nodes;
+    },
+    get catalogDrag() {
+      return catalogDrag;
+    },
+    get previewParts() {
+      return previewParts;
+    },
+    get food() {
+      return food;
+    },
+    get debris() {
+      return debris;
+    },
+    get colonies() {
+      return colonies;
+    },
+    get angle() {
+      return angle;
+    },
+    get velocity() {
+      return velocity;
+    },
+    spawnWorld,
+    progress,
+    unlocked,
+    unlockPart,
+    addPart,
+    hurt,
+    burst: (n) => {
+      for (let i = 0; i < n; i++) spawnBurst(player.position.x, player.position.y, 0xffcc88, 20);
+    },
+    killNPC,
+    completeCellStage,
+    startCreatureStage,
+    stopCreatureStage,
+    openPath,
+    spawnEpic,
+    openGameSettings,
+    startTribeStage,
+    get tribeStage() {
+      return tribeStage;
+    },
+    startGrowthPullback,
+    get growth() {
+      return growth;
+    },
+    get epics() {
+      return epics;
+    },
+    tipEngine,
+    get creatureStage() {
+      return creatureStage;
+    },
+    get creatureEditor() {
+      return creatureEditor;
+    },
+    get partOrbs() {
+      return partOrbs;
+    },
+  };
+}

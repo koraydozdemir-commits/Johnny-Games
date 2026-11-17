@@ -46,6 +46,8 @@ export function mergePieces(pieces) {
     const tip = piece.colorTip !== undefined ? new THREE.Color(piece.colorTip) : null;
     for (let k = 0; k < count; k++) {
       p.fromBufferAttribute(pos, k);
+      // Optional per-vertex pattern, evaluated in the piece's own space (ribs, stripes, growth lines).
+      const patterned = piece.colorAt ? piece.colorAt(p.x, p.y, p.z, k) : null;
       if (m) p.applyMatrix4(m);
       position.set([p.x, p.y, p.z], (v + k) * 3);
       if (nor) {
@@ -55,7 +57,8 @@ export function mergePieces(pieces) {
       }
       const s = own ? own.getX(k) : piece.sway ?? 0;
       sway[v + k] = s;
-      if (tip && own) {
+      if (patterned) color.set([patterned.r, patterned.g, patterned.b], (v + k) * 3);
+      else if (tip && own) {
         const t = Math.min(1, Math.abs(own.getX(k)) / (piece.swayMax || 1));
         tmpColor.copy(base).lerp(tip, t);
         color.set([tmpColor.r, tmpColor.g, tmpColor.b], (v + k) * 3);
