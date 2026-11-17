@@ -1,6 +1,6 @@
 'use strict';
-var CACHE='johnny-games-shell-v12';
-var CORE=['./','./index.html','./play.html','./analytics.html','./games.json','./manifest.webmanifest','./images/Banner.png','./images/Wallpaper.jpg'];
+var CACHE='johnny-games-shell-v13';
+var CORE=['./','./index.html','./play.html','./chess.html','./analytics.html','./games.json','./manifest.webmanifest','./images/Banner.png','./images/Wallpaper.jpg'];
 var MAX_CACHE_BYTES=2*1024*1024;
 function cacheable(request,response,url){
  if(!response||!response.ok||response.type!=='basic'||request.method!=='GET')return false;
