@@ -705,9 +705,9 @@ var $=function(id){return document.getElementById(id)};
 var S={games:[],q:'',tab:'all',sort:'az',favs:store.get('jg_favs',[]),recent:store.get('jg_recent',[])};
 
 function norm(e){
- var ext=!!e.url;
+ var ext=!!e.url&&/^https?:\\/\\//i.test(e.url);
  var game=e.game||e.name;
- return {name:e.name,href:ext?e.url:'play.html?g='+encodeURIComponent(game),ext:ext,
+ return {name:e.name,href:e.url||'play.html?g='+encodeURIComponent(game),ext:ext,
   thumbs:e.thumb?[e.thumb]:EXT.map(function(x){return 'thumbnails/'+(e.image||game)+'.'+x})};
 }
 function toggleFav(n){
