@@ -64,7 +64,8 @@
   },
   {
     "name": "Johnny Chess",
-    "url": "chess.html"
+    "url": "chess.html",
+    "image": "Chess"
   },
   {
     "name": "Johnny Obby"
