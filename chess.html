@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090b14">
+<title>Johnny Chess · Johnny Games</title>
+<style>
+:root{color-scheme:dark;--bg:#090b14;--panel:#121625;--panel2:#181e30;--line:#ffffff19;--text:#f7f7fb;--muted:#a8adbf;--purple:#987cff;--gold:#f3c969;--light:#f0d9b5;--dark:#b58863}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% -20%,#30265b 0,transparent 45%),var(--bg);color:var(--text);font:15px/1.45 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+button,input{font:inherit}button{cursor:pointer;color:inherit}
+.top{height:62px;display:flex;align-items:center;gap:14px;padding:0 clamp(14px,4vw,42px);border-bottom:1px solid var(--line);background:#090b14c9;backdrop-filter:blur(16px)}
+.top a{color:#e9e4ff;text-decoration:none;font-weight:750}.brand{font-weight:950;letter-spacing:.14em}.brand span{color:var(--purple)}
+main{width:min(1180px,100%);margin:0 auto;padding:26px clamp(12px,3vw,28px) 48px}
+.hero{display:flex;align-items:end;justify-content:space-between;gap:16px;margin:0 0 20px}.eyebrow{color:#b9a9ff;font-size:10px;font-weight:900;letter-spacing:.24em;text-transform:uppercase}
+h1{margin:4px 0 2px;font-size:clamp(30px,5vw,48px);line-height:1;letter-spacing:-.055em}.sub{margin:8px 0 0;color:var(--muted);font-size:13px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+.panel{border:1px solid var(--line);border-radius:18px;background:linear-gradient(155deg,#171c2cF2,#101522F2);box-shadow:0 18px 50px #0005}
+.board-panel{padding:clamp(10px,2vw,20px)}
+.board-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.turn{font-size:13px;font-weight:850}.turn small{display:block;color:var(--muted);font-size:11px;font-weight:500}
+.pill{padding:6px 10px;border:1px solid #a78bfa55;border-radius:999px;background:#9b7cff18;color:#d9ceff;font-size:10px;font-weight:850;letter-spacing:.08em}
+.board{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));width:100%;aspect-ratio:1;border:4px solid #26283a;border-radius:9px;overflow:hidden;touch-action:manipulation;user-select:none}
+.square{position:relative;display:grid;place-items:center;min-width:0;aspect-ratio:1;border:0;padding:0;color:#161616;font-family:"Segoe UI Symbol","DejaVu Sans",serif;font-size:clamp(22px,5.4vw,58px);line-height:1}
+.square.light{background:var(--light)}.square.dark{background:var(--dark)}
+.square.selected{box-shadow:inset 0 0 0 4px #f5d65f}
+.square.last:after{content:"";position:absolute;inset:0;background:#facc1555;pointer-events:none}
+.square.target:before{content:"";position:absolute;width:24%;height:24%;border-radius:50%;background:#246b42a8;z-index:1}
+.square.target.capture:before{width:84%;height:84%;background:transparent;border:5px solid #246b42a8}
+.piece{position:relative;z-index:2;filter:drop-shadow(0 1px 1px #0007);pointer-events:none}
+.white-piece{color:#fffdf4;text-shadow:0 1px 2px #282828,1px 0 1px #282828,-1px 0 1px #282828}
+.black-piece{color:#171717;text-shadow:0 1px 1px #f5e9d7}
+.coords{position:absolute;left:3px;top:2px;font:700 9px/1 Arial;color:#28231e;opacity:.7}
+.square.dark .coords{color:#fff1d7}
+.board-footer{display:flex;justify-content:space-between;gap:10px;margin-top:10px;color:var(--muted);font-size:10px}
+.side{display:flex;flex-direction:column;gap:14px}
+.side .panel{padding:17px}
+h2{margin:0 0 10px;font-size:15px;letter-spacing:-.02em}
+label{display:block;margin:10px 0 5px;color:#c6c8d4;font-size:11px;font-weight:750}
+input{width:100%;height:42px;padding:0 12px;border:1px solid #ffffff25;border-radius:10px;background:#0b0f1a;color:#fff;outline:none}
+input:focus{border-color:#a78bfa}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.btn{min-height:40px;padding:0 13px;border:1px solid #ffffff24;border-radius:10px;background:#ffffff0c;font-size:12px;font-weight:800}
+.btn.primary{border-color:#a995ff;background:linear-gradient(135deg,#9477f5,#6449d1);box-shadow:0 7px 20px #7859db3d}
+.btn:disabled{opacity:.42;cursor:not-allowed}
+.btn:hover:not(:disabled){filter:brightness(1.12);transform:translateY(-1px)}
+.btn.small{min-height:32px;padding:0 10px;font-size:10px}
+#message{min-height:36px;margin:12px 0 0;color:#c5c7d4;font-size:11px;line-height:1.45}
+#message.error{color:#ff9aab}#message.success{color:#8ee2b0}
+.room-code{display:flex;align-items:center;gap:8px;margin-top:10px;padding:10px;border:1px dashed #9c83ff66;border-radius:11px;background:#9c83ff10}
+.room-code strong{flex:1;font:900 21px/1 ui-monospace,monospace;letter-spacing:.18em;color:#e4dcff}
+.moves{max-height:190px;overflow:auto;color:#d7d8e2;font:12px/1.8 ui-monospace,monospace}
+.moves span{display:inline-block;min-width:50%;padding-right:5px}
+.moves .latest{color:#f4d98a}
+.hint{color:var(--muted);font-size:11px;line-height:1.5}
+.hidden{display:none!important}
+.promotion{position:fixed;inset:0;z-index:10;display:grid;place-items:center;padding:18px;background:#050711d9}
+.promotion-card{width:min(340px,100%);padding:18px;border:1px solid #ffffff2a;border-radius:16px;background:#171c2c;box-shadow:0 20px 80px #000b}
+.promotion-options{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.promotion-options button{height:66px;border:1px solid #ffffff24;border-radius:10px;background:#ffffff0b;font-size:40px}
+@media(max-width:800px){main{padding-top:18px}.layout{grid-template-columns:1fr}.side{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.side .panel:first-child{grid-column:1/-1}}
+@media(max-width:480px){.hero{align-items:start;flex-direction:column}.side{grid-template-columns:1fr}.side .panel:first-child{grid-column:auto}.square{font-size:clamp(25px,10vw,48px)}.board-panel{padding:8px}.board{border-width:3px}.board-head{margin-bottom:8px}}
+</style>
+</head>
+<body>
+<header class="top"><a href="index.html">← Home</a><div class="brand">JOHNNY <span>CHESS</span></div></header>
+<main>
+ <div class="hero"><div><div class="eyebrow">Johnny Games · Multiplayer</div><h1>Johnny Chess</h1><p class="sub">Challenge a friend. No account or download needed.</p></div><div class="pill" id="connection">ONLINE READY</div></div>
+ <div class="layout">
+  <section class="panel board-panel">
+   <div class="board-head"><div class="turn" id="turn">Create a room or join a friend<small>White pieces start at the bottom</small></div><div class="pill" id="game-state">WAITING</div></div>
+   <div class="board" id="board" aria-label="Chess board"></div>
+   <div class="board-footer"><span id="player-label">Not in a game</span><span>Tap a piece, then a highlighted square</span></div>
+  </section>
+  <aside class="side">
+   <section class="panel">
+    <h2>Play online</h2>
+    <label for="player-name">Your name</label><input id="player-name" maxlength="18" placeholder="Player name" autocomplete="nickname">
+    <div class="actions"><button class="btn primary" id="create">Create room</button></div>
+    <label for="room-input">Join with a room code</label><input id="room-input" maxlength="8" placeholder="8-character code" autocapitalize="characters" autocomplete="off">
+    <div class="actions"><button class="btn" id="join">Join room</button></div>
+    <div id="room-share" class="room-code hidden"><strong id="room-code"></strong><button class="btn small" id="copy">COPY</button></div>
+    <p id="message" role="status" aria-live="polite">Create a room and send the code to your opponent.</p>
+   </section>
+   <section class="panel">
+    <h2>Game controls</h2>
+    <div class="actions"><button class="btn" id="resign" disabled>Resign</button><button class="btn" id="leave" disabled>Leave game</button></div>
+    <p class="hint">Full chess rules are enforced, including castling, en passant, promotion, check and checkmate. The server checks every move before it is saved.</p>
+   </section>
+   <section class="panel">
+    <h2>Move history</h2><div class="moves" id="moves">Moves will appear here.</div>
+   </section>
+  </aside>
+ </div>
+</main>
+<div id="promotion" class="promotion hidden" role="dialog" aria-modal="true" aria-label="Choose promotion piece"><div class="promotion-card"><h2>Promote your pawn</h2><div class="promotion-options" id="promotion-options"></div><div class="actions"><button class="btn" id="cancel-promotion">Cancel</button></div></div></div>
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { Chess } from "https://esm.sh/chess.js@1.4.0";
+const SUPABASE_URL="https://wnxauvllhjklhpjksvuz.supabase.co";
+const SUPABASE_KEY="sb_publishable_kTrhj6QAHhLLrdva03Neuw_21MKNymV";
+const API=SUPABASE_URL+"/functions/v1/chess-room";
+const supabase=createClient(SUPABASE_URL,SUPABASE_KEY);
+const $=id=>document.getElementById(id);
+const glyph={wk:"♔",wq:"♕",wr:"♖",wb:"♗",wn:"♘",wp:"♙",bk:"♚",bq:"♛",br:"♜",bb:"♝",bn:"♞",bp:"♟︎"};
+const game=new Chess();
+let room=null,token="",color="",channel=null,pollTimer=null,selected=null,legalTargets=[],lastMove=null,pendingPromotion=null,busy=false;
+const savedName=localStorage.getItem("jg_chess_name")||localStorage.getItem("jg_name")||"";
+$("player-name").value=savedName;
+function say(text,type=""){const el=$("message");el.textContent=text;el.className=type}
+function playerName(){const n=$("player-name").value.trim().replace(/[<>\u0000-\u001f]/g,"").slice(0,18)||"Player";$("player-name").value=n;localStorage.setItem("jg_chess_name",n);return n}
+async function request(path,body){
+ const opts=body?{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY},body:JSON.stringify(body)}:{headers:{"apikey":SUPABASE_KEY}};
+ const r=await fetch(API+path,opts);const data=await r.json().catch(()=>({error:"The chess server returned an unreadable response."}));
+ if(!r.ok){if(data.room)applyRoom(data.room);throw new Error(data.error||"Chess request failed.");}return data;
+}
+function applyRoom(data){
+ room=data;game.load(data.fen);lastMove=null;const hist=game.history({verbose:true});if(hist.length){const m=hist[hist.length-1];lastMove={from:m.from,to:m.to}}
+ selected=null;legalTargets=[];render();
+ const yourTurn=(game.turn()==="w"&&color==="white")||(game.turn()==="b"&&color==="black");
+ $("turn").innerHTML=data.status==="waiting"?"Waiting for an opponent<small>Share the room code to start</small>":data.status==="finished"?(data.result||"Game finished"):""+(yourTurn?"Your move":"Opponent's move")+"<small>"+data.white_name+" (White) vs "+(data.black_name||"Waiting…")+" (Black)</small>";
+ $("game-state").textContent=data.status.toUpperCase();
+ $("player-label").textContent=color?("You are playing "+color):"Spectating";
+ $("resign").disabled=!token||data.status!=="playing";$("leave").disabled=!token;
+ $("room-share").classList.remove("hidden");$("room-code").textContent=data.code;
+ $("moves").innerHTML="";
+ const histText=game.history();if(!histText.length)$("moves").textContent="No moves yet.";
+ for(let i=0;i<histText.length;i+=2){const line=document.createElement("div");const num=document.createElement("span");num.textContent=(Math.floor(i/2)+1)+". ";const w=document.createElement("span");w.textContent=histText[i]||"";if(i===histText.length-1)w.className="latest";const b=document.createElement("span");b.textContent=histText[i+1]||"";if(i+1===histText.length-1)b.className="latest";line.append(num,w,b);$("moves").append(line)}
+ $("moves").scrollTop=$("moves").scrollHeight;
+}
+function render(){
+ const board=$("board");board.innerHTML="";const files="abcdefgh";
+ for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+  const square=files[c]+(8-r),piece=game.get(square),el=document.createElement("button");
+  el.type="button";el.className="square "+((r+c)%2===0?"light":"dark");el.dataset.square=square;
+  if(selected===square)el.classList.add("selected");
+  if(lastMove&&(lastMove.from===square||lastMove.to===square))el.classList.add("last");
+  const target=legalTargets.find(m=>m.to===square);if(target){el.classList.add("target");if(piece)el.classList.add("capture")}
+  if(c===0){const coord=document.createElement("span");coord.className="coords";coord.textContent=8-r;el.append(coord)}
+  if(r===7){const coord=document.createElement("span");coord.className="coords";coord.style.left="auto";coord.style.top="auto";coord.style.right="3px";coord.style.bottom="2px";coord.textContent=files[c];el.append(coord)}
+  if(piece){const span=document.createElement("span");span.className="piece "+(piece.color==="w"?"white-piece":"black-piece");span.textContent=glyph[piece.color+piece.type];el.append(span)}
+  el.setAttribute("aria-label",square+(piece?", "+(piece.color==="w"?"white ":"black ")+piece.type:""));el.addEventListener("click",()=>tapSquare(square));board.append(el);
+ }
+}
+function tapSquare(square){
+ if(!room||room.status!=="playing"||!token||busy||pendingPromotion)return;
+ const turn=game.turn()==="w"?"white":"black";if(turn!==color){say("Wait for your opponent to move.");return}
+ const piece=game.get(square);
+ if(selected){
+  const options=legalTargets.filter(m=>m.to===square);
+  if(options.length){if(options.some(m=>m.promotion)){showPromotion(options);return}sendMove(selected,square);return}
+ }
+ if(piece&&piece.color===(color==="white"?"w":"b")){
+  selected=selected===square?null:square;legalTargets=selected?game.moves({square:selected,verbose:true}):[];render();return;
+ }
+ selected=null;legalTargets=[];render();
+}
+function showPromotion(options){
+ pendingPromotion={from:selected,to:options[0].to};const side=color==="white"?"w":"b";
+ const choices=["q","r","b","n"];const wrap=$("promotion-options");wrap.innerHTML="";
+ choices.forEach(p=>{const b=document.createElement("button");b.type="button";b.textContent=glyph[side+p];b.setAttribute("aria-label",({q:"Queen",r:"Rook",b:"Bishop",n:"Knight"})[p]);b.onclick=()=>{const move=pendingPromotion;pendingPromotion=null;$("promotion").classList.add("hidden");sendMove(move.from,move.to,p)};wrap.append(b)});
+ $("promotion").classList.remove("hidden");
+}
+$("cancel-promotion").onclick=()=>{$("promotion").classList.add("hidden");pendingPromotion=null};
+async function sendMove(from,to,promotion="q"){
+ if(busy)return;busy=true;selected=null;legalTargets=[];render();say("Sending move…");
+ try{const result=await request("",{action:"move",code:room.code,player_token:token,version:room.version,from,to,promotion});applyRoom(result.room);say("Move played.","success")}
+ catch(e){say(e.message,"error");if(room)await refresh()}
+ finally{busy=false}
+}
+async function refresh(){if(!room)return;try{const d=await request("?code="+encodeURIComponent(room.code));if(!room||d.room.version>=room.version)applyRoom(d.room)}catch(e){say(e.message,"error")}}
+async function enterRoom(result){
+ room=result.room;token=result.player_token;color=result.color;
+ localStorage.setItem("jg_chess_token_"+room.code,token);localStorage.setItem("jg_chess_color_"+room.code,color);
+ applyRoom(room);$("connection").textContent="CONNECTED";say(color==="white"?"Room created. Share the code with your opponent.":"You joined the game. White moves first.","success");
+ if(channel)await supabase.removeChannel(channel);
+ channel=supabase.channel("chess:"+room.code).on("broadcast",{event:"game_updated"},()=>refresh()).subscribe(status=>{if(status==="SUBSCRIBED")$("connection").textContent="LIVE";else if(status==="CHANNEL_ERROR"||status==="TIMED_OUT")$("connection").textContent="RECONNECTING"});
+ clearInterval(pollTimer);pollTimer=setInterval(refresh,4000);
+}
+$("create").onclick=async()=>{if(busy)return;busy=true;$("create").disabled=true;say("Creating your room…");try{await enterRoom(await request("",{action:"create",name:playerName()}))}catch(e){say(e.message,"error")}finally{busy=false;$("create").disabled=false}};
+$("join").onclick=async()=>{if(busy)return;const code=$("room-input").value.trim().toUpperCase();if(!/^[A-Z2-9]{8}$/.test(code)){say("Enter the full 8-character room code.","error");return}busy=true;$("join").disabled=true;say("Joining room…");try{await enterRoom(await request("",{action:"join",code,name:playerName()}))}catch(e){say(e.message,"error")}finally{busy=false;$("join").disabled=false}};
+$("copy").onclick=async()=>{const code=room?.code;if(!code)return;try{await navigator.clipboard.writeText(code);say("Room code copied. Send it to your opponent.","success")}catch(e){$("room-input").value=code;say("Copy unavailable here — select the room code above.","error")}};
+$("resign").onclick=async()=>{if(!room||!token||busy||!confirm("Resign this game?"))return;busy=true;try{const d=await request("",{action:"resign",code:room.code,player_token:token});applyRoom(d.room);say(d.room.result,"success")}catch(e){say(e.message,"error")}finally{busy=false}};
+$("leave").onclick=async()=>{if(channel)await supabase.removeChannel(channel);channel=null;clearInterval(pollTimer);pollTimer=null;room=null;token="";color="";game.reset();selected=null;legalTargets=[];lastMove=null;$("room-share").classList.add("hidden");$("turn").innerHTML="Create a room or join a friend<small>White pieces start at the bottom</small>";$("game-state").textContent="WAITING";$("player-label").textContent="Not in a game";$("resign").disabled=true;$("leave").disabled=true;$("moves").textContent="Moves will appear here.";$("connection").textContent="ONLINE READY";render();say("You left the room.")};
+$("room-input").addEventListener("input",e=>{e.target.value=e.target.value.toUpperCase().replace(/[^A-Z2-9]/g,"").slice(0,8)});
+window.addEventListener("beforeunload",()=>{if(channel)supabase.removeChannel(channel);clearInterval(pollTimer)});
+render();
+</script>
+</body>
+</html>
