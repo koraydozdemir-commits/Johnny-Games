@@ -731,7 +731,7 @@ function card(g){
  f.onclick=function(e){e.preventDefault();e.stopPropagation();toggleFav(g.name)};
  d.appendChild(f);return d;
 }
-function fill(el,list){el.innerHTML='';list.forEach(function(g){el.appendChild(card(g))})}
+function fill(el,list){var fragment=document.createDocumentFragment();list.forEach(function(g){fragment.appendChild(card(g))});el.replaceChildren(fragment)}
 function render(){
  var q=S.q.trim().toLowerCase();
  var list=S.games.filter(function(g){
@@ -759,8 +759,27 @@ document.querySelectorAll('.tab').forEach(function(b){
  });
 });
 window.addEventListener('pageshow',function(){S.recent=store.get('jg_recent',[]);S.favs=store.get('jg_favs',[]);if(S.games.length)render()});
-fetch('games.json').then(function(r){return r.json()}).then(function(d){S.games=d.map(norm);render()})
- .catch(function(){$('grid').innerHTML='<p class="empty">Could not load games.json.</p>'});
+function loadGames(){
+ var grid=$('grid');
+ grid.replaceChildren(Object.assign(document.createElement('p'),{className:'empty',textContent:'Loading games…'}));
+ var controller=typeof AbortController!=='undefined'?new AbortController():null;
+ var timeout=setTimeout(function(){if(controller)controller.abort()},12000);
+ fetch('games.json?refresh='+Date.now(),{cache:'no-store',signal:controller?controller.signal:undefined})
+  .then(function(response){if(!response.ok)throw new Error('Library request failed (HTTP '+response.status+').');return response.json()})
+  .then(function(data){
+   if(!Array.isArray(data))throw new Error('The game library has an invalid format.');
+   var valid=data.filter(function(item){return item&&typeof item.name==='string'&&item.name.trim()});
+   if(!valid.length)throw new Error('The game library is currently empty.');
+   S.games=valid.map(norm);render();window.dispatchEvent(new Event('jg-library-updated'));
+  })
+  .catch(function(error){
+   var message=error&&error.name==='AbortError'?'The game library took too long to respond.':(error&&error.message)||'Could not load the game library.';
+   var note=document.createElement('div');note.className='empty';note.textContent=message+' ';
+   var retry=document.createElement('button');retry.type='button';retry.className='btn primary';retry.textContent='Try again';retry.addEventListener('click',loadGames);note.appendChild(retry);grid.replaceChildren(note);
+  })
+  .finally(function(){clearTimeout(timeout)});
+}
+loadGames();
 document.getElementById('rnd').addEventListener('click',function(){
  var g=S.games.filter(function(x){return!x.ext});if(g.length){var pick=g[Math.random()*g.length|0];if(pick.ext&&window.trackPlay)window.trackPlay(pick.name);location.href=pick.href}});
 // ---- Johnny Lounge chat ----
