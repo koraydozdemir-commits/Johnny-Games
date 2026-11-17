@@ -277,15 +277,15 @@ async function enterRoom(result){
  watchRoom();
 }
 $("create").onclick=async()=>{if(busy)return;busy=true;$("create").disabled=true;say("Creating your room…");try{await enterRoom(await request("",{action:"create",name:playerName()}))}catch(e){say(e.message,"error")}finally{busy=false;$("create").disabled=false}};
-$("join").onclick=async()=>{if(busy)return;const code=$("room-input").value.trim().toUpperCase();if(!/^[A-Z2-9]{4}$/.test(code)){say("Enter the 4-letter room code.","error");return}busy=true;$("join").disabled=true;say("Joining room…");try{await enterRoom(await request("",{action:"join",code,name:playerName()}))}catch(e){say(e.message,"error")}finally{busy=false;$("join").disabled=false}};
+$("join").onclick=async()=>{if(busy)return;const code=$("room-input").value.trim().toUpperCase();if(!/^[A-Z]{4}$/.test(code)){say("Enter the 4-letter room code.","error");return}busy=true;$("join").disabled=true;say("Joining room…");try{await enterRoom(await request("",{action:"join",code,name:playerName()}))}catch(e){say(e.message,"error")}finally{busy=false;$("join").disabled=false}};
 $("copy").onclick=async()=>{const code=room?.code;if(!code)return;const invite=location.origin+location.pathname+"?room="+code;try{await navigator.clipboard.writeText(invite);say("Invite link copied. Send it to your opponent.","success")}catch(e){$("room-input").value=code;say("Copy unavailable here — select the room code above.","error")}};
 $("resign").onclick=async()=>{if(!room||!token||busy||!confirm("Resign this game?"))return;busy=true;try{const d=await request("",{action:"resign",code:room.code,player_token:token});applyRoom(d.room);say(d.room.result,"success")}catch(e){say(e.message,"error")}finally{busy=false}};
 $("leave").onclick=async()=>{if(channel)await supabase.removeChannel(channel);channel=null;clearInterval(pollTimer);pollTimer=null;room=null;token="";color="";game.reset();selected=null;legalTargets=[];lastMove=null;$("room-share").classList.add("hidden");$("turn").innerHTML="Create a room or join a friend<small>White pieces start at the bottom</small>";$("game-state").textContent="WAITING";$("player-label").textContent="Not in a game";$("resign").disabled=true;$("leave").disabled=true;$("moves").textContent="Moves will appear here.";$("connection").textContent="ONLINE READY";render();say("You left the room.")};
-$("room-input").addEventListener("input",e=>{e.target.value=e.target.value.toUpperCase().replace(/[^A-Z2-9]/g,"").slice(0,4)});
+$("room-input").addEventListener("input",e=>{e.target.value=e.target.value.toUpperCase().replace(/[^A-Z]/g,"").slice(0,4)});
 window.addEventListener("beforeunload",()=>{if(channel)supabase.removeChannel(channel);clearInterval(pollTimer)});
 render();
 const invitedCode=new URLSearchParams(location.search).get("room");
-if(invitedCode&&/^[A-Z2-9]{4}$/i.test(invitedCode))$("room-input").value=invitedCode.toUpperCase();
+if(invitedCode&&/^[A-Z]{4}$/i.test(invitedCode))$("room-input").value=invitedCode.toUpperCase();
 (async function resumeRoom(){
  const code=(invitedCode||localStorage.getItem("jg_chess_last_room")||"").toUpperCase();
  const savedToken=localStorage.getItem("jg_chess_token_"+code),savedColor=localStorage.getItem("jg_chess_color_"+code);
