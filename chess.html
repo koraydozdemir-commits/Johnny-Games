@@ -168,22 +168,33 @@ async function sendMove(from,to,promotion="q"){
  finally{busy=false}
 }
 async function refresh(){if(!room)return;try{const d=await request("?code="+encodeURIComponent(room.code));if(!room||d.room.version>=room.version)applyRoom(d.room)}catch(e){say(e.message,"error")}}
-async function enterRoom(result){
- room=result.room;token=result.player_token;color=result.color;
- localStorage.setItem("jg_chess_token_"+room.code,token);localStorage.setItem("jg_chess_color_"+room.code,color);
- applyRoom(room);$("connection").textContent="CONNECTED";say(color==="white"?"Room created. Share the code with your opponent.":"You joined the game. White moves first.","success");
- if(channel)await supabase.removeChannel(channel);
+function watchRoom(){
+ if(channel)supabase.removeChannel(channel);
  channel=supabase.channel("chess:"+room.code).on("broadcast",{event:"game_updated"},()=>refresh()).subscribe(status=>{if(status==="SUBSCRIBED")$("connection").textContent="LIVE";else if(status==="CHANNEL_ERROR"||status==="TIMED_OUT")$("connection").textContent="RECONNECTING"});
  clearInterval(pollTimer);pollTimer=setInterval(refresh,4000);
 }
+async function enterRoom(result){
+ room=result.room;token=result.player_token;color=result.color;
+ localStorage.setItem("jg_chess_token_"+room.code,token);localStorage.setItem("jg_chess_color_"+room.code,color);localStorage.setItem("jg_chess_last_room",room.code);
+ applyRoom(room);$("connection").textContent="CONNECTED";say(color==="white"?"Room created. Share the code with your opponent.":"You joined the game. White moves first.","success");
+ watchRoom();
+}
 $("create").onclick=async()=>{if(busy)return;busy=true;$("create").disabled=true;say("Creating your room…");try{await enterRoom(await request("",{action:"create",name:playerName()}))}catch(e){say(e.message,"error")}finally{busy=false;$("create").disabled=false}};
 $("join").onclick=async()=>{if(busy)return;const code=$("room-input").value.trim().toUpperCase();if(!/^[A-Z2-9]{8}$/.test(code)){say("Enter the full 8-character room code.","error");return}busy=true;$("join").disabled=true;say("Joining room…");try{await enterRoom(await request("",{action:"join",code,name:playerName()}))}catch(e){say(e.message,"error")}finally{busy=false;$("join").disabled=false}};
-$("copy").onclick=async()=>{const code=room?.code;if(!code)return;try{await navigator.clipboard.writeText(code);say("Room code copied. Send it to your opponent.","success")}catch(e){$("room-input").value=code;say("Copy unavailable here — select the room code above.","error")}};
+$("copy").onclick=async()=>{const code=room?.code;if(!code)return;const invite=location.origin+location.pathname+"?room="+code;try{await navigator.clipboard.writeText(invite);say("Invite link copied. Send it to your opponent.","success")}catch(e){$("room-input").value=code;say("Copy unavailable here — select the room code above.","error")}};
 $("resign").onclick=async()=>{if(!room||!token||busy||!confirm("Resign this game?"))return;busy=true;try{const d=await request("",{action:"resign",code:room.code,player_token:token});applyRoom(d.room);say(d.room.result,"success")}catch(e){say(e.message,"error")}finally{busy=false}};
 $("leave").onclick=async()=>{if(channel)await supabase.removeChannel(channel);channel=null;clearInterval(pollTimer);pollTimer=null;room=null;token="";color="";game.reset();selected=null;legalTargets=[];lastMove=null;$("room-share").classList.add("hidden");$("turn").innerHTML="Create a room or join a friend<small>White pieces start at the bottom</small>";$("game-state").textContent="WAITING";$("player-label").textContent="Not in a game";$("resign").disabled=true;$("leave").disabled=true;$("moves").textContent="Moves will appear here.";$("connection").textContent="ONLINE READY";render();say("You left the room.")};
 $("room-input").addEventListener("input",e=>{e.target.value=e.target.value.toUpperCase().replace(/[^A-Z2-9]/g,"").slice(0,8)});
 window.addEventListener("beforeunload",()=>{if(channel)supabase.removeChannel(channel);clearInterval(pollTimer)});
 render();
+const invitedCode=new URLSearchParams(location.search).get("room");
+if(invitedCode&&/^[A-Z2-9]{8}$/i.test(invitedCode))$("room-input").value=invitedCode.toUpperCase();
+(async function resumeRoom(){
+ const code=(invitedCode||localStorage.getItem("jg_chess_last_room")||"").toUpperCase();
+ const savedToken=localStorage.getItem("jg_chess_token_"+code),savedColor=localStorage.getItem("jg_chess_color_"+code);
+ if(!code||!savedToken||!savedColor)return;
+ try{const d=await request("?code="+encodeURIComponent(code));room=d.room;token=savedToken;color=savedColor;applyRoom(room);watchRoom();$("connection").textContent="RECONNECTING";say("Your previous game has been restored.","success")}catch(e){say("Previous game could not be restored: "+e.message,"error")}
+})();
 </script>
 </body>
 </html>
