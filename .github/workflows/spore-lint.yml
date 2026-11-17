@@ -1,0 +1,23 @@
+name: Spore lint and tests
+on:
+  push:
+    paths: ["games/spore/**", ".github/workflows/spore-lint.yml"]
+  pull_request:
+    paths: ["games/spore/**", ".github/workflows/spore-lint.yml"]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: games/spore
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Lint
+        run: npx --yes eslint@9 -c eslint.config.js .
+      - name: Install three.js for the tests (the game itself loads it from a CDN)
+        run: npm install --no-save --no-package-lock three@0.160.0
+      - name: Unit tests
+        run: node --test tests/*.test.mjs
