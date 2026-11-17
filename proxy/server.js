@@ -48,7 +48,7 @@ function rejectProxyRequest(target, isUpgrade, message, retryAfterSeconds = 1) {
   const body = JSON.stringify({ error: message });
   if (isUpgrade) {
     target.write(
-      `HTTP/1.1 429 Too Many Requests\\r\\nRetry-After: ${retryAfterSeconds}\\r\\nConnection: close\\r\\nContent-Type: application/json\\r\\nContent-Length: ${Buffer.byteLength(body)}\\r\\n\\r\\n${body}`
+      `HTTP/1.1 429 Too Many Requests\r\nRetry-After: ${retryAfterSeconds}\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`
     );
     target.destroy();
     return;
