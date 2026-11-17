@@ -21,10 +21,10 @@
     "name": "Bloons Tower Defense"
   },
   {
-    "name": "Burrito Bison Revenge"
+    "name": "Burrito Bison"
   },
   {
-    "name": "Burrito Bison"
+    "name": "Burrito Bison Revenge"
   },
   {
     "name": "Cookie Clicker"
@@ -63,6 +63,10 @@
     "name": "Hill Climb Racing"
   },
   {
+    "name": "Johnny Chess",
+    "url": "chess.html"
+  },
+  {
     "name": "Johnny Obby"
   },
   {
@@ -75,11 +79,11 @@
     "name": "Minecraft"
   },
   {
-    "name": "Online Mini Golf",
-    "game": "Mini Golf Classic"
+    "name": "Monkey Mart"
   },
   {
-    "name": "Monkey Mart"
+    "name": "Online Mini Golf",
+    "game": "Mini Golf Classic"
   },
   {
     "name": "Online Mini Golf"
