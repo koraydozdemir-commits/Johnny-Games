@@ -22,6 +22,122 @@ const allowedAnalyticsOrigins = new Set([
 // Bare blocks private and non-routable IP destinations by default, including
 // DNS results, which prevents the proxy from reaching Render's internal network.
 const bare = createBareServer("/bare/");
+
+// Public proxy safeguards: generous per-IP request allowance and bounded concurrency.
+const PROXY_REQUESTS_PER_MINUTE = 300;
+const PROXY_MAX_CONCURRENT_CONNECTIONS = 8;
+const PROXY_RATE_WINDOW_MS = 60_000;
+const PROXY_COOLDOWN_MS = 60_000;
+const PROXY_ESCALATED_COOLDOWN_MS = 5 * 60_000;
+const PROXY_ABUSE_WINDOW_MS = 10 * 60_000;
+const proxyRateWindows = new Map();
+const proxyActiveConnections = new Map();
+const proxyAbuse = new Map();
+
+function proxyClientIp(request) {
+  const forwarded = request.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    return forwarded.split(",")[0].trim().slice(0, 100);
+  }
+  return request.socket && request.socket.remoteAddress
+    ? request.socket.remoteAddress
+    : "unknown";
+}
+
+function rejectProxyRequest(target, isUpgrade, message, retryAfterSeconds = 1) {
+  const body = JSON.stringify({ error: message });
+  if (isUpgrade) {
+    target.write(
+      `HTTP/1.1 429 Too Many Requests\\r\\nRetry-After: ${retryAfterSeconds}\\r\\nConnection: close\\r\\nContent-Type: application/json\\r\\nContent-Length: ${Buffer.byteLength(body)}\\r\\n\\r\\n${body}`
+    );
+    target.destroy();
+    return;
+  }
+  target.statusCode = 429;
+  target.setHeader("Retry-After", String(retryAfterSeconds));
+  target.setHeader("Content-Type", "application/json; charset=utf-8");
+  target.setHeader("Cache-Control", "no-store");
+  target.end(body);
+}
+
+function acquireProxyConnection(request, target, isUpgrade = false) {
+  const now = Date.now();
+  const ip = proxyClientIp(request);
+  const abuse = proxyAbuse.get(ip);
+  if (abuse && abuse.blockedUntil > now) {
+    rejectProxyRequest(
+      target,
+      isUpgrade,
+      "Proxy temporarily paused for this IP after excessive requests. Please try again shortly.",
+      Math.max(1, Math.ceil((abuse.blockedUntil - now) / 1000))
+    );
+    return null;
+  }
+
+  let window = proxyRateWindows.get(ip);
+  if (!window || now - window.start >= PROXY_RATE_WINDOW_MS) {
+    window = { start: now, count: 0 };
+    proxyRateWindows.set(ip, window);
+  }
+  window.count += 1;
+
+  if (window.count > PROXY_REQUESTS_PER_MINUTE) {
+    let strikes = abuse && now - abuse.lastViolation <= PROXY_ABUSE_WINDOW_MS
+      ? abuse.strikes + 1
+      : 1;
+    const cooldown = strikes >= 3
+      ? PROXY_ESCALATED_COOLDOWN_MS
+      : PROXY_COOLDOWN_MS;
+    proxyAbuse.set(ip, {
+      strikes,
+      lastViolation: now,
+      blockedUntil: now + cooldown
+    });
+    rejectProxyRequest(
+      target,
+      isUpgrade,
+      "Proxy request limit reached. Please wait before trying again.",
+      Math.ceil(cooldown / 1000)
+    );
+    return null;
+  }
+
+  const active = proxyActiveConnections.get(ip) || 0;
+  if (active >= PROXY_MAX_CONCURRENT_CONNECTIONS) {
+    rejectProxyRequest(
+      target,
+      isUpgrade,
+      "Too many active proxy connections. Please close a tab or wait a moment.",
+      5
+    );
+    return null;
+  }
+
+  proxyActiveConnections.set(ip, active + 1);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const remaining = (proxyActiveConnections.get(ip) || 1) - 1;
+    if (remaining <= 0) proxyActiveConnections.delete(ip);
+    else proxyActiveConnections.set(ip, remaining);
+  };
+}
+
+// Keep limiter memory bounded even if many unique IPs visit the public proxy.
+const proxyLimiterCleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [ip, window] of proxyRateWindows) {
+    if (now - window.start > PROXY_RATE_WINDOW_MS * 2) proxyRateWindows.delete(ip);
+  }
+  for (const [ip, abuse] of proxyAbuse) {
+    if (now - abuse.lastViolation > PROXY_ABUSE_WINDOW_MS && abuse.blockedUntil <= now) {
+      proxyAbuse.delete(ip);
+    }
+  }
+}, 5 * 60_000);
+proxyLimiterCleanupTimer.unref();
+
 const app = express();
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
@@ -300,7 +416,19 @@ const server = createServer();
 
 server.on("request", (request, response) => {
   if (bare.shouldRoute(request)) {
-    void bare.routeRequest(request, response);
+    const release = acquireProxyConnection(request, response);
+    if (!release) return;
+    response.once("finish", release);
+    response.once("close", release);
+    void bare.routeRequest(request, response).catch((error) => {
+      console.error("Proxy request failed:", error && error.message ? error.message : "unknown error");
+      if (!response.headersSent) {
+        response.statusCode = 502;
+        response.end("Proxy request failed.");
+      } else {
+        response.destroy();
+      }
+    });
   } else {
     app(request, response);
   }
@@ -308,7 +436,13 @@ server.on("request", (request, response) => {
 
 server.on("upgrade", (request, socket, head) => {
   if (bare.shouldRoute(request)) {
-    void bare.routeUpgrade(request, socket, head);
+    const release = acquireProxyConnection(request, socket, true);
+    if (!release) return;
+    socket.once("close", release);
+    void bare.routeUpgrade(request, socket, head).catch((error) => {
+      console.error("Proxy websocket failed:", error && error.message ? error.message : "unknown error");
+      socket.destroy();
+    });
   } else {
     socket.destroy();
   }
