@@ -114,7 +114,7 @@ async function request(path,body){
  if(!r.ok){if(data.room)applyRoom(data.room);throw new Error(data.error||"Chess request failed.");}return data;
 }
 function applyRoom(data){
- room=data;game.load(data.fen);lastMove=null;const hist=game.history({verbose:true});if(hist.length){const m=hist[hist.length-1];lastMove={from:m.from,to:m.to}}
+ room=data;if(data.pgn){game.reset();game.loadPgn(data.pgn)}else game.load(data.fen);lastMove=null;const hist=game.history({verbose:true});if(hist.length){const m=hist[hist.length-1];lastMove={from:m.from,to:m.to}}
  selected=null;legalTargets=[];render();
  const yourTurn=(game.turn()==="w"&&color==="white")||(game.turn()==="b"&&color==="black");
  $("turn").innerHTML=data.status==="waiting"?"Waiting for an opponent<small>Share the room code to start</small>":data.status==="finished"?(data.result||"Game finished"):""+(yourTurn?"Your move":"Opponent's move")+"<small>"+data.white_name+" (White) vs "+(data.black_name||"Waiting…")+" (Black)</small>";
