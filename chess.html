@@ -59,6 +59,59 @@ input:focus{border-color:#a78bfa}
 .promotion-options{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.promotion-options button{height:66px;border:1px solid #ffffff24;border-radius:10px;background:#ffffff0b;font-size:40px}
 @media(max-width:800px){main{padding-top:18px}.layout{grid-template-columns:1fr}.side{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.side .panel:first-child{grid-column:1/-1}}
 @media(max-width:480px){.hero{align-items:start;flex-direction:column}.side{grid-template-columns:1fr}.side .panel:first-child{grid-column:auto}.square{font-size:clamp(25px,10vw,48px)}.board-panel{padding:8px}.board{border-width:3px}.board-head{margin-bottom:8px}}
+
+/* Johnny Games Chess thumbnail-inspired medieval gold visual pass */
+:root{--bg:#100d0b;--panel:#211a15;--panel2:#302318;--line:#d5a64b44;--text:#fff5dc;--muted:#c6b69a;--purple:#d9a944;--gold:#f4c45d;--light:#e7c58d;--dark:#80502e}
+body{
+ background:
+  linear-gradient(180deg,rgba(12,13,21,.78),rgba(15,10,7,.94)),
+  url("thumbnails/Chess.png") center 18%/cover fixed,
+  #100d0b;
+ color:#fff4dc;
+}
+.top{border-bottom:1px solid #d5a64b55;background:linear-gradient(90deg,#15100deF,#302012eF,#15100deF);box-shadow:0 5px 24px #0008}
+.top a{color:#f2ce7d}.brand{color:#ffe4a3;text-shadow:0 2px 0 #61370e,0 0 18px #e5a63b55}.brand span{color:#f1bd4f}
+main{width:min(1280px,100%);padding-top:22px}
+.hero{
+ position:relative;isolation:isolate;overflow:hidden;min-height:190px;padding:28px 30px;
+ align-items:center;border:1px solid #d6a64b88;border-radius:20px;
+ background:linear-gradient(90deg,rgba(15,13,17,.94) 0%,rgba(19,15,14,.72) 48%,rgba(18,13,10,.22) 100%),url("thumbnails/Chess.png") center 42%/cover;
+ box-shadow:0 15px 40px #0008,inset 0 0 0 3px #f5d28b12;
+}
+.hero:after{content:"";position:absolute;inset:7px;border:1px solid #e5bc6a55;border-radius:14px;pointer-events:none;z-index:-1}
+.eyebrow{color:#f0c76b;text-shadow:0 1px 4px #000;font-size:11px}
+h1{color:#ffe1a0;text-shadow:0 3px 0 #5c3518,0 5px 16px #000;font-family:Georgia,serif;letter-spacing:-.035em}
+.sub{color:#f0dfc1;text-shadow:0 1px 4px #000}
+.pill{border-color:#e3b95f77;background:linear-gradient(135deg,#8d5a1caa,#3c2818dd);color:#ffe3a0;box-shadow:inset 0 1px #fff4b955,0 3px 10px #0006}
+.panel{border:1px solid #b9873e88;border-radius:16px;background:linear-gradient(145deg,rgba(52,37,25,.96),rgba(24,20,19,.97));box-shadow:0 18px 42px #0009,inset 0 1px #ffe2a022}
+.board-panel{padding:clamp(10px,2vw,20px);background:linear-gradient(145deg,#302318f5,#171311f5)}
+.board{border:7px solid #4a2a13;border-radius:8px;background:#3d2413;box-shadow:0 0 0 2px #d6a34e,0 0 0 5px #4a2c16,0 14px 28px #000a,inset 0 0 0 2px #f4d18a55}
+.square.light{background:linear-gradient(145deg,#f3d9a6,#d7ad6d);box-shadow:inset 0 0 12px #fff3c744}
+.square.dark{background:linear-gradient(145deg,#98633b,#63391f);box-shadow:inset 0 0 12px #2b140b55}
+.square.selected{box-shadow:inset 0 0 0 4px #ffe16d,inset 0 0 22px #ffe16d88}
+.square.last:after{background:#f7cf4b44}
+.square.target:before{background:#f7e2a5a8;box-shadow:0 0 0 2px #57371988}
+.square.target.capture:before{border-color:#f7e2a5bb}
+.piece{filter:drop-shadow(0 3px 2px #0009) drop-shadow(0 0 4px #fff3);transform:translateY(-1px)}
+.white-piece{color:#fff0c9;text-shadow:0 2px 0 #8c5d2d,1px 0 0 #75451d,-1px 0 0 #75451d,0 4px 5px #160b05}
+.black-piece{color:#34251d;text-shadow:0 1px 0 #e4bd76,1px 0 0 #b98a4c,-1px 0 0 #b98a4c,0 4px 5px #000}
+.board-head .turn{color:#ffe7b4}.board-head small{color:#cbb99a}
+.board-footer{color:#d3bd98}
+input{border-color:#b9873e66;background:#17110d;color:#fff2d3;box-shadow:inset 0 2px 8px #0007}
+input:focus{border-color:#f0c45c;box-shadow:0 0 0 3px #f0c45c22}
+.btn{border-color:#c89a4d77;background:linear-gradient(180deg,#5a4027,#342317);color:#ffe8b8;box-shadow:inset 0 1px #fff2c522,0 3px 8px #0005}
+.btn.primary{border-color:#f0c66d;background:linear-gradient(180deg,#e8bd5e,#986021);color:#261506;text-shadow:0 1px #fff5c5;box-shadow:inset 0 1px #fff9d0,0 5px 14px #0007}
+.btn:hover:not(:disabled){filter:brightness(1.16)}
+.hint,#message{color:#d7c4a3}
+#message.error{color:#ff9c91}#message.success{color:#9ee0a4}
+.room-code{border-color:#e0b65b88;background:#e2ad4017}
+.room-code strong{color:#ffe4a2;text-shadow:0 2px 4px #000}
+.moves{color:#f2dfbd}.moves .latest{color:#ffdc7b}
+.promotion-card{border-color:#d3a24f;background:linear-gradient(145deg,#3d2b1c,#17110d);box-shadow:0 20px 80px #000c}
+.promotion-options button{border-color:#bd8d4b;background:linear-gradient(145deg,#624329,#2e1d12);color:#ffe2a4}
+@media(max-width:800px){.hero{min-height:165px;padding:22px}}
+@media(max-width:480px){.hero{min-height:155px;padding:18px 16px;background-position:58% center}.board{border-width:5px}.square{font-size:clamp(25px,10vw,48px)}}
+
 </style>
 </head>
 <body>
