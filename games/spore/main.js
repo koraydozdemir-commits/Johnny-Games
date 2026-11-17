@@ -16,7 +16,7 @@ import { capsuleGap, leadTarget, pointCapsuleGap, resolveCollisions, steerHeadin
 import { createCreatureStage } from "./creature/stage.js";
 import { openCreatureEditor } from "./creature/editor.js";
 import { buildCreatureBody } from "./creature/body3d.js";
-import { CREATURE_SAVE_KEY, creatureFromCell } from "./creature/format.js";
+import { CREATURE_SAVE_KEY, creatureFromCell, creaturePartIds } from "./creature/format.js";
 import { CREATURE_CARDS } from "./traits.js";
 import { timeUniform } from "./gfx/materials.js";
 import { renderCellSnapshot, renderPartThumbnails } from "./gfx/thumbs.js";
@@ -26,6 +26,7 @@ import {
   defaultNodes as defaultSpine,
   makeRng,
   mutateCellRecord,
+  randomStarterCell,
   storeCellRecord,
   writeHandoff,
 } from "./cell-format.js";
@@ -624,6 +625,30 @@ function straightenSpine(list) {
   const mid = (sorted[0].x + sorted[sorted.length - 1].x) / 2;
   sorted.forEach((n) => (n.x -= mid));
   return sorted;
+}
+/** The hatchling's starter eyes and cilia: mirrored pairs seated on the membrane at the rolled spots. */
+function starterParts(hatchling) {
+  const half = (nodes[nodes.length - 1].x - nodes[0].x) / 2;
+  const widest = Math.max(...nodes.map((n) => n.r));
+  const cfg = [
+    { id: "cilia", x: hatchling.ciliaAt * half, scale: hatchling.ciliaScale, pair: 101 },
+    { id: "eye", x: hatchling.eyeAt * half, scale: hatchling.eyeScale, pair: 102 },
+  ];
+  const draft = cfg.map((o) => ({ id: o.id, x: o.x, y: widest * 1.5, rotation: 0, scale: o.scale, pairId: o.pair }));
+  const seated = snapPartsToSurface(createCellRecord({ nodes, parts: draft }), { faceOutward: true }).parts;
+  return seated.flatMap((p) =>
+    [1, -1].map((side) => ({
+      id: p.id,
+      def: defs.find((d) => d.id === p.id),
+      x: p.x,
+      y: Math.abs(p.y) * side,
+      rotation: side > 0 ? p.rotation : -p.rotation,
+      scale: p.scale,
+      costPaid: 0,
+      source: "mirror",
+      pairId: p.pairId,
+    })),
+  );
 }
 let previewParts = [];
 let partsNeedSeating = false;
@@ -2060,7 +2085,7 @@ function startCreatureStage(resume = false, intro = false) {
   // Arrival: design the first land generation before setting off (after the crawl-out, if any).
   const arrive = () => {
     const s = creatureStage.debug.P;
-    openCreatureEditorFor({ record: s.record, unlocked: new Set([...s.record.parts.map((p) => p.id), s.record.foot]), dna: s.dna }, true);
+    openCreatureEditorFor({ record: s.record, unlocked: new Set([...creaturePartIds(s.record), "paw"]), dna: s.dna }, true);
   };
   if (fresh && intro) document.body.classList.add("cinematic");
   if (fresh && !intro) arrive();
@@ -2148,9 +2173,9 @@ function stopCreatureStage(toSoup = true) {
    Your creature's species, settled in a village. Reached from the Creature Stage's menu; it keeps
    its own save, and leaving it drops you back into the Creature Stage where you left off. */
 let tribeStage = null;
-function startTribeStage() {
+function startTribeStage(fallbackRecord = null) {
   if (tribeStage) return;
-  const record = creatureStage ? creatureStage.record : loadCreatureSave()?.record;
+  const record = creatureStage ? creatureStage.record : loadCreatureSave()?.record || fallbackRecord;
   if (!record) {
     toast("Reach land first: the Tribe Stage starts from your creature.");
     return;
@@ -4307,11 +4332,15 @@ function bindUI() {
       landReady: false,
       pendingBanner: 0,
     });
-    state.cellName = "Karlets";
-    state.baseColor = baseColors[0];
-    state.patternColor = patternColors[0];
-    state.accentColor = accentColors[0];
-    state.pattern = "speckle";
+    // Every run hatches a different cell: body plan, palette, pattern and name are rolled fresh.
+    const hatchling = randomStarterCell();
+    state.cellName = hatchling.name;
+    state.baseColor = hatchling.baseColor;
+    state.patternColor = hatchling.patternColor;
+    state.accentColor = hatchling.accentColor;
+    state.pattern = hatchling.pattern;
+    nodes = straightenSpine(hatchling.nodes);
+    state.selectedNode = Math.floor(nodes.length / 2);
     state.symmetry = true;
     state.stack = false;
     state.dna = 25;
@@ -4335,25 +4364,9 @@ function bindUI() {
     knockVel.set(0, 0);
     angle = 0;
     unlocked.clear();
-    // Every run starts the same way: a plain cell with cilia and eyes, and the player picks its mouth.
-    const cfg = [
-      { id: "cilia", x: -0.6, y: 0.68, pair: 101 },
-      { id: "cilia", x: -0.6, y: -0.68, pair: 101 },
-      { id: "eye", x: 0.38, y: 0.88, pair: 102 },
-      { id: "eye", x: 0.38, y: -0.88, pair: 102 },
-    ];
+    // Every run starts with cilia and eyes, and the player picks its mouth. Where they sit varies with the body.
     STARTER_UNLOCKS.forEach((id) => unlocked.add(id));
-    parts = cfg.map((o) => ({
-      id: o.id,
-      def: defs.find((d) => d.id === o.id),
-      x: o.x,
-      y: o.y,
-      rotation: 0,
-      scale: 1,
-      costPaid: 0,
-      source: o.pair ? "mirror" : "starter",
-      pairId: o.pair || null,
-    }));
+    parts = starterParts(hatchling);
     state.selected = null;
     state.category = "All";
     progress.firstBuild = true;
@@ -4399,6 +4412,96 @@ function bindUI() {
     chooseEgg(state.pendingDiet || "plant", hatchEditor);
   };
   $("#skipHatch").onclick = skipHatch;
+  bindStageSwitcher();
+  /*
+   * TEMPORARY stage switcher for playtesting: jumps straight to any stage. Saves are kept, so a jump
+   * resumes a stage where it was left; a stage never reached starts fresh from the current cell.
+   */
+  function bindStageSwitcher() {
+    const root = $("#devStages");
+    if (!root) return;
+    const toggle = $("#devStagesToggle"),
+      menu = $("#devStagesMenu");
+    const currentStage = () => (tribeStage ? "tribe" : creatureStage ? "creature" : "cell");
+    const setOpen = (open) => {
+      menu.hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+      if (!open) return;
+      const now = state.runStarted ? currentStage() : null;
+      menu.querySelectorAll("button").forEach((b) => b.setAttribute("aria-current", String(b.dataset.stage === now)));
+      menu.querySelector("button")?.focus();
+    };
+    const hasCellSave = () => {
+      try {
+        return !!localStorage.getItem("johnny-spore-cell-stage");
+      } catch (e) {
+        return false;
+      }
+    };
+    /** Leave menus, dialogs and the hatch cinematic so the jump lands on a clean screen. */
+    const clearScreens = () => {
+      if (hatchTimer) clearTimeout(hatchTimer);
+      hatchTimer = null;
+      $("#hatchCinematic").style.display = "none";
+      $("#dialogOverlay").style.display = "none";
+      if (pathScreenOpen()) $("#pathClose")?.click();
+      if (state.editor && !hasMouth()) {
+        // A brand-new cell can't leave the editor without a mouth: give it the plant mouth, free.
+        const head = nodes[nodes.length - 1],
+          tip = snapToSurface(head.x + head.r + 0.4, 0);
+        parts.push({ id: "filter", def: defs.find((d) => d.id === "filter"), x: tip.x, y: tip.y, rotation: tip.angle, scale: 1, costPaid: 0, source: "starter", pairId: nextPairId++ });
+        rebuildPlayer();
+      }
+      if (state.editor) setEditor(false);
+    };
+    const enterRun = () => {
+      document.body.classList.add("inGameMode");
+      $("#intro").style.display = "none";
+      state.runStarted = true;
+    };
+    const backToSoup = () => {
+      document.body.classList.remove("creatureMode", "tribeMode");
+      audio.setAmbient("cell");
+      state.paused = false;
+      updateCamera();
+      updateHUD();
+    };
+    const jumpTo = (stage) => {
+      setOpen(false);
+      if (state.runStarted && stage === currentStage()) return;
+      clearScreens();
+      if (stage === "cell") {
+        if (tribeStage) {
+          stopTribeStage();
+          backToSoup();
+        } else if (creatureStage) stopCreatureStage(true);
+        else if (!state.runStarted && !hasCellSave()) return chooseEgg("plant");
+        enterRun();
+        state.paused = false;
+        updateHUD();
+        return;
+      }
+      enterRun();
+      audio.setAmbient("land");
+      if (stage === "creature") {
+        if (tribeStage) stopTribeStage();
+        startCreatureStage(!!loadCreatureSave(), false);
+        return;
+      }
+      startTribeStage(creatureFromCell(currentRecord(), state.cellName));
+    };
+    toggle.onclick = () => setOpen(menu.hidden);
+    menu.querySelectorAll("button").forEach((b) => (b.onclick = () => jumpTo(b.dataset.stage)));
+    root.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" || menu.hidden) return;
+      e.stopPropagation();
+      setOpen(false);
+      toggle.focus();
+    });
+    document.addEventListener("pointerdown", (e) => {
+      if (!menu.hidden && !root.contains(e.target)) setOpen(false);
+    });
+  }
   $("#begin").onclick = () => {
     audio.setAmbient("cell");
     startHatch("plant");

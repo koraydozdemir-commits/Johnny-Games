@@ -37,7 +37,8 @@ export const abilityIcon = (k) => ABILITY_INFO[k]?.icon || STAT_INFO[k]?.icon ||
 
 /**
  * slot: where it attaches. mouth = head tip (one only) · eye = upper head, mirrored · side = flank,
- * mirrored · back = along the top · tail = rear tip · foot = end of every leg (one style per creature).
+ * mirrored · back = along the top · tail = rear tip · foot = end of every leg (one style per creature) ·
+ * hand = end of an arm (each arm pair has its own; a foot can go on an arm too, as in Spore).
  */
 export const CREATURE_PARTS = [
   // Mouths decide diet.
@@ -58,12 +59,12 @@ export const CREATURE_PARTS = [
   { id: "antennae", name: "Antennae", slot: "eye", cost: 10, abilities: { sight: 2, charm: 1, sneak: 2 }, desc: "Feelers that taste the air, so you can creep up on anything." },
   { id: "ears", name: "Leaf Ears", slot: "eye", cost: 10, abilities: { sing: 2, charm: 1, sight: 1 }, desc: "Big ears for picking up a tune." },
   // Limbs.
-  { id: "arm", name: "Simple Arm", slot: "side", cost: 8, abilities: { strike: 1, charm: 1, dance: 1, sneak: 1 }, desc: "A plain jointed arm with a little paw." },
+  { id: "paw", name: "Paws", slot: "hand", cost: 0, abilities: { strike: 1, sneak: 1 }, desc: "Simple padded hands." },
   // Flanks: hands and arms.
-  { id: "claws", name: "Claws", slot: "side", cost: 10, abilities: { strike: 2, charm: 1 }, desc: "Curved claws for slashing." },
-  { id: "pincers", name: "Pincers", slot: "side", cost: 18, abilities: { strike: 4 }, desc: "Crushing pincers." },
-  { id: "bladeArms", name: "Blade Arms", slot: "side", cost: 28, abilities: { strike: 5 }, desc: "Mantis scythes that fold flat when at rest." },
-  { id: "graspers", name: "Graspers", slot: "side", cost: 12, abilities: { charm: 3, strike: 1 }, desc: "Gentle hands, good for grooming friends." },
+  { id: "claws", name: "Claws", slot: "hand", cost: 10, abilities: { strike: 2, charm: 1 }, desc: "Curved claws for slashing." },
+  { id: "pincers", name: "Pincers", slot: "hand", cost: 18, abilities: { strike: 4 }, desc: "Crushing pincers." },
+  { id: "bladeArms", name: "Mantis Blades", slot: "hand", cost: 28, abilities: { strike: 5 }, desc: "Scythes that fold flat when at rest." },
+  { id: "graspers", name: "Graspers", slot: "hand", cost: 12, abilities: { charm: 3, strike: 1 }, desc: "Gentle hands, good for grooming friends." },
   { id: "tentacles", name: "Tentacles", slot: "side", cost: 18, abilities: { charm: 2, dance: 3, sneak: 1 }, desc: "Swaying tendrils for a hypnotic dance." },
   { id: "venomSac", name: "Venom Sac", slot: "side", cost: 16, abilities: { spit: 3 }, desc: "Spits venom at a distance." },
   { id: "acidGland", name: "Acid Gland", slot: "side", cost: 28, abilities: { spit: 5 }, desc: "A pressurised gland that fires burning acid." },
@@ -95,7 +96,8 @@ export const CREATURE_PARTS = [
   { id: "stompers", name: "Stompers", slot: "foot", cost: 20, abilities: { charge: 3, health: 2 }, desc: "Pillar feet that shake the ground." },
 ];
 /**
- * The editor's part sections, in Spore's order. "limbs" also holds the leg-pair card the editor adds.
+ * The editor's part sections, in Spore's order. "limbs" also holds the leg- and arm-pair cards the
+ * editor adds; "graspers" are hands, which go on the ends of arms.
  */
 export const PART_SECTIONS = [
   ["mouth", "Mouths"],
@@ -109,26 +111,33 @@ export const PART_SECTIONS = [
 const SECTION_OF = {
   mouth: ["beak", "jaws", "snout", "fluteBeak", "trunk", "tuskMaw", "mandibles", "crusher", "sawBeak"],
   senses: ["eyes", "stalkEyes", "bugEyes", "doeEyes", "antennae", "ears"],
-  limbs: ["arm", "wings", "fanFins"],
-  graspers: ["graspers", "claws", "pincers", "tentacles"],
+  limbs: ["wings", "fanFins", "tentacles"],
+  graspers: ["paw", "graspers", "claws", "pincers", "bladeArms"],
   feet: ["pads", "hooves", "talons", "webbed", "stompers"],
-  weapons: ["bladeArms", "venomSac", "acidGland", "horns", "antlers", "spines", "quills", "stinger"],
+  weapons: ["venomSac", "acidGland", "horns", "antlers", "spines", "quills", "stinger"],
   details: ["frill", "sail", "crest", "glowOrbs", "shell", "plates", "knobs", "tailClub", "plumeTail", "fanTail", "rattleTail"],
 };
 for (const [section, ids] of Object.entries(SECTION_OF)) for (const id of ids) CREATURE_PARTS.find((p) => p.id === id).section = section;
 export const creaturePart = (id) => CREATURE_PARTS.find((p) => p.id === id) || null;
+/** Can go on the end of an arm: any grasper, or a foot. */
+export const fitsArm = (id) => ["hand", "foot"].includes(creaturePart(id)?.slot);
+/** Older saves had arms as single parts; these are the hands they become. */
+export const LEGACY_ARM_HANDS = { arm: "paw", claws: "claws", graspers: "graspers", pincers: "pincers", bladeArms: "bladeArms" };
+/** What a pair of arms adds on its own, before any hand: arms to wave and to hug with. */
+export const ARM_ABILITIES = { dance: 1, charm: 1 };
 
 /** Starting parts on land: the mouth of the cell's diet, eyes and pads. Everything else is found. */
 export const STARTER_CREATURE_PARTS = { plant: ["beak", "eyes", "pads"], meat: ["jaws", "eyes", "pads"], omni: ["snout", "eyes", "pads"] };
 
 /** Ability levels for a set of part ids: the best level per ability, capped at 5. */
-export function abilitiesOf(partIds, legPairs = 2) {
+export function abilitiesOf(partIds, legPairs = 2, armPairs = 0) {
   const out = { bite: 0, strike: 0, charge: 0, spit: 0, sing: 0, dance: 0, charm: 0, pose: 0, speed: 0, health: 0, sight: 0, sneak: 0, jump: 0, glide: 0 };
   for (const id of partIds) {
     const p = creaturePart(id);
     if (!p) continue;
     for (const [k, v] of Object.entries(p.abilities)) out[k] = Math.min(5, Math.max(out[k], v));
   }
+  if (armPairs > 0) for (const [k, v] of Object.entries(ARM_ABILITIES)) out[k] = Math.max(out[k], v);
   // Every creature can do a little of everything with its body alone.
   out.charge = Math.max(out.charge, 1);
   out.dance = Math.max(out.dance, legPairs > 0 ? 1 : 0);
@@ -149,7 +158,8 @@ const gradY = (base, tip, y0, y1) => (x, y) => mix(base, tip, THREE.MathUtils.cl
 /** A thin flat piece (fin, wing, web) that is visible from both sides. */
 const flat = (shape, depth = 0.018) => new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: 14 }).translate(0, 0, -depth / 2);
 /** A smooth beak/snout shape along +x from a lathe profile of [radius, length] pairs. */
-const lathe = (profile, seg = 18) => new THREE.LatheGeometry(profile.map(([r, l]) => new THREE.Vector2(r, l)), seg).rotateZ(-Math.PI / 2);
+// Profiles run root to tip; the lathe wants them the other way round to face outward.
+const lathe = (profile, seg = 18) => new THREE.LatheGeometry(profile.map(([r, l]) => new THREE.Vector2(r, l)).reverse(), seg).rotateZ(-Math.PI / 2);
 /** A curved, tapering horn/claw from points, with a gradient from root to tip. */
 const curved = (pts, r0, r1, base, tip, o = {}) => ({
   geometry: taperedTube(
@@ -171,45 +181,26 @@ const eyeball = (r, iris, m = {}) => [
   sphere(r * 0.14, 0xffffff, { ...m, x: (m.x || 0) + r * 0.86, y: (m.y || 0) + r * 0.3, z: (m.z || 0) + r * 0.2 }, 8),
 ];
 
-/**
- * The path of a jointed arm: shoulder, elbow, wrist, hand. bend -1..1 raises or lowers the upper arm
- * and opens or closes the elbow, so the editor can pose arms like Spore's limb tool.
- */
-function armPath(bend = 0) {
-  const a1 = 0.12 + bend * 0.55; // upper arm, from the shoulder
-  const a2 = a1 - 1.15 - bend * 0.35; // forearm, from the elbow
-  const a3 = a2 + 0.25;
-  const p0 = [0, 0],
-    p1 = [p0[0] + Math.cos(a1) * 0.22, p0[1] + Math.sin(a1) * 0.22],
-    p2 = [p1[0] + Math.cos(a2) * 0.22, p1[1] + Math.sin(a2) * 0.22],
-    p3 = [p2[0] + Math.cos(a3) * 0.1, p2[1] + Math.sin(a3) * 0.1];
-  return { pts: [p0, p1, p2, p3], hand: p3, dir: a3 };
-}
-/** Where the elbow sits for a given bend (part-local), for the editor's joint handle. */
-export const ARM_PARTS = ["arm", "claws", "graspers"];
-export const elbowOf = (bend) => armPath(bend).pts[1];
-/** An arm from a chain of points: a bone between each pair and a rounded joint at each bend. */
-function jointedArm(c, pts, hand) {
-  const pieces = [];
-  for (let i = 0; i < pts.length - 1; i++) {
-    const [x0, y0] = pts[i],
-      [x1, y1] = pts[i + 1];
-    const len = Math.hypot(x1 - x0, y1 - y0);
-    const r = 0.06 - i * 0.008;
-    pieces.push({
-      geometry: new THREE.CylinderGeometry(r * 0.85, r, len, 10).rotateZ(-Math.PI / 2 + Math.atan2(y1 - y0, x1 - x0)).translate((x0 + x1) / 2, (y0 + y1) / 2, 0),
-      color: shade(c, 0.88 - i * 0.04),
-    });
-    pieces.push(sphere(r * 1.15, shade(c, 0.8), { x: x0, y: y0 }, 10));
-  }
-  return [...pieces, ...hand];
-}
-/** Hand pieces are drawn pointing along +x from the origin, then moved to the end of the arm. */
-function atHand(path, pieces) {
-  // Translate to the wrist, then turn to the forearm's direction.
-  const m = new THREE.Matrix4().makeRotationZ(path.dir).setPosition(path.hand[0], path.hand[1], 0);
-  return pieces.map((p) => ({ ...p, matrix: p.matrix ? m.clone().multiply(p.matrix) : m.clone() }));
-}
+/** A finger: a tapering tube that curls down (-y) toward its tip. */
+const finger = (z, len, r, base, tip, spread = 0) =>
+  curved(
+    [
+      [0, 0, z],
+      [len * 0.45, -len * 0.05, z + spread * 0.5],
+      [len * 0.85, -len * 0.3, z + spread],
+      [len, -len * 0.55, z + spread],
+    ],
+    r,
+    r * 0.55,
+    base,
+    tip,
+  );
+/** Upper eyelid in the body's colour, drawn half-lowered over the eye (for part thumbnails). */
+const lid = (c, r, m = {}) => ({
+  geometry: new THREE.SphereGeometry(r * 1.08, 18, 9, 0, Math.PI * 2, 0, Math.PI / 2).rotateZ(0.42),
+  color: shade(c, 0.95),
+  matrix: matrixOf(m),
+});
 const MODELS = {
   /* Mouths */
   beak: (c) => [
@@ -266,10 +257,11 @@ const MODELS = {
     return pieces;
   },
   /* Eyes */
-  eyes: () => eyeball(0.14, 0x5a8a3a),
+  eyes: (c) => [...eyeball(0.16, 0x5f9a3c), lid(c, 0.16)],
   stalkEyes: (c) => [
     curved([[0, 0], [0.06, 0.18], [0.12, 0.34]], 0.05, 0.03, shade(c, 0.85), shade(c, 1.05)),
-    ...eyeball(0.13, 0xd2a020, { x: 0.14, y: 0.42 }),
+    ...eyeball(0.14, 0xd2a020, { x: 0.14, y: 0.42 }),
+    lid(c, 0.14, { x: 0.14, y: 0.42 }),
   ],
   bugEyes: () => [
     {
@@ -278,8 +270,9 @@ const MODELS = {
       matrix: matrixOf({ x: 0.04, sx: 0.85 }),
     },
   ],
-  doeEyes: () => [
-    ...eyeball(0.17, 0x8a5a2a),
+  doeEyes: (c) => [
+    ...eyeball(0.19, 0x8a5a2a),
+    lid(c, 0.19),
     { geometry: new THREE.TorusGeometry(0.17, 0.022, 6, 18, Math.PI).rotateY(Math.PI / 2), color: 0x2a1a14, matrix: matrixOf({ x: 0.07 }) },
     ...[-0.6, 0, 0.6].map((a) => ({ geometry: new THREE.ConeGeometry(0.012, 0.1, 4), color: 0x1a1210, matrix: matrixOf({ x: 0.1, y: 0.16, z: a * 0.12, rz: -0.5 }) })),
   ],
@@ -296,48 +289,43 @@ const MODELS = {
       shape.bezierCurveTo(-0.06, 0.32, -0.08, 0.12, 0, 0);
       return { geometry: flat(shape, 0.03), colorAt: (x, y) => mix(shade(c, 0.85), 0xffb0a8, Math.max(0, y - 0.1) * 1.6), matrix: matrixOf({ z: s * 0.08, rx: s * 0.4 }) };
     }),
-  /* Arms and flanks */
-  // Shoulder, elbow and wrist joints, so arms bend like Spore's limbs.
-  arm: (c, bend) => {
-    const path = armPath(bend);
-    return jointedArm(c, path.pts, atHand(path, [sphere(0.08, shade(c, 1.05), { x: 0.04, sy: 0.75 })]));
-  },
-  claws: (c, bend) => {
-    const path = armPath(bend);
-    return jointedArm(
-      c,
-      path.pts,
-      atHand(path, [sphere(0.075, shade(c, 0.8), { x: 0.02 }), ...[-1, 0, 1].map((i) => curved([[0.04, 0, i * 0.05], [0.14, -0.02, i * 0.06], [0.2, -0.1, i * 0.06]], 0.026, 0.004, 0xd8ccb0, 0xffffff))]),
-    );
-  },
+  /* Hands: drawn from the wrist along +x, palm down (-y). They go on the ends of arms. */
+  paw: (c) => [
+    sphere(0.085, shade(c, 1.02), { x: 0.07, sx: 1.15, sy: 0.7, sz: 1.05 }),
+    ...[-1, 0, 1].map((i) => sphere(0.042, shade(c, 1.08), { x: 0.16, y: -0.015, z: i * 0.055, sx: 1.2, sy: 0.85 }, 10)),
+    ...[-1, 0, 1].map((i) => sphere(0.022, 0xe9a3a0, { x: 0.18, y: -0.045, z: i * 0.055, sy: 0.5 }, 8)),
+  ],
+  graspers: (c) => [
+    sphere(0.08, shade(c, 1.04), { x: 0.06, sx: 1.1, sy: 0.75, sz: 1.2 }),
+    ...[-1, 0, 1].map((i) => finger(i * 0.05, 0.2, 0.026, shade(c, 1.04), 0xffc4b0, i * 0.03)),
+    // An opposable thumb, out to one side.
+    curved([[0.04, 0, 0.07], [0.1, -0.01, 0.12], [0.16, -0.06, 0.12]], 0.026, 0.016, shade(c, 1.04), 0xffc4b0),
+  ],
+  claws: (c) => [
+    sphere(0.08, shade(c, 0.9), { x: 0.06, sx: 1.1, sy: 0.8 }),
+    ...[-1, 0, 1].map((i) => finger(i * 0.055, 0.24, 0.03, 0xd8ccb0, 0xffffff, i * 0.025)),
+  ],
   pincers: () => [
-    curved([[0, 0], [0.2, 0.02], [0.32, 0]], 0.08, 0.07, 0xa8432f, 0xc4573f),
-    sphere(0.13, 0xd0603f, { x: 0.42, sx: 1.2, sy: 0.85 }),
-    curved([[0.48, 0.04], [0.62, 0.1], [0.72, 0.03]], 0.05, 0.01, 0xd8664a, 0xf2a080),
-    curved([[0.48, -0.04], [0.6, -0.1], [0.68, -0.04]], 0.045, 0.01, 0xc4573f, 0xe08a6a),
+    sphere(0.12, 0xc4553b, { x: 0.12, sx: 1.35, sy: 0.85 }),
+    curved([[0.22, 0.04], [0.36, 0.1], [0.48, 0.06], [0.54, -0.02]], 0.06, 0.012, 0xd8664a, 0xf2a080),
+    curved([[0.22, -0.05], [0.34, -0.1], [0.44, -0.06]], 0.045, 0.01, 0xb04a32, 0xe08a6a),
+    ...[0.28, 0.36, 0.44].map((x) => sphere(0.016, 0xfff0e0, { x, y: 0.04 }, 6)),
   ],
   bladeArms: (c) => [
-    curved([[0, 0], [0.2, 0.08], [0.32, 0.2]], 0.07, 0.05, shade(c, 0.8), shade(c, 0.7)),
+    sphere(0.075, shade(c, 0.8), { x: 0.04 }),
     {
       geometry: (() => {
         const shape = new THREE.Shape();
-        shape.moveTo(0, 0);
-        shape.quadraticCurveTo(0.25, 0.05, 0.55, -0.12);
-        shape.quadraticCurveTo(0.3, -0.04, 0, -0.06);
+        shape.moveTo(0, 0.03);
+        shape.quadraticCurveTo(0.3, 0.06, 0.58, -0.14);
+        shape.quadraticCurveTo(0.32, -0.02, 0, -0.04);
         return new THREE.ExtrudeGeometry(shape, { depth: 0.025, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 1, curveSegments: 10 });
       })(),
-      colorAt: gradX(0x8aa4ac, 0xeaf6f8, 0, 0.55),
-      matrix: matrixOf({ x: 0.3, y: 0.2, z: -0.012 }),
+      colorAt: gradX(0x8aa4ac, 0xeaf6f8, 0, 0.58),
+      matrix: matrixOf({ x: 0.05, z: -0.012 }),
     },
+    ...[0.18, 0.28, 0.38].map((x) => ({ geometry: new THREE.ConeGeometry(0.014, 0.05, 4), color: 0xf6fbfc, matrix: matrixOf({ x, y: -0.045 - x * 0.08, rz: Math.PI }) })),
   ],
-  graspers: (c, bend) => {
-    const path = armPath(bend);
-    return jointedArm(
-      c,
-      path.pts,
-      atHand(path, [sphere(0.085, shade(c, 1.05), { x: 0.04, sz: 1.2 }), ...[-1, 0, 1].map((i) => curved([[0.08, 0, i * 0.05], [0.16, -0.02, i * 0.07], [0.2, -0.08, i * 0.07]], 0.024, 0.017, shade(c, 1.05), 0xffc4b0))]),
-    );
-  },
   tentacles: (c) => [0, 1, 2].map((i) => curved([[0, 0, (i - 1) * 0.06], [0.2, -0.1, (i - 1) * 0.1], [0.4, -0.05, (i - 1) * 0.14], [0.58, -0.2, (i - 1) * 0.12]], 0.05, 0.012, shade(c, 0.9), 0xff8fc0, { sway: 0.07, segments: 16 })),
   venomSac: () => [
     { geometry: new THREE.SphereGeometry(0.17, 18, 14), colorAt: (x, y) => mix(0x5fae45, 0xc8ff8a, (y + 0.17) / 0.34), matrix: matrixOf({ x: 0.1, sy: 0.85 }) },
@@ -500,15 +488,15 @@ const MODELS = {
 };
 
 const modelCache = new Map();
-/** A part's model geometry (shared, cached per colour and, for jointed arms, per bend). */
-export function partGeometry(id, bodyColor = 0x7fb0d0, bend = 0) {
-  const b = ARM_PARTS.includes(id) ? Math.round(bend * 10) / 10 : 0;
-  const key = id + ":" + bodyColor + ":" + b;
+/** A part's model geometry (shared, cached per colour). */
+export function partGeometry(id, bodyColor = 0x7fb0d0) {
+  const key = id + ":" + bodyColor;
   if (!modelCache.has(key)) {
     const build = MODELS[id];
-    const g = mergePieces(build ? build(bodyColor, b) : [{ geometry: new THREE.SphereGeometry(0.12, 8, 6), color: 0xff00ff }]);
+    const g = mergePieces(build ? build(bodyColor) : [{ geometry: new THREE.SphereGeometry(0.12, 8, 6), color: 0xff00ff }]);
     g.userData.shared = true;
     modelCache.set(key, g);
   }
   return modelCache.get(key);
 }
+export const PART_MODELS = MODELS; // read-only: for tests and dev tools

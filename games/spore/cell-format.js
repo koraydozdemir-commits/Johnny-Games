@@ -239,6 +239,65 @@ export function starterCellRecord() {
   });
 }
 
+/*
+ * Body plans a fresh cell can hatch with. Each lists vertebra radii from tail to head; the
+ * generator jitters every radius and gap, so no two runs start with quite the same cell.
+ */
+const STARTER_PLANS = [
+  { name: "classic", radii: [0.24, 0.52, 0.74, 0.54, 0.24], gap: 0.7 },
+  { name: "teardrop", radii: [0.16, 0.34, 0.6, 0.78, 0.4], gap: 0.66 },
+  { name: "comet", radii: [0.42, 0.72, 0.56, 0.34, 0.16], gap: 0.66 },
+  { name: "round", radii: [0.36, 0.86, 0.36], gap: 0.62 },
+  { name: "long", radii: [0.18, 0.4, 0.52, 0.54, 0.46, 0.22], gap: 0.62 },
+  { name: "peanut", radii: [0.3, 0.6, 0.38, 0.62, 0.3], gap: 0.6 },
+];
+const NAME_START = ["Ka", "Zo", "Mi", "Bru", "Ve", "Ta", "Plo", "Qui", "Ro", "Fen", "Glo", "Si", "Ul", "Ny", "Do"];
+const NAME_MID = ["", "", "r", "l", "m", "n", "x", "b", "v"];
+const NAME_END = ["lets", "pod", "bo", "ri", "zil", "mo", "pa", "nix", "ula", "tik", "on", "ee", "op", "ash"];
+
+/** A pronounceable species name such as "Zorbo" or "Fennix". */
+export function randomCellName(rng = Math.random) {
+  const pick = (list) => list[Math.floor(rng() * list.length)];
+  return pick(NAME_START) + pick(NAME_MID) + pick(NAME_END);
+}
+
+/**
+ * The look of a brand-new run: a body plan, palette, pattern and name, plus where along the
+ * body the starter eyes and cilia sit (as fractions of the half-length, + toward the head).
+ * Pure, so the same seed always hatches the same cell.
+ */
+export function randomStarterCell(rng = Math.random) {
+  const pick = (list) => list[Math.floor(rng() * list.length)];
+  const vary = (amount) => 1 + (rng() - 0.5) * 2 * amount;
+  const plan = pick(STARTER_PLANS);
+  const girth = vary(0.12);
+  const radii = plan.radii.map((r, i, all) => clamp(r * girth * vary(i === 0 || i === all.length - 1 ? 0.15 : 0.1), LIMITS.radiusMin, 1));
+  let x = 0;
+  const nodes = radii.map((r, i) => {
+    if (i) x += clamp(plan.gap * vary(0.12), 0.4, 0.95);
+    return { x, y: 0, r: round(r, 3) };
+  });
+  const mid = x / 2;
+  nodes.forEach((n) => (n.x = round(n.x - mid, 3)));
+
+  const baseColor = pick(BASE_COLORS);
+  // A pattern colour equal to the base would hide the pattern, so pick from the others.
+  const patternColor = pick(PATTERN_COLORS.filter((c) => c !== baseColor));
+  return {
+    plan: plan.name,
+    name: randomCellName(rng),
+    nodes,
+    baseColor,
+    patternColor,
+    accentColor: pick(ACCENT_COLORS),
+    pattern: pick(PATTERNS),
+    eyeAt: round(0.25 + rng() * 0.45, 3),
+    ciliaAt: round(-(0.2 + rng() * 0.5), 3),
+    eyeScale: round(0.85 + rng() * 0.3, 3),
+    ciliaScale: round(0.9 + rng() * 0.25, 3),
+  };
+}
+
 /* ---- persistence ---------------------------------------------------------------- */
 
 export function storeCellRecord(storage, record) {

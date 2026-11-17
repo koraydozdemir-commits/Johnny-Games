@@ -8,10 +8,11 @@
 import * as THREE from "three";
 import { createEditorBackdrop } from "./backdrop.js";
 import { buildCreatureBody } from "./body3d.js";
-import { LIMITS, creaturePartIds, validateCreature } from "./format.js";
-import { ABILITY_INFO, ARM_PARTS, COMBAT, CREATURE_PARTS, PART_SECTIONS, SOCIAL, STAT_INFO, abilitiesOf, abilityIcon, creaturePart, dietOfParts, elbowOf, partGeometry } from "./parts.js";
+import { ARM_ANGLE, LIMITS, armPairsOf, creaturePartIds, validateCreature } from "./format.js";
+import { ABILITY_INFO, ARM_ABILITIES, COMBAT, CREATURE_PARTS, PART_SECTIONS, SOCIAL, STAT_INFO, abilitiesOf, abilityIcon, creaturePart, dietOfParts, fitsArm, partGeometry } from "./parts.js";
 
 const LEG_COST = 8;
+const ARM_COST = 8;
 const NODE_COST = 2;
 const SWATCHES = [0x3be0d8, 0x58c46a, 0xa6d04a, 0xf2c84b, 0xf28a3b, 0xe0504a, 0xd8508e, 0x9a63e0, 0x4a74e0, 0x6f5a46, 0xe8e2d4, 0x2c3440];
 const PATTERNS = [
@@ -23,13 +24,17 @@ const PATTERNS = [
 ];
 /** The Limbs section's leg card: drag it onto the body to add a pair of legs there. */
 const LEG_CARD = { id: "__leg", name: "Leg Pair", slot: "leg", cost: LEG_COST, abilities: { speed: 1 }, desc: "Another pair of legs: steadier and faster." };
-const cardDef = (id) => (id === LEG_CARD.id ? LEG_CARD : creaturePart(id));
+/** And the arm card: a pair of jointed arms that hands (graspers, or feet) go on the end of. */
+const ARM_CARD = { id: "__arm", name: "Arm Pair", slot: "arm", cost: ARM_COST, abilities: ARM_ABILITIES, desc: "Jointed arms. Drag graspers or feet onto their ends." };
+const cardDef = (id) => (id === LEG_CARD.id ? LEG_CARD : id === ARM_CARD.id ? ARM_CARD : creaturePart(id));
+/** A new arm pair's spot: forward on the chest, low on the flank. */
+const ARM_SPOT = { t: 0.76, angle: 1.7 };
 /** Where a part goes when it is tapped instead of dragged. */
-const DEFAULT_SPOT = { mouth: [1, 0], eye: [0.86, 0.75], side: [0.62, 1.45], back: [0.5, 0], tail: [0, 0] };
+const DEFAULT_SPOT = { mouth: [1, 0], eye: [0.92, 0.62], side: [0.62, 1.45], back: [0.5, 0], tail: [0, 0] };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const hex = (n) => "#" + n.toString(16).padStart(6, "0");
 
-/** DNA cost of turning `from` into `to`: new parts, leg pairs and vertebrae; removing is free. */
+/** DNA cost of turning `from` into `to`: new parts and hands, leg and arm pairs, and vertebrae; removing is free. */
 export function designCost(from, to) {
   const owned = new Map();
   creaturePartIds(from).forEach((id) => owned.set(id, (owned.get(id) || 0) + 1));
@@ -39,6 +44,7 @@ export function designCost(from, to) {
     else cost += creaturePart(id)?.cost || 0;
   }
   cost += Math.max(0, to.legs.length - from.legs.length) * LEG_COST;
+  cost += Math.max(0, armPairsOf(to) - armPairsOf(from)) * ARM_COST;
   cost += Math.max(0, to.spine.length - from.spine.length) * NODE_COST;
   return cost;
 }
@@ -197,7 +203,7 @@ export function openCreatureEditor(o) {
     $("#ceRedo").disabled = !redoStack.length;
   }
   function renderStats() {
-    const ab = abilitiesOf(creaturePartIds(rec), rec.legs.length);
+    const ab = abilitiesOf(creaturePartIds(rec), rec.legs.length, armPairsOf(rec));
     const diet = dietOfParts(rec.parts.map((p) => p.id));
     const row = (k, name, icon) => `<div class="ceStat"><span>${icon} ${name}</span><i>${[1, 2, 3, 4, 5].map((n) => `<b class="${n <= ab[k] ? "on" : ""}"></b>`).join("")}</i></div>`;
     $("#ceStats").innerHTML =
@@ -238,6 +244,21 @@ export function openCreatureEditor(o) {
           )
           .join("")}
         <button id="ceAddLeg" ${rec.legs.length >= LIMITS.maxLegPairs ? "disabled" : ""}>+ Leg pair <small>${LEG_COST}🧬</small></button>
+      </div>
+      <div class="ceGroup">
+        <h4>Arms <small>${rec.arms.length} / ${LIMITS.maxArmPairs} pairs</small></h4>
+        ${rec.arms
+          .map(
+            (a, i) => `<div class="ceLeg ceArm">
+              <b>Pair ${i + 1}<small>${a.hand ? esc(creaturePart(a.hand)?.name || "") : "No hands"}</small></b>
+              <label>Position <input type="range" data-arm="${i}" data-k="t" min="0.05" max="0.95" step="0.01" value="${a.t}" aria-label="Arm pair ${i + 1} position"></label>
+              <label>Length <input type="range" data-arm="${i}" data-k="length" min="${LIMITS.minArm}" max="${LIMITS.maxArm}" step="0.05" value="${a.length}" aria-label="Arm pair ${i + 1} length"></label>
+              <label>Elbows <input type="range" data-arm="${i}" data-k="bend" min="-1" max="1" step="0.05" value="${a.bend || 0}" aria-label="Arm pair ${i + 1} elbow bend"></label>
+              <button data-delarm="${i}" aria-label="Remove arm pair ${i + 1}">✕</button>
+            </div>`,
+          )
+          .join("")}
+        <button id="ceAddArm" ${rec.arms.length >= LIMITS.maxArmPairs ? "disabled" : ""}>+ Arm pair <small>${ARM_COST}🧬</small></button>
       </div>`;
     const p = $('[data-pane="body"]');
     p.querySelector("#ceAddNode").onclick = () => {
@@ -284,6 +305,24 @@ export function openCreatureEditor(o) {
           renderBodyTab();
         }),
     );
+    p.querySelectorAll("input[data-arm]").forEach((inp) => {
+      inp.onpointerdown = () => commit();
+      inp.onkeydown = () => commit();
+      inp.oninput = () => {
+        rec.arms[+inp.dataset.arm][inp.dataset.k] = +inp.value;
+        rebuild();
+      };
+    });
+    p.querySelectorAll("[data-delarm]").forEach(
+      (b) =>
+        (b.onclick = () => {
+          commit();
+          rec.arms.splice(+b.dataset.delarm, 1);
+          rebuild();
+          renderBodyTab();
+        }),
+    );
+    p.querySelector("#ceAddArm").onclick = () => addArmAt(null, null, "paw");
     p.querySelector("#ceAddLeg").onclick = () => {
       commit();
       const used = rec.legs.map((l) => l.t);
@@ -306,7 +345,6 @@ export function openCreatureEditor(o) {
       html += `<div class="ceSelected"><b>${esc(selDef.name)}</b>
         <label>Size <input type="range" data-partk="scale" min="0.6" max="1.6" step="0.05" value="${sel.scale || 1}"></label>
         <label>Turn <input type="range" data-partk="roll" min="-3.14" max="3.14" step="0.05" value="${sel.roll || 0}"></label>
-        ${ARM_PARTS.includes(sel.id) ? `<label>Elbow <input type="range" data-partk="bend" min="-1" max="1" step="0.05" value="${sel.bend || 0}"></label>` : ""}
         <button id="cePartDel">Remove</button></div>`;
     }
     // Spore's layout: a row of section tabs, and one sideways strip of parts for the chosen section.
@@ -317,15 +355,16 @@ export function openCreatureEditor(o) {
       const section = partSection;
       html += `<div class="ceSlot"><div class="ceCards">`;
       const defs = CREATURE_PARTS.filter((p) => p.section === section);
-      if (section === "limbs") defs.unshift(LEG_CARD);
+      if (section === "limbs") defs.unshift(LEG_CARD, ARM_CARD);
       for (const def of defs) {
         const unlocked = isUnlocked(def.id);
-        const inUse = def.slot === "foot" ? rec.foot === def.id : def.slot === "leg" ? false : rec.parts.some((p) => p.id === def.id);
+        const onArm = rec.arms.some((a) => a.hand === def.id);
+        const inUse = def.slot === "foot" ? rec.foot === def.id || onArm : def.slot === "hand" ? onArm : def.slot === "leg" || def.slot === "arm" ? false : rec.parts.some((p) => p.id === def.id);
         const abilities = Object.entries(def.abilities)
           .map(([k, v]) => abilityIcon(k) + v)
           .join(" ");
         html += `<button class="cePart ${unlocked ? "" : "locked"} ${inUse ? "inUse" : ""}" data-part="${def.id}" ${unlocked ? "" : 'aria-disabled="true"'} aria-label="${esc(def.name)}${unlocked ? ", costs " + def.cost + " DNA" : ", locked"}">
-          <span class="thumb">${def.slot === "leg" ? '<span class="legIc" aria-hidden="true">🦵</span>' : ""}${thumbCache.get(def.id) ? `<img src="${thumbCache.get(def.id)}" alt="" draggable="false">` : ""}${unlocked ? "" : '<span class="lk" aria-hidden="true">🔒</span>'}</span>
+          <span class="thumb">${def.slot === "leg" ? '<span class="legIc" aria-hidden="true">🦵</span>' : def.slot === "arm" ? '<span class="legIc" aria-hidden="true">💪</span>' : ""}${thumbCache.get(def.id) ? `<img src="${thumbCache.get(def.id)}" alt="" draggable="false">` : ""}${unlocked ? "" : '<span class="lk" aria-hidden="true">🔒</span>'}</span>
           <b>${esc(def.name)}</b><small>${abilities}</small><em>${unlocked ? (def.cost ? def.cost + "🧬" : "Free") : "Find it"}</em>
         </button>`;
       }
@@ -526,11 +565,14 @@ export function openCreatureEditor(o) {
     const a = Math.abs(angle) < 0.18 ? 0 : Math.abs(angle) > Math.PI - 0.18 ? Math.PI : angle;
     return { t: THREE.MathUtils.clamp(t, 0.02, 0.98), angle: a };
   }
-  const isUnlocked = (id) => id === LEG_CARD.id || o.unlocked.has(id);
+  const isUnlocked = (id) => id === LEG_CARD.id || id === ARM_CARD.id || o.unlocked.has(id);
   function placePart(id, t, angle) {
     if (id === LEG_CARD.id) return addLegAt(t);
+    if (id === ARM_CARD.id) return addArmAt(t, angle, "paw");
     const def = creaturePart(id);
     if (!def || !o.unlocked.has(id)) return;
+    // A grasper dropped on the body grows a pair of arms there to hold it (or goes on the arms you have).
+    if (def.slot === "hand") return rec.arms.length ? setHand(0, id) : addArmAt(t, angle, id);
     commit();
     if (def.slot === "foot") rec.foot = id;
     else {
@@ -547,6 +589,57 @@ export function openCreatureEditor(o) {
     hint(def.name + ": " + def.desc);
     rebuild();
     renderPartsTab();
+  }
+
+  /** Put a hand (a grasper or a foot) on the end of arm pair i. */
+  function setHand(i, id) {
+    const arm = rec.arms[i];
+    const def = creaturePart(id);
+    if (!arm || !def || !fitsArm(id) || !o.unlocked.has(id)) return;
+    if (arm.hand === id) return;
+    commit();
+    arm.hand = id;
+    o.sfx("unlock");
+    hint(def.name + (def.slot === "foot" ? " on your arms: walk on all fours, Spore-style." : ": " + def.desc));
+    rebuild();
+    renderPartsTab();
+    renderBodyTab();
+  }
+  /** Add a pair of arms where it was dropped (or on the chest), holding `hand`. */
+  function addArmAt(t, angle, hand) {
+    if (rec.arms.length >= LIMITS.maxArmPairs) {
+      hint("Two pairs is the most arms a creature can have. Drop graspers on the ends of the ones you have.");
+      return;
+    }
+    commit();
+    rec.arms.push({
+      t: THREE.MathUtils.clamp(t ?? ARM_SPOT.t, 0.05, 0.95),
+      angle: THREE.MathUtils.clamp(Math.abs(angle ?? ARM_SPOT.angle), ARM_ANGLE.min, ARM_ANGLE.max),
+      length: rec.arms[0]?.length || 1,
+      bend: 0,
+      hand,
+    });
+    o.sfx("unlock");
+    hint(hand && hand !== "paw" ? creaturePart(hand).name + " on a new pair of arms. Drag the elbows and hands to pose them." : "Arms! Drag graspers onto their ends, and the elbows and hands to pose them.");
+    rebuild();
+    renderPartsTab();
+    renderBodyTab();
+  }
+  /** The arm end (hand) nearest a screen point, within reach of a finger: { pair } or null. */
+  function armEndAt(clientX, clientY, radius = 70) {
+    if (!creature || !rec.arms.length) return null;
+    let best = null,
+      bestD = radius;
+    for (const j of creature.joints()) {
+      if (j.kind !== "arm") continue;
+      const p = toScreen(j.foot);
+      const d = Math.hypot(p.x - clientX, p.y - clientY);
+      if (d < bestD) {
+        bestD = d;
+        best = { pair: j.pair, point: j.foot };
+      }
+    }
+    return best;
   }
 
   /** Add a pair of legs at spine fraction t (or the best free spot when t is null). */
@@ -638,9 +731,12 @@ export function openCreatureEditor(o) {
       }
       e.preventDefault();
       moveGhost(e);
-      const s = def.slot === "foot" ? null : surfaceAt(e.clientX, e.clientY);
-      marker.visible = !!s;
-      if (s) marker.position.copy(s.point);
+      // Graspers and feet snap onto the end of an arm when they are dragged near one.
+      const end = fitsArm(id) ? armEndAt(e.clientX, e.clientY) : null;
+      const s = end ? null : def.slot === "foot" ? null : surfaceAt(e.clientX, e.clientY);
+      marker.visible = !!(end || s);
+      if (end) marker.position.copy(end.point);
+      else if (s) marker.position.copy(s.point);
     };
     /** Let the strip coast after a flick. */
     const glide = (v) => {
@@ -659,7 +755,9 @@ export function openCreatureEditor(o) {
       if (dragging && e.type === "pointerup") {
         const s = surfaceAt(e.clientX, e.clientY);
         const overCanvas = document.elementFromPoint(e.clientX, e.clientY) === canvas;
-        if (def.slot === "leg") {
+        const armEnd = fitsArm(id) ? armEndAt(e.clientX, e.clientY) : null;
+        if (armEnd) setHand(armEnd.pair, id);
+        else if (def.slot === "leg") {
           if (overCanvas) placePart(id, s ? s.t : null, 0);
         } else if (s) placePart(id, s.t, s.angle);
         else if (overCanvas && def.slot === "foot") placePart(id, 0.5, 0);
@@ -691,7 +789,7 @@ export function openCreatureEditor(o) {
         hint(def.name + " is locked. Dig it from a fossil, or win it from species you befriend or drive extinct.");
         return;
       }
-      if (def.slot === "leg") return placePart(id, null, 0);
+      if (def.slot === "leg" || def.slot === "arm") return placePart(id, null, null);
       const [t, a] = DEFAULT_SPOT[def.slot] || [0.5, 0];
       // Tapping a second copy of a flank part puts it further back.
       const copies = rec.parts.filter((p) => creaturePart(p.id).slot === def.slot).length;
@@ -844,8 +942,9 @@ export function openCreatureEditor(o) {
   /* ---- grips: joints and part handles ----------------------------------------------
      Big round handles drawn over the 3D view, so they are easy to hit with a finger. On the Body
      tab every leg pair has a knee grip (drag forward or back to bend the leg) and a foot grip (drag
-     along the leg to stretch or shorten it). A selected part gets a size grip, a turn grip and,
-     for jointed arms, an elbow grip. Every grip has a slider twin in the panel for keyboards. */
+     along the leg to stretch or shorten it); arms get the same pair (elbow up or down to raise and
+     fold the arm, hand along the arm for reach). A selected part gets a size grip and a turn grip.
+     Every grip has a slider twin in the panel for keyboards. */
   const grips = document.createElement("div");
   grips.className = "ceGrips";
   root.appendChild(grips);
@@ -856,15 +955,17 @@ export function openCreatureEditor(o) {
     const r = canvas.getBoundingClientRect();
     return new THREE.Vector2(r.left + (p.x * 0.5 + 0.5) * r.width, r.top + (-p.y * 0.5 + 0.5) * r.height);
   };
-  /** The leg of a pair on the side facing the camera. */
-  function nearLeg(pair) {
-    const both = creature.joints().filter((j) => j.pair === pair);
+  /** The leg (or arm) of a pair on the side facing the camera. */
+  function nearLimb(limb, pair) {
+    const both = creature.joints().filter((j) => j.kind === limb && j.pair === pair);
     return both.sort((a, b) => a.foot.distanceToSquared(camera.position) - b.foot.distanceToSquared(camera.position))[0];
   }
+  const limbList = (limb) => (limb === "arm" ? rec.arms : rec.legs);
+  const limbLimits = (limb) => (limb === "arm" ? [LIMITS.minArm, LIMITS.maxArm] : [LIMITS.minLeg, LIMITS.maxLeg]);
   const selectedMesh = () => creature?.partMeshes.find((pm) => pm.userData.partIndex === selectedPart);
   function renderGrips() {
     const part = rec.parts[selectedPart];
-    const key = rec.legs.length + "|" + selectedPart + "|" + (part ? part.id : "");
+    const key = rec.legs.length + "|" + rec.arms.length + "|" + selectedPart + "|" + (part ? part.id : "");
     if (key === gripKey) return;
     gripKey = key;
     grips.innerHTML = "";
@@ -882,13 +983,16 @@ export function openCreatureEditor(o) {
       gripList.push(g);
     };
     rec.legs.forEach((_, i) => {
-      add("knee", "", "Drag to bend the knee", { leg: i });
-      add("foot", "↕", "Drag to stretch or shorten the leg", { leg: i });
+      add("knee", "", "Drag to bend the knee", { limb: "leg", leg: i });
+      add("foot", "↕", "Drag to stretch or shorten the leg", { limb: "leg", leg: i });
+    });
+    rec.arms.forEach((_, i) => {
+      add("knee elbow", "", "Drag up or down to raise and bend the arm", { limb: "arm", leg: i });
+      add("foot hand", "↕", "Drag to lengthen or shorten the arm", { limb: "arm", leg: i });
     });
     if (part) {
       add("size", "⤢", "Drag to resize", {});
       add("turn", "⟳", "Drag to turn", {});
-      if (ARM_PARTS.includes(part.id)) add("elbow", "", "Drag to bend the elbow", {});
     }
   }
   /** Where each grip sits on screen this frame. */
@@ -904,18 +1008,14 @@ export function openCreatureEditor(o) {
     }
     for (const g of gripList) {
       let at = null;
-      if (g.kind === "knee" || g.kind === "foot") {
+      if (g.limb) {
         if (showLegs) {
-          const leg = nearLeg(g.leg);
-          if (leg) at = toScreen(g.kind === "knee" ? leg.knee : leg.foot);
+          const j = nearLimb(g.limb, g.leg);
+          if (j) at = toScreen(g.kind.startsWith("knee") ? j.knee : j.foot);
         }
       } else if (mesh) {
         if (g.kind === "size") at = centreS.clone().add(new THREE.Vector2(46, 34));
         else if (g.kind === "turn") at = centreS.clone().add(new THREE.Vector2(-46, 34));
-        else {
-          const [ex, ey] = elbowOf(rec.parts[selectedPart].bend || 0);
-          at = toScreen(mesh.localToWorld(new THREE.Vector3(ex, ey, 0)));
-        }
       }
       // Never over the tool panel or the top bar.
       if (at && (at.y > panelTop - 12 || at.y < topBottom + 12)) at = null;
@@ -933,18 +1033,21 @@ export function openCreatureEditor(o) {
       e.stopPropagation();
       const pointer = new THREE.Vector2(e.clientX, e.clientY);
       d = { id: e.pointerId, start: pointer, moved: false };
-      if (g.kind === "knee" || g.kind === "foot") {
-        const leg = nearLeg(g.leg);
-        const hip = toScreen(leg.hip),
-          foot = toScreen(leg.foot);
+      if (g.limb) {
+        const j = nearLimb(g.limb, g.leg);
+        if (!j) return (d = null);
+        const hip = toScreen(j.hip),
+          foot = toScreen(j.foot);
         d.along = foot.clone().sub(hip);
         d.len = Math.max(20, d.along.length());
         d.along.normalize();
-        // The body's forward direction on screen, for bending the knee.
-        const front = toScreen(leg.hip.clone().add(new THREE.Vector3(0.5, 0, 0).applyQuaternion(creature.root.quaternion))).sub(hip);
-        d.front = front.length() > 4 ? front.normalize() : new THREE.Vector2(1, 0);
-        d.length0 = rec.legs[g.leg].length;
-        d.bend0 = rec.legs[g.leg].bend || 0;
+        // Legs bend toward the body's front; arms are raised by dragging the elbow up.
+        const dir = g.limb === "arm" ? new THREE.Vector3(0, 0.5, 0) : new THREE.Vector3(0.5, 0, 0).applyQuaternion(creature.root.quaternion);
+        const front = toScreen(j.hip.clone().add(dir)).sub(hip);
+        d.front = front.length() > 4 ? front.normalize() : new THREE.Vector2(g.limb === "arm" ? 0 : 1, g.limb === "arm" ? -1 : 0);
+        const limb = limbList(g.limb)[g.leg];
+        d.length0 = limb.length;
+        d.bend0 = limb.bend || 0;
       } else {
         const mesh = selectedMesh();
         if (!mesh) return (d = null);
@@ -952,17 +1055,8 @@ export function openCreatureEditor(o) {
         d.centre = toScreen(mesh.getWorldPosition(new THREE.Vector3()));
         d.scale0 = part.scale || 1;
         d.roll0 = part.roll || 0;
-        d.bend0 = part.bend || 0;
         d.dist0 = Math.max(12, pointer.distanceTo(d.centre));
         d.angle0 = Math.atan2(pointer.y - d.centre.y, pointer.x - d.centre.x);
-        if (g.kind === "elbow") {
-          const [ex, ey] = elbowOf(d.bend0);
-          const a = toScreen(mesh.localToWorld(new THREE.Vector3(ex, ey, 0))),
-            b = toScreen(mesh.localToWorld(new THREE.Vector3(ex, ey + 0.2, 0)));
-          d.up = b.sub(a);
-          d.upLen = Math.max(8, d.up.length());
-          d.up.normalize();
-        }
       }
       commit();
       g.el.classList.add("held");
@@ -979,10 +1073,11 @@ export function openCreatureEditor(o) {
       const delta = pointer.clone().sub(d.start);
       if (!d.moved && delta.length() < 3) return;
       d.moved = true;
-      if (g.kind === "foot") {
-        rec.legs[g.leg].length = THREE.MathUtils.clamp(d.length0 * (1 + delta.dot(d.along) / d.len), LIMITS.minLeg, LIMITS.maxLeg);
-      } else if (g.kind === "knee") {
-        rec.legs[g.leg].bend = THREE.MathUtils.clamp(d.bend0 + delta.dot(d.front) / (d.len * 0.9), -1, 1);
+      if (g.limb) {
+        const limb = limbList(g.limb)[g.leg];
+        if (!limb) return;
+        if (g.kind.startsWith("foot")) limb.length = THREE.MathUtils.clamp(d.length0 * (1 + delta.dot(d.along) / d.len), ...limbLimits(g.limb));
+        else limb.bend = THREE.MathUtils.clamp(d.bend0 + delta.dot(d.front) / (d.len * 0.9), -1, 1);
       } else {
         const part = rec.parts[selectedPart];
         if (!part) return;
@@ -990,7 +1085,7 @@ export function openCreatureEditor(o) {
         else if (g.kind === "turn") {
           const a = Math.atan2(pointer.y - d.centre.y, pointer.x - d.centre.x);
           part.roll = THREE.MathUtils.euclideanModulo(d.roll0 + (a - d.angle0) + Math.PI, Math.PI * 2) - Math.PI;
-        } else part.bend = THREE.MathUtils.clamp(d.bend0 + delta.dot(d.up) / (d.upLen * 1.5), -1, 1);
+        }
       }
       rebuild();
     };
@@ -1021,7 +1116,7 @@ export function openCreatureEditor(o) {
     const bar = $("#ceTestBar");
     bar.hidden = !on;
     if (on) {
-      const ab = abilitiesOf(creaturePartIds(rec), rec.legs.length);
+      const ab = abilitiesOf(creaturePartIds(rec), rec.legs.length, armPairsOf(rec));
       bar.innerHTML = [...COMBAT, ...SOCIAL]
         .map((k) => `<button data-play="${k}" ${ab[k] ? "" : "disabled"}>${ABILITY_INFO[k].icon}<small>${ABILITY_INFO[k].name} ${ab[k] || "–"}</small></button>`)
         .join("");
@@ -1117,8 +1212,13 @@ export function openCreatureEditor(o) {
             a = testT * 0.6;
           creature.root.position.set(Math.cos(a) * r - centre.x, FLOOR, Math.sin(a) * r);
           creature.root.rotation.y = -a - Math.PI / 2;
+          creature.lookAt(null);
           creature.update(dt, 2.6);
-        } else creature.update(dt, 0);
+        } else {
+          // As in Spore, the creature on the table looks back at you.
+          creature.lookAt(camera.position);
+          creature.update(dt, 0);
+        }
         // Orbit around the body's middle.
         const target = testing ? new THREE.Vector3(0, 1, 0) : centre;
         // Tall phone screens need the camera further back to fit the body's length.

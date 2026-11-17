@@ -7,17 +7,24 @@
 import * as THREE from "three";
 import { timeUniform } from "../gfx/materials.js";
 import { buildCreatureBody } from "./body3d.js";
-import { CREATURE_SAVE_KEY, creaturePartIds, validateCreature } from "./format.js";
+import { CREATURE_SAVE_KEY, armPairsOf, creaturePartIds, validateCreature } from "./format.js";
 import { ABILITY_INFO, COMBAT, CREATURE_PARTS, SOCIAL, abilitiesOf, creaturePart, dietOfParts } from "./parts.js";
 import { createEmotes } from "./emotes.js";
 import { RELATION_INFO, relationDelta, relationOf } from "./relations.js";
-import { evolveSpecies, generateEpic, generateRogue, generateSpecies, socialNeed } from "./species.js";
-import { ISLAND, RING_NAMES, createIsland, heightAt, ringAt } from "./world.js";
+import { atLevel, evolveSpecies, generateEpic, generateRogue, generateSpecies, socialNeed } from "./species.js";
+import { ISLAND, areaAt, createIsland, heightAt, steerAround } from "./world.js";
+import { createMinimap, islandPicture, openIslandMap } from "./minimap.js";
 import { creatureCard } from "../traits.js";
 
 const TAU = Math.PI * 2;
-const DIET_BY_RING = [null, ["plant", "omni", "plant"], ["plant", "meat", "plant"], ["meat", "plant", "omni"], ["plant", "meat"], ["meat"]];
-const XP_TO_NEXT = [0, 120, 180, 250, 330];
+/** The open island (v2). Saves from the old ringed island keep their progress but not positions. */
+const WORLD_VERSION = 2;
+/* Nests are listed nearest your first nest first: gentle plant eaters close by, meat eaters further out. */
+const NEST_DIETS = ["plant", "plant", "omni", "plant", "meat", "omni", "plant", "meat", "omni", "plant", "meat", "meat"];
+/* As in Spore, nests level with you: each is your brain level plus this, so the near ones stay a
+   little gentler and the far ones a little tougher, whatever your level. */
+const NEST_OFFSET = [-1, -1, 0, 0, 0, -1, 0, 0, 1, 0, 1, 1];
+const XP_TO_NEXT = [0, 100, 150, 210, 280];
 const PACK_SIZE = [0, 1, 2, 3, 4, 4];
 const ACTIVE_RANGE = 80; // nests closer than this have live creatures
 
@@ -53,6 +60,9 @@ export function createCreatureStage(o) {
 
   /* ---- state ---------------------------------------------------------- */
   const save = o.save || {};
+  const sameWorld = save.worldVersion === WORLD_VERSION;
+  /** Where your species nests right now. It moves when you migrate. */
+  const nestAt = sameWorld && save.home ? { x: save.home.x, z: save.home.z } : { x: ISLAND.nest.x, z: ISLAND.nest.z };
   const P = {
     record: validateCreature(save.record || o.record),
     brain: save.brain || 1,
@@ -66,7 +76,7 @@ export function createCreatureStage(o) {
     extinctions: save.extinctions || 0,
     deaths: save.deaths || 0,
     card: save.card || null,
-    pos: new THREE.Vector3(save.pos?.x ?? ISLAND.nest.x, 0, save.pos?.z ?? ISLAND.nest.z - 13),
+    pos: sameWorld && save.pos ? new THREE.Vector3(save.pos.x, 0, save.pos.z) : new THREE.Vector3(nestAt.x, 0, nestAt.z - 13),
     heading: save.heading ?? Math.PI / 2,
     speed: 0,
     lastHurt: 0,
@@ -82,7 +92,12 @@ export function createCreatureStage(o) {
     body: null,
     deadTimer: 0,
     genStart: save.genStart || { alliances: 0, extinctions: 0, deaths: 0 },
-    bonesTaken: new Set(save.bonesTaken || []),
+    bonesTaken: new Set(sameWorld ? save.bonesTaken || [] : []),
+    /** Nests you have lived at, so each migration heads somewhere new. */
+    pastHomes: sameWorld ? save.pastHomes || [] : [],
+    /** The new nest you are migrating to, or null. */
+    migration: sameWorld ? save.migration || null : null,
+    migrateDue: sameWorld ? !!save.migrateDue : false,
     stamina: 100,
     staminaRest: 0, // seconds before stamina starts to refill
     sneaking: false,
@@ -96,10 +111,13 @@ export function createCreatureStage(o) {
     const rec = (P.treated[sp.id] ||= { friends: 0, kills: 0 });
     rec[key]++;
   };
+  const lookTmp = new THREE.Vector3();
   const unlockedParts = () => {
     const base = new Set(P.unlocked);
-    P.record.parts.forEach((p) => base.add(p.id));
-    base.add(P.record.foot);
+    creaturePartIds(P.record).forEach((id) => base.add(id));
+    base.add("paw"); // simple hands come with every arm
+    // Older saves unlocked the single-piece "arm"; it is now a pair of arms with paws.
+    base.delete("arm");
     return base;
   };
 
@@ -111,40 +129,69 @@ export function createCreatureStage(o) {
     P.air = null;
     P.body = buildCreatureBody(P.record, { quality: o.quality });
     scene.add(P.body.root);
-    P.abilities = abilitiesOf(creaturePartIds(P.record), P.record.legs.length);
+    P.abilities = abilitiesOf(creaturePartIds(P.record), P.record.legs.length, armPairsOf(P.record));
     P.diet = dietOfParts(P.record.parts.map((p) => p.id));
-    P.maxHealth = 100 + P.abilities.health * 25 + (P.brain - 1) * 20;
+    P.maxHealth = 120 + P.abilities.health * 25 + (P.brain - 1) * 20;
     if (P.health > P.maxHealth || P.health <= 1) P.health = P.maxHealth;
     P.scale = 0.9 + (P.brain - 1) * 0.12;
     P.body.root.scale.setScalar(P.scale);
   }
   rebuildPlayer();
   if (save.health) P.health = Math.min(P.maxHealth, save.health);
+  {
+    // Never start inside a rock or a mountain.
+    const at = world.resolve(P.pos.x, P.pos.z, 1.2);
+    P.pos.set(at.x, 0, at.z);
+  }
 
   /* ---- nests and creatures -------------------------------------------- */
   const seedBase = save.seed || ((Math.random() * 1e9) | 0);
+  const nestLevel = (i) => Math.max(1, Math.min(5, P.brain + NEST_OFFSET[i % NEST_OFFSET.length]));
   const nests = world.nestSites.map((site, i) => {
-    const diets = DIET_BY_RING[site.ring];
-    let species = generateSpecies(seedBase + i * 7919, diets[i % diets.length], site.ring);
+    let base = generateSpecies(seedBase + i * 7919, NEST_DIETS[i % NEST_DIETS.length], 2);
     const saved = save.nests?.[i];
     // Species evolve as you do; a saved island replays the same evolution steps.
-    for (let k = 0; k < (saved?.evo || 0); k++) species = evolveSpecies(species);
-    const home = saved?.site ? { x: saved.site.x, z: saved.site.z, ring: site.ring } : { ...site };
+    for (let k = 0; k < (saved?.evo || 0); k++) base = evolveSpecies(base);
+    const species = atLevel(base, nestLevel(i));
+    const home = sameWorld && saved?.site ? { x: saved.site.x, z: saved.site.z } : { x: site.x, z: site.z };
     const mesh = world.makeNestMesh(home.x, home.z, species.record.colors.accent);
     return {
       index: i,
       site: home,
+      base, // the species' look and lineage; species is the same creature at its current level
       evo: saved?.evo || 0,
       migrating: 0,
       snub: 0,
       species,
       status: saved?.status || "neutral", // neutral | allied | extinct
       angry: 0,
+      eggs: 3,
+      eggRegrow: 0,
       members: Array.from({ length: species.members }, (_, k) => ({ alive: saved?.members?.[k]?.alive ?? true, friend: saved?.members?.[k]?.friend ?? false, npc: null })),
       mesh,
     };
   });
-  const epics = [generateEpic(seedBase + 99991, 4), generateEpic(seedBase + 77773, 5)].map((sp, i) => ({ species: sp, alive: save.epics?.[i] ?? true, angle: i * Math.PI, ring: sp.ring, npc: null }));
+  /** The quietest open spot on the island: as far as possible from every nest and the beach start. */
+  function remoteSpot(avoid) {
+    let best = null,
+      bestD = -1;
+    for (let x = -168; x <= 168; x += 6)
+      for (let z = -168; z <= 168; z += 6) {
+        if (!world.isOpen(x, z, 10, ISLAND.beach - 16)) continue;
+        const d = Math.min(...avoid.map((a) => Math.hypot(a.x - x, a.z - z)));
+        if (d > bestD) {
+          bestD = d;
+          best = { x, z };
+        }
+      }
+    return best || { x: 0, z: 0 };
+  }
+  // Epics keep to the island's remotest corners, well away from every nest.
+  const epicAvoid = [ISLAND.nest, ...world.nestSites];
+  const epicHomes = [remoteSpot(epicAvoid)];
+  epicHomes.push(remoteSpot([...epicAvoid, epicHomes[0]]));
+  const epics = [generateEpic(seedBase + 99991, 4), generateEpic(seedBase + 77773, 5)].map((sp, i) => ({ species: sp, alive: save.epics?.[i] ?? true, angle: i * Math.PI, anchor: epicHomes[i], npc: null }));
+  const epicHome = (e) => world.resolve(e.anchor.x + Math.cos(e.angle) * 10, e.anchor.z + Math.sin(e.angle) * 10, 3);
 
   const npcs = new Set();
   /**
@@ -202,7 +249,7 @@ export function createCreatureStage(o) {
     maxHealth: Math.round(P.maxHealth * 0.8),
     diet: P.diet,
     temper: "friendly",
-    ring: 1,
+    level: P.brain,
     scale: P.scale * 0.95,
     generation: P.brain,
   });
@@ -215,18 +262,19 @@ export function createCreatureStage(o) {
       ...away,
       ...Array.from({ length: Math.max(0, FAMILY_SIZE - away.length) }, (_, k) => {
         const a = (k / FAMILY_SIZE) * TAU + 0.4;
-        return spawnNPC(sp, ISLAND.nest.x + Math.cos(a) * 6, ISLAND.nest.z + Math.sin(a) * 6, { family: true });
+        return spawnNPC(sp, nestAt.x + Math.cos(a) * 6, nestAt.z + Math.sin(a) * 6, { family: true, trek: !!P.migration });
       }),
     ];
   }
   /** Mating, Spore-style: the nearest family member comes over, you court, and an egg is laid. */
   let courtship = null;
   function callMate() {
-    if (!brainReady || courtship || !nearNest()) return;
+    if (!brainReady || courtship || !nearNest() || P.migration) return;
     const partner = family.filter((n) => !n.dead && !n.following).sort((a, b) => distTo(a) - distTo(b))[0];
     if (!partner) return mate();
     courtship = { n: partner, t: 0 };
     partner.social = null;
+    partner.wake = 60; // even at night
     P.pending = null;
     o.sfx("mate");
   }
@@ -276,7 +324,7 @@ export function createCreatureStage(o) {
     if ((hatchClock -= dt) > 0) return;
     hatchClock = 90;
     const a = Math.random() * TAU;
-    const n = spawnNPC(ownSpecies(), ISLAND.nest.x + Math.cos(a) * 4, ISLAND.nest.z + Math.sin(a) * 4, { family: true });
+    const n = spawnNPC(ownSpecies(), nestAt.x + Math.cos(a) * 4, nestAt.z + Math.sin(a) * 4, { family: true });
     family.push(n);
     dust(n.pos.x, n.pos.z, 6, eggMat);
     if (distTo(n) < 40) pop(n, "🥚", "good");
@@ -286,24 +334,28 @@ export function createCreatureStage(o) {
      Once your brain has grown a little, carnivores come for your family. A few hunters run in from
      the wild and go for the creatures at your nest; drive them off or lose your kin. */
   let raid = null,
-    raidClock = 240 + Math.random() * 120;
+    raidClock = 300 + Math.random() * 150;
+  /** Raiders are the nearest meat eaters, a level below you so a raid is a fight you can win. */
   function raidSpecies() {
-    const meat = nests.filter((n) => n.status !== "extinct" && n.species.diet === "meat" && n.status !== "allied").sort((a, b) => a.species.ring - b.species.ring);
-    if (meat.length) return meat[Math.min(meat.length - 1, Math.max(0, P.brain - 2))].species;
-    return generateSpecies(seedBase + 4242 + P.brain, "meat", Math.min(4, P.brain));
+    const level = Math.max(1, P.brain - 1);
+    const meat = nests
+      .filter((n) => n.status !== "extinct" && n.species.diet === "meat" && n.status !== "allied")
+      .sort((a, b) => Math.hypot(a.site.x - nestAt.x, a.site.z - nestAt.z) - Math.hypot(b.site.x - nestAt.x, b.site.z - nestAt.z));
+    if (meat.length) return atLevel(meat[0].base, level);
+    return generateSpecies(seedBase + 4242 + P.brain, "meat", level);
   }
   function startRaid() {
-    if (raid || !family.some((n) => !n.dead && !n.following)) return false;
+    if (raid || P.migration || !family.some((n) => !n.dead && !n.following)) return false;
     const sp = raidSpecies();
-    const count = Math.min(4, 1 + Math.ceil(P.brain / 2));
+    const count = Math.min(3, 1 + Math.floor(P.brain / 2));
     // They come from inland, the side away from the beach.
-    const a0 = Math.atan2(-ISLAND.nest.z, -ISLAND.nest.x);
+    const a0 = Math.atan2(-nestAt.z, -nestAt.x);
     const raiders = [];
     for (let i = 0; i < count; i++) {
       const a = a0 + (i - (count - 1) / 2) * 0.35;
-      const at = world.resolve(ISLAND.nest.x + Math.cos(a) * 42, ISLAND.nest.z + Math.sin(a) * 42, 2);
+      const at = world.resolve(nestAt.x + Math.cos(a) * 42, nestAt.z + Math.sin(a) * 42, 2);
       const n = spawnNPC(sp, at.x, at.z, { raider: true });
-      n.heading = Math.atan2(-(ISLAND.nest.z - at.z), ISLAND.nest.x - at.x);
+      n.heading = Math.atan2(-(nestAt.z - at.z), nestAt.x - at.x);
       raiders.push(n);
     }
     raid = { raiders, t: 0, warned: false };
@@ -316,7 +368,7 @@ export function createCreatureStage(o) {
     if (!raid) {
       if (P.brain >= 2 && !intro && !courtship && (raidClock -= dt) <= 0) {
         // Only when you are near enough to come back and defend; otherwise check again soon.
-        if (Math.hypot(P.pos.x - ISLAND.nest.x, P.pos.z - ISLAND.nest.z) < 90 && startRaid()) raidClock = 240 + Math.random() * 120;
+        if (Math.hypot(P.pos.x - nestAt.x, P.pos.z - nestAt.z) < 90 && startRaid()) raidClock = 300 + Math.random() * 150;
         else raidClock = 30;
       }
       return;
@@ -365,7 +417,7 @@ export function createCreatureStage(o) {
       nest.members.forEach((m, k) => {
         if (!m.alive) return;
         const inPack = m.npc?.following;
-        if (d < ACTIVE_RANGE && !m.npc) {
+        if (d < ACTIVE_RANGE && !m.npc && !(m.away > 0)) {
           const a = (k / nest.members.length) * TAU;
           m.npc = spawnNPC(nest.species, nest.site.x + Math.cos(a) * 4, nest.site.z + Math.sin(a) * 4, { nest, member: m, alpha: k === 0 });
         } else if (d > ACTIVE_RANGE + 15 && m.npc && !inPack) {
@@ -376,8 +428,7 @@ export function createCreatureStage(o) {
     }
     for (const e of epics) {
       if (!e.alive) continue;
-      const ex = Math.cos(e.angle) * (e.ring === 5 ? 22 : 52),
-        ez = Math.sin(e.angle) * (e.ring === 5 ? 22 : 52);
+      const { x: ex, z: ez } = epicHome(e);
       const d = Math.hypot(ex - P.pos.x, ez - P.pos.z);
       if (d < ACTIVE_RANGE && !e.npc) e.npc = spawnNPC(e.species, ex, ez, { epic: e });
       else if (d > ACTIVE_RANGE + 20 && e.npc) {
@@ -398,22 +449,15 @@ export function createCreatureStage(o) {
       }
     }
   }
-  /* Rogues: lone, extra-tough wanderers, one per ring from the forest inward, each carrying a rare
-     part. They circle the island slowly, so you meet them in different places. */
-  const ROGUE_RADIUS = [0, 176, 131, 91, 53];
-  const rogues = [1, 2, 3, 4].map((ring, i) => ({
-    species: generateRogue(seedBase + 31337 + i * 104729, ring),
-    alive: save.rogues?.[i] ?? true,
-    angle: i * 1.7 + 0.6,
-    ring,
-    npc: null,
-  }));
-  const rogueHome = (r) => {
-    const d = ROGUE_RADIUS[r.ring];
-    const x = Math.cos(r.angle) * d,
-      z = Math.sin(r.angle) * d;
-    return world.resolve(x, z, 3);
-  };
+  /* Rogues: lone, extra-tough wanderers, each carrying a rare part and always a level above you.
+     They circle the island slowly at different distances, so you meet them in different places. */
+  const ROGUE_RADIUS = [150, 115, 80, 45];
+  const rogueLevel = () => Math.min(5, P.brain + 1);
+  const rogues = ROGUE_RADIUS.map((radius, i) => {
+    const base = generateRogue(seedBase + 31337 + i * 104729, i + 1);
+    return { base, species: atLevel(base, rogueLevel()), alive: save.rogues?.[i] ?? true, angle: i * 1.7 + 0.6, radius, npc: null };
+  });
+  const rogueHome = (r) => world.resolve(Math.cos(r.angle) * r.radius, Math.sin(r.angle) * r.radius, 3);
 
   hatchFamily();
 
@@ -487,6 +531,7 @@ export function createCreatureStage(o) {
     <div class="chPops" id="chPops" aria-hidden="true"></div>
     <div class="chToast" id="chToast"></div>
     <button class="chMate" id="chMate" hidden>♡ Call a mate</button>
+    <button class="chMate chEgg" id="chEgg" hidden>🥚 Eat an egg</button>
     <div class="chAbilities" id="chAbilities" role="toolbar" aria-label="Abilities"></div>
     <div class="chMenuPanel" id="chMenuPanel" hidden>
       <button id="chResume" class="primary">Resume</button>
@@ -776,7 +821,8 @@ export function createCreatureStage(o) {
     act(P, kind);
     voice(P, kind);
     if (info.kind === "combat") {
-      P.aggro = 12;
+      if (kind !== "spit") knockTree();
+      P.aggro = t ? 12 : P.aggro; // swinging at a tree doesn't make you look dangerous
       if (t && t.social) endEncounter(t.social);
       // Out of hiding: the first blow lands much harder, and you are seen.
       const ambush = P.sneaking ? 1.5 + 0.1 * P.abilities.sneak : 1;
@@ -819,7 +865,11 @@ export function createCreatureStage(o) {
       // shared meter; the leader shows the moves it wants to see.
       // If the nest's alpha is close it leads, and winning it over wins the whole nest.
       const enc = { progress: 0.2, request: null, timer: ASK_TIME, misses: 0, leader: t, nest: t.nest, alpha: false };
-      for (const n of npcs) if (n.nest === t.nest && usable(n) && !n.member?.friend && Math.hypot(n.pos.x - t.pos.x, n.pos.z - t.pos.z) < 22) n.social = enc;
+      for (const n of npcs)
+        if (n.nest === t.nest && usable(n) && !n.member?.friend && Math.hypot(n.pos.x - t.pos.x, n.pos.z - t.pos.z) < 22) {
+          n.social = enc;
+          n.wake = 30;
+        }
       t.social = enc;
       const alpha = [...npcs].find((n) => n.social === enc && n.alpha);
       if (alpha) {
@@ -838,7 +888,7 @@ export function createCreatureStage(o) {
     const need = socialNeed(t.species, t.social.request);
     if (kind === t.social.request) {
       const allies = packMembers().length;
-      const gain = lvl >= need ? 0.22 + 0.06 * (lvl - need) + allies * 0.04 : 0.06;
+      const gain = lvl >= need ? 0.25 + 0.06 * (lvl - need) + allies * 0.04 : 0.08;
       t.social.progress = Math.min(1, t.social.progress + gain);
       bumpArc(lvl >= need ? "good" : "weak");
       // A strong move gets a big golden pop; a weak one only a faint one, and barely moves the meter.
@@ -871,7 +921,7 @@ export function createCreatureStage(o) {
       }
     } else missSocial(t, "wrong");
   }
-  const ASK_TIME = 4.5; // seconds to answer a requested move
+  const ASK_TIME = 5; // seconds to answer a requested move
   /** The encounter you are in, shown on the arc at the top of the screen. */
   let activeEnc = null;
   const arcState = { sour: 0, win: 0, winEnc: null, rel: null };
@@ -889,7 +939,7 @@ export function createCreatureStage(o) {
   /** A wrong or late move knocks the meter back and sours the face; an empty meter ends it. */
   function missSocial(t, why) {
     const enc = t.social;
-    enc.progress = Math.max(0, enc.progress - (why === "slow" ? 0.1 : 0.12));
+    enc.progress = Math.max(0, enc.progress - (why === "slow" ? 0.08 : 0.1));
     enc.misses++;
     arcState.sour = 1;
     bumpArc("miss");
@@ -939,7 +989,7 @@ export function createCreatureStage(o) {
       pop(P, "✧", "good");
     }
   }
-  const SWARM_SPECIES = () => ({ name: P.record.name, record: P.record, abilities: P.abilities, favourite: ["sing"], maxHealth: 60, diet: P.diet, temper: "friendly", ring: 1 });
+  const SWARM_SPECIES = () => ({ name: P.record.name, record: P.record, abilities: P.abilities, favourite: ["sing"], maxHealth: 60, diet: P.diet, temper: "friendly", level: 1 });
 
   function ambushHit(n) {
     o.sfx("ambush");
@@ -952,6 +1002,7 @@ export function createCreatureStage(o) {
     if (n.nest?.cowed > 0) dmg *= 1.5;
     n.health -= dmg;
     n.hurtAt = timeUniform.value;
+    n.wake = 30;
     n.body.hit();
     n.stun = Math.max(n.stun, stun);
     if (n.social) endEncounter(n.social);
@@ -975,9 +1026,10 @@ export function createCreatureStage(o) {
     n.body.die();
     o.sfx("death");
     dropCarcass(n.pos.x, n.pos.z, Math.max(2, Math.round(n.scale * 2)));
-    const tough = n.epic ? 120 : n.rogue ? 60 : n.alpha ? 24 + n.species.ring * 6 : 8 + n.species.ring * 4;
+    const level = n.species.level || 1;
+    const tough = n.epic ? 120 : n.rogue ? 60 : n.alpha ? 24 + level * 6 : 8 + level * 4;
     gainXp(tough, true);
-    P.dna += n.epic ? 30 : n.rogue ? 16 : 3 + n.species.ring + (n.alpha ? 3 : 0);
+    P.dna += n.epic ? 30 : n.rogue ? 16 : 3 + level + (n.alpha ? 3 : 0);
     treat(n.species, "kills");
     if (n.member) {
       n.member.alive = false;
@@ -996,7 +1048,7 @@ export function createCreatureStage(o) {
       if (nest.members.every((m) => !m.alive) && nest.status !== "extinct") {
         nest.status = "extinct";
         P.extinctions++;
-        gainXp(30 + nest.species.ring * 10, true);
+        gainXp(30 + nest.species.level * 10, true);
         unlockFromSpecies(nest.species, "Taken from the extinct " + nest.species.name);
         toast(nest.species.name + " are extinct", 3.5);
       }
@@ -1027,13 +1079,13 @@ export function createCreatureStage(o) {
     n.hunting = false;
     treat(n.species, "friends");
     if (!quiet) o.sfx("mate");
-    gainXp(10 + n.species.ring * 4, true);
-    P.dna += 2 + n.species.ring;
+    gainXp(10 + (n.species.level || 1) * 4, true);
+    P.dna += 2 + (n.species.level || 1);
     const nest = n.nest;
     if (nest.members.filter((m) => m.alive).every((m) => m.friend) && nest.status !== "allied") {
       nest.status = "allied";
       P.alliances++;
-      gainXp(30 + nest.species.ring * 10, true);
+      gainXp(30 + nest.species.level * 10, true);
       unlockFromSpecies(nest.species, "A gift from your allies, the " + nest.species.name);
       toast("The " + nest.species.name + " are now your allies", 3.5);
     } else if (!quiet) pop(n, "💚", "good");
@@ -1080,6 +1132,8 @@ export function createCreatureStage(o) {
     recordGeneration();
     evolveIsland();
     migrateNests(1 + Math.floor(Math.random() * 2));
+    // A new generation moves on: once you are back from the editor, your species migrates.
+    if (P.brain < 5) P.migrateDue = true;
     // Grow, then design the next generation.
     o.onMate({ record: P.record, unlocked: unlockedParts(), dna: P.dna, brain: P.brain });
     if (P.brain >= 5 && !P.card) {
@@ -1088,12 +1142,16 @@ export function createCreatureStage(o) {
     }
     saveState();
   }
-  /** As your species evolves, so does everyone else's: every surviving nest gains a part and grows. */
+  /**
+   * As your species evolves, so does everyone else's: every surviving nest gains a part, and every
+   * species moves to its level for your new brain (rogues stay one above you).
+   */
   function evolveIsland() {
     let count = 0;
     for (const nest of nests) {
       if (nest.status === "extinct") continue;
-      nest.species = evolveSpecies(nest.species);
+      nest.base = evolveSpecies(nest.base);
+      nest.species = atLevel(nest.base, nestLevel(nest.index));
       nest.evo++;
       count++;
       // Rebuild the live members in their new form (pack members keep following in theirs).
@@ -1105,36 +1163,124 @@ export function createCreatureStage(o) {
         }
       });
     }
-    if (count) tipOnce("evolve", "The island evolves with you: other species grow new parts too.", 4);
+    for (const r of rogues) {
+      r.species = atLevel(r.base, rogueLevel());
+      if (r.npc && !r.npc.dead) {
+        const { x, z } = r.npc.pos;
+        despawnNPC(r.npc);
+        r.npc = spawnNPC(r.species, x, z, { rogue: r });
+      }
+    }
+    if (count) tipOnce("evolve", "The island evolves with you: other species grow new parts and get stronger too.", 4);
   }
-  /** Spore's migrating herds: a neutral nest packs up and moves somewhere new in its ring. */
+  /** Spore's migrating herds: a neutral nest packs up and moves somewhere new nearby. */
   function migrateNests(howMany) {
     const movable = nests.filter((n) => n.status === "neutral" && n.angry <= 0 && !n.members.some((m) => m.npc?.social));
     for (let k = 0; k < howMany && movable.length; k++) {
       const nest = movable.splice(Math.floor(Math.random() * movable.length), 1)[0];
-      const spot = freeNestSpot(nest.site.ring || ringAt(nest.site.x, nest.site.z), nest);
+      const spot = freeNestSpot(nest);
       if (!spot) continue;
-      nest.site = { x: spot.x, z: spot.z, ring: nest.site.ring };
+      nest.site = { x: spot.x, z: spot.z };
       nest.mesh.position.set(spot.x, heightAt(spot.x, spot.z) + 0.2, spot.z);
       nest.migrating = 45;
     }
     saveState();
   }
-  const RING_BAND = [null, [158, 195], [116, 146], [76, 106], [40, 66], [16, 30]];
-  function freeNestSpot(ring, self) {
-    const [lo, hi] = RING_BAND[ring] || RING_BAND[1];
-    for (let tries = 0; tries < 40; tries++) {
+  /** Open plains a short trek from a nest, clear of your nest, you and the other nests. */
+  function freeNestSpot(self) {
+    for (let tries = 0; tries < 60; tries++) {
       const a = Math.random() * TAU,
-        d = lo + Math.random() * (hi - lo);
-      const x = Math.cos(a) * d,
-        z = Math.sin(a) * d;
-      if (Math.hypot(x - ISLAND.nest.x, z - ISLAND.nest.z) < 32 || Math.hypot(x - P.pos.x, z - P.pos.z) < 25) continue;
+        d = 25 + Math.random() * 35;
+      const x = self.site.x + Math.cos(a) * d,
+        z = self.site.z + Math.sin(a) * d;
+      if (!world.isOpen(x, z, 6)) continue;
+      if (Math.hypot(x - nestAt.x, z - nestAt.z) < 32 || Math.hypot(x - P.pos.x, z - P.pos.z) < 25) continue;
+      if (P.migration && Math.hypot(x - P.migration.x, z - P.migration.z) < 32) continue;
       if (nests.some((n) => n !== self && Math.hypot(n.site.x - x, n.site.z - z) < 28)) continue;
-      const res = world.resolve(x, z, 3);
-      if (Math.hypot(res.x - x, res.z - z) > 0.5) continue;
       return { x, z };
     }
     return null;
+  }
+
+  /* ---- migration ---------------------------------------------------------------
+     As in Spore, your species moves on as it grows: after each new brain level a fresh nest site is
+     picked out on the plains, and you lead your family there. A beam of light marks the spot. */
+  const beacon = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.1, 1.8, 70, 18, 1, true).translate(0, 35, 0),
+    new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.26, depthWrite: false, side: THREE.DoubleSide, fog: false }),
+  );
+  beacon.visible = false;
+  scene.add(beacon);
+  function pickMigrationSite() {
+    const lived = [nestAt, ISLAND.nest, ...P.pastHomes];
+    let best = null,
+      bestScore = -Infinity;
+    for (let tries = 0; tries < 200; tries++) {
+      const a = Math.random() * TAU,
+        d = 70 + Math.random() * 70;
+      const x = nestAt.x + Math.cos(a) * d,
+        z = nestAt.z + Math.sin(a) * d;
+      if (!world.isOpen(x, z, 8, ISLAND.beach - 12)) continue;
+      const nearestNest = Math.min(...nests.map((n) => Math.hypot(n.site.x - x, n.site.z - z)));
+      if (nearestNest < 30) continue;
+      // Somewhere new (far from everywhere you have lived) with a little room around it.
+      const score = Math.min(...lived.map((v) => Math.hypot(v.x - x, v.z - z))) + Math.min(nearestNest, 60) * 0.5;
+      if (score > bestScore) {
+        bestScore = score;
+        best = { x, z };
+      }
+    }
+    return best;
+  }
+  function showBeacon() {
+    beacon.visible = !!P.migration;
+    if (P.migration) beacon.position.set(P.migration.x, heightAt(P.migration.x, P.migration.z), P.migration.z);
+  }
+  function startMigration() {
+    P.migrateDue = false;
+    const to = pickMigrationSite();
+    if (!to) {
+      saveState();
+      return;
+    }
+    P.migration = to;
+    showBeacon();
+    family.forEach((n) => (n.trek = true));
+    o.sfx("friend");
+    toast("Your species is migrating! Lead your family to the new nest", 4.5);
+    tipOnce("migrate", "Follow the 🐾 marker and the beam of light. Family members near you come along.", 5.5);
+    saveState();
+  }
+  function finishMigration() {
+    P.pastHomes = [...P.pastHomes, { x: nestAt.x, z: nestAt.z }].slice(-6);
+    nestAt.x = P.migration.x;
+    nestAt.z = P.migration.z;
+    P.migration = null;
+    showBeacon();
+    playerNest.position.set(nestAt.x, heightAt(nestAt.x, nestAt.z) + 0.2, nestAt.z);
+    // Family who kept up settle in; any left far behind find their own way to the new nest.
+    family.forEach((n, k) => {
+      n.trek = false;
+      if (!n.dead && !n.following && Math.hypot(n.pos.x - nestAt.x, n.pos.z - nestAt.z) > 30) {
+        const a = (k / FAMILY_SIZE) * TAU + 0.4;
+        n.pos.set(nestAt.x + Math.cos(a) * 6, 0, nestAt.z + Math.sin(a) * 6);
+        n.pos.y = heightAt(n.pos.x, n.pos.z);
+      }
+    });
+    dust(nestAt.x, nestAt.z, 10, eggMat);
+    o.sfx("friend");
+    pop(P, "🏠", "good");
+    toast("You've settled a new nest", 3);
+    gainXp(20);
+    P.dna += 10;
+    saveState();
+  }
+  function updateMigration() {
+    if (!P.migration) {
+      if (P.migrateDue && !paused && !courtship && !raid && P.deadTimer <= 0) startMigration();
+      return;
+    }
+    if (Math.hypot(P.pos.x - P.migration.x, P.pos.z - P.migration.z) < 10) finishMigration();
   }
   function recordGeneration() {
     o.onGeneration({
@@ -1160,12 +1306,13 @@ export function createCreatureStage(o) {
     o.sfx("death");
     toast(reason || "You died", 2.5);
     packMembers().forEach((n) => (n.following = false)); // the pack scatters
-    P.xp = Math.max(0, P.xp - XP_TO_NEXT[Math.min(4, P.brain)] * 0.25);
+    P.xp = Math.max(0, P.xp - XP_TO_NEXT[Math.min(4, P.brain)] * 0.15);
   }
   function respawn() {
     rebuildPlayer();
-    P.pos.set(ISLAND.nest.x, 0, ISLAND.nest.z - 13);
-    P.health = P.maxHealth * 0.6;
+    const at = world.resolve(nestAt.x, nestAt.z - 7, 1.2);
+    P.pos.set(at.x, 0, at.z);
+    P.health = P.maxHealth * 0.7;
     P.hunger = 60;
     P.invulnerable = 3;
     P.target = null;
@@ -1175,6 +1322,11 @@ export function createCreatureStage(o) {
   /* ---- saving ---------------------------------------------------------- */
   function snapshot() {
     return {
+      worldVersion: WORLD_VERSION,
+      home: { x: nestAt.x, z: nestAt.z },
+      pastHomes: P.pastHomes,
+      migration: P.migration,
+      migrateDue: P.migrateDue,
       seed: seedBase,
       record: P.record,
       brain: P.brain,
@@ -1306,7 +1458,8 @@ export function createCreatureStage(o) {
       jump();
     } else if (e.key === "c" || e.key === "C") useAbility("sneak");
     else if (e.key === "q" || e.key === "Q") useAbility("card");
-    else if ((e.key === "m" || e.key === "M") && nearNest()) callMate();
+    else if (e.key === "m" || e.key === "M") brainReady && nearNest() && !P.migration ? callMate() : toggleMap();
+    else if (e.key === "e" || e.key === "E") eatEgg();
     else if (e.key === "Escape") {
       P.target = null;
       P.pending = null;
@@ -1322,7 +1475,7 @@ export function createCreatureStage(o) {
   };
   window.addEventListener("keydown", onKey);
   window.addEventListener("keyup", onKeyUp);
-  const nearNest = () => Math.hypot(P.pos.x - ISLAND.nest.x, P.pos.z - ISLAND.nest.z) < 14;
+  const nearNest = () => Math.hypot(P.pos.x - nestAt.x, P.pos.z - nestAt.z) < 14;
   $h("#chMate").onclick = callMate;
   $h("#chTargetClose").onclick = () => {
     P.target = null;
@@ -1345,8 +1498,9 @@ export function createCreatureStage(o) {
   };
   renderAbilityButtons();
 
-  const playerNest = world.makeNestMesh(ISLAND.nest.x, ISLAND.nest.z, P.record.colors.accent);
+  const playerNest = world.makeNestMesh(nestAt.x, nestAt.z, P.record.colors.accent);
   playerNest.scale.setScalar(1.3);
+  showBeacon();
 
   /* ---- per-frame --------------------------------------------------------- */
   const camPos = new THREE.Vector3();
@@ -1358,6 +1512,229 @@ export function createCreatureStage(o) {
     paused = false;
   camPos.set(P.pos.x - Math.cos(camYaw) * 12, heightAt(P.pos.x, P.pos.z) + 9, P.pos.z + Math.sin(camYaw) * 12);
   const tmp = new THREE.Vector3();
+
+  /* ---- the map ---------------------------------------------------------------
+     Spore's minimap in the corner, turning with the camera; tap it (or press M) for the whole island. */
+  const minimap = createMinimap(hud, { onOpen: () => toggleMap() });
+  let islandPic = null,
+    mapClock = 0,
+    islandMap = null;
+  // The relief picture takes a moment to draw, so it is made just after the stage appears.
+  const picTimer = setTimeout(() => {
+    islandPic = islandPicture(320);
+    minimap.setPicture(islandPic);
+  }, 250);
+  /** What the maps show. The minimap is a local radar; the island map shows what you have found. */
+  function mapMarkers(full) {
+    const out = [];
+    const near = (x, z, r) => Math.hypot(x - P.pos.x, z - P.pos.z) < r;
+    for (const b of world.bonePiles) if (!b.taken && (full ? b.seen : near(b.x, b.z, 60))) out.push({ kind: "fossil", x: b.x, z: b.z });
+    for (const n of nests) {
+      const known = P.discovered.has(n.species.id);
+      const state = n.status === "allied" ? "allied" : n.status === "extinct" ? "extinct" : n.angry > 0 ? "angry" : known && n.species.temper === "hostile" ? "wary" : "neutral";
+      const label = full && known ? n.species.name + (n.status === "neutral" ? " · Lv " + n.species.level : "") : null;
+      out.push({ kind: "nest", x: n.site.x, z: n.site.z, state, known, label });
+    }
+    out.push({ kind: "home", x: nestAt.x, z: nestAt.z, edge: true, label: full ? "Your nest" : null });
+    for (const e of [...epics, ...rogues]) {
+      if (!e.alive) continue;
+      const at = e.npc && !e.npc.dead ? e.npc.pos : null;
+      if (full && P.discovered.has(e.species.id)) {
+        const h = e.anchor ? e.anchor : rogueHome(e);
+        out.push({ kind: "danger", x: h.x, z: h.z, label: e.species.name });
+      } else if (!full && at) out.push({ kind: "danger", x: at.x, z: at.z, edge: true });
+    }
+    if (!full)
+      for (const n of npcs) {
+        if (n.dead || n.abducted) continue;
+        if (n.following) out.push({ kind: "pack", x: n.pos.x, z: n.pos.z });
+        else if (n.hunting || n.raider) out.push({ kind: "hunter", x: n.pos.x, z: n.pos.z });
+      }
+    if (P.migration) out.push({ kind: "migrate", x: P.migration.x, z: P.migration.z, edge: true, label: full ? "New nest" : null });
+    return out;
+  }
+  function toggleMap() {
+    if (islandMap) return islandMap.close();
+    if (intro || !islandPic) return;
+    const wasPaused = paused;
+    paused = true;
+    islandMap = openIslandMap(document.body, {
+      picture: islandPic,
+      markers: mapMarkers(true),
+      you: { x: P.pos.x, z: P.pos.z, heading: P.heading },
+      onClose: () => {
+        islandMap = null;
+        if (!wasPaused) paused = false;
+      },
+    });
+  }
+
+  /* ---- fruit trees, eggs and allies ------------------------------------------ */
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x4f9a4a, roughness: 1, transparent: true, opacity: 0.9, flatShading: true });
+  /** Bump a fruit tree (bite, strike, charge or land on it) and its fruit falls. */
+  function knockTree(extra = 0) {
+    const tree = world.shakeTree(P.pos.x, P.pos.z, 1.4 + P.scale * 1.1 + extra);
+    if (!tree) return;
+    o.sfx("dig");
+    dust(tree.x, tree.z, 8, leafMat, heightAt(tree.x, tree.z) + 4.6 * tree.s);
+    if (P.diet !== "meat") tipOnce("fruitDown", "Down it comes! Eat the fruit before it rots.");
+  }
+  /** The allied nest you are resting at, if any. */
+  const allyNestNear = () => nests.find((n) => n.status === "allied" && Math.hypot(n.site.x - P.pos.x, n.site.z - P.pos.z) < 12) || null;
+  /** A nest whose eggs you could eat from here (meat and omnivores only). */
+  function eggNest() {
+    if (P.diet === "plant" || P.deadTimer > 0 || P.air) return null;
+    for (const n of nests) if (n.status === "neutral" && n.eggs > 0 && Math.hypot(n.site.x - P.pos.x, n.site.z - P.pos.z) < 3.6 + P.scale) return n;
+    return null;
+  }
+  /** Spore's egg raid: a good meal, but the nest won't forgive you if anyone sees. */
+  function eatEgg() {
+    const nest = eggNest();
+    if (!nest) return;
+    nest.eggs--;
+    nest.eggRegrow = 150;
+    nest.mesh.children[nest.eggs + 1].visible = false;
+    P.heading = Math.atan2(-(nest.site.z - P.pos.z), nest.site.x - P.pos.x);
+    eat(30, 10, 6);
+    pop(P, "🥚", "good");
+    const sight = P.sneaking ? 7 : 18;
+    const seen = [...npcs].filter((n) => n.nest === nest && !n.dead && !n.asleep && distTo(n) < sight);
+    if (!seen.length) {
+      tipOnce("eggSneak", "Nobody saw you. Sleeping nests and sneaking make egg raids much safer.", 4.5);
+      return;
+    }
+    nest.angry = 40;
+    seen.forEach((n) => {
+      n.calm = 0;
+      n.wake = 30;
+      if (n.social) endEncounter(n.social);
+      pop(n, "❗", "bad");
+    });
+    o.sfx("snub");
+    toast("The " + nest.species.name + " saw you take an egg!", 2.6);
+  }
+  $h("#chEgg").onclick = eatEgg;
+
+  /* ---- UFOs ----------------------------------------------------------------
+     As in Spore, now and then a flying saucer drops by and beams a creature up: a hint of what is
+     out there. The creature is only borrowed; its nest gets it back in a couple of minutes. */
+  let ufo = null,
+    ufoClock = 220 + Math.random() * 160;
+  function buildUfo() {
+    const mats = [
+      new THREE.MeshStandardMaterial({ color: 0xbac6d2, metalness: 0.75, roughness: 0.28 }),
+      new THREE.MeshStandardMaterial({ color: 0x9be8ff, transparent: true, opacity: 0.75, emissive: 0x1f7ea0, roughness: 0.1 }),
+      new THREE.MeshBasicMaterial({ color: 0xfff4a8 }),
+      new THREE.MeshBasicMaterial({ color: 0xc8f7ff, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }),
+    ];
+    const geos = [
+      new THREE.SphereGeometry(3.4, 32, 12).scale(1, 0.26, 1),
+      new THREE.SphereGeometry(1.45, 24, 12, 0, TAU, 0, Math.PI / 2),
+      new THREE.SphereGeometry(0.22, 8, 6),
+      new THREE.CylinderGeometry(0.7, 3.4, 1, 28, 1, true).translate(0, -0.5, 0),
+    ];
+    const group = new THREE.Group();
+    group.add(new THREE.Mesh(geos[0], mats[0]));
+    const dome = new THREE.Mesh(geos[1], mats[1]);
+    dome.position.y = 0.5;
+    group.add(dome);
+    const lights = [];
+    for (let i = 0; i < 10; i++) {
+      const l = new THREE.Mesh(geos[2], mats[2]);
+      l.position.set(Math.cos((i / 10) * TAU) * 3.2, -0.12, Math.sin((i / 10) * TAU) * 3.2);
+      group.add(l);
+      lights.push(l);
+    }
+    const beam = new THREE.Mesh(geos[3], mats[3]);
+    beam.visible = false;
+    group.add(beam);
+    return { group, beam, lights, mats, geos };
+  }
+  function endUfo() {
+    if (!ufo) return;
+    scene.remove(ufo.group);
+    ufo.mats.forEach((m) => m.dispose());
+    ufo.geos.forEach((g) => g.dispose());
+    ufo = null;
+  }
+  function updateUfo(dt) {
+    if (!ufo) {
+      if ((ufoClock -= dt) > 0 || raid || courtship) return;
+      // Someone you can watch being taken: a nest creature, not yours, not busy, not too close.
+      const fx = Math.cos(camYaw),
+        fz = -Math.sin(camYaw);
+      const inView = (n) => ((n.pos.x - P.pos.x) * fx + (n.pos.z - P.pos.z) * fz) / Math.max(1, distTo(n)) > 0.75; // within ~40° of straight ahead
+      const pool = [...npcs].filter((n) => n.member && !n.dead && !n.following && !n.social && !n.hunting && P.target !== n && distTo(n) > 16 && distTo(n) < 55 && inView(n));
+      if (!pool.length) {
+        ufoClock = 45;
+        return;
+      }
+      ufoClock = 260 + Math.random() * 220;
+      const victim = pool[Math.floor(Math.random() * pool.length)];
+      const ship = buildUfo();
+      const a = Math.atan2(victim.pos.z - P.pos.z, victim.pos.x - P.pos.x);
+      const from = new THREE.Vector3(victim.pos.x + Math.cos(a) * 140, victim.pos.y + 70, victim.pos.z + Math.sin(a) * 140);
+      ship.group.position.copy(from);
+      scene.add(ship.group);
+      // Low enough to see from where you stand: just over the victim's head.
+      ufo = { ...ship, victim, phase: "in", t: 0, from, hover: Math.max(6, victim.body.height * victim.scale + 3.5) };
+      o.sfx("jet");
+      tipOnce("ufo", "A UFO! Something out there is watching this island…", 4.5);
+      return;
+    }
+    const u = ufo,
+      v = u.victim;
+    u.t += dt;
+    u.group.rotation.y += dt * 1.6;
+    u.lights.forEach((l, i) => (l.visible = Math.floor(u.t * 6 + i) % 3 !== 0));
+    const lost = !npcs.has(v) || v.dead;
+    if (u.phase === "in") {
+      if (lost || v.following || v.social || v.hunting) {
+        u.phase = "out";
+        u.t = 0;
+        return;
+      }
+      const k = Math.min(1, u.t / 4.5),
+        e = 1 - Math.pow(1 - k, 3);
+      tmp.set(v.pos.x, v.pos.y + u.hover, v.pos.z);
+      u.group.position.lerpVectors(u.from, tmp, e);
+      if (k >= 1) {
+        u.phase = "beam";
+        u.t = 0;
+        v.abducted = true;
+        if (P.target === v) P.target = null;
+        u.beam.visible = true;
+        u.beam.scale.set(1, u.hover, 1);
+        o.sfx("meteor");
+      }
+    } else if (u.phase === "beam") {
+      // Up it goes, spinning and shrinking into the saucer.
+      const k = Math.min(1, u.t / 3.2);
+      if (!lost) {
+        v.body.root.position.set(v.pos.x, v.pos.y + k * k * (u.hover - 0.5), v.pos.z);
+        v.body.root.rotation.y += dt * (1 + k * 6);
+        v.body.root.scale.setScalar(v.scale * (1 - k * 0.85));
+      }
+      u.beam.material.opacity = 0.32 + 0.1 * Math.sin(u.t * 12);
+      if (k >= 1 || lost) {
+        if (!lost) {
+          v.member.away = 140;
+          v.member.npc = null;
+          despawnNPC(v);
+        }
+        u.beam.visible = false;
+        u.phase = "out";
+        u.t = 0;
+        u.from = u.group.position.clone();
+        o.sfx("jet");
+      }
+    } else {
+      // Off it zips, up and away.
+      const k = u.t / 2.5;
+      u.group.position.set(u.from.x + k * k * 120, u.from.y + k * k * 90, u.from.z - k * k * 40);
+      if (k >= 1) endUfo();
+    }
+  }
 
   /* ---- crawl-out cinematic -------------------------------------------------
      The new creature wades out of the surf onto the beach below its nest while the camera swings
@@ -1489,6 +1866,9 @@ export function createCreatureStage(o) {
     updateDeepWater(dt, ground);
     P.body.root.position.copy(P.pos);
     P.body.root.rotation.y = P.heading;
+    // Your creature keeps an eye on whatever you have selected.
+    const seen = P.target && !P.target.dead ? P.target : null;
+    P.body.lookAt(seen ? lookTmp.set(seen.pos.x, seen.pos.y + seen.body.height * seen.scale * 0.8, seen.pos.z) : null);
     P.body.update(dt, P.speed);
     // Footsteps (or splashes) in time with the stride; sneaking steps are barely audible.
     if (!P.air && P.speed > 0.8 && (stepClock -= dt * (1 + P.speed * 0.25)) <= 0) {
@@ -1496,7 +1876,8 @@ export function createCreatureStage(o) {
       o.sfx(ground < 0 ? "splash" : "step", { pitch: 1 / Math.sqrt(P.scale), gain: (ground < 0 ? 0.4 : 1) * (P.sneaking ? 0.3 : 1) });
     }
 
-    // Charge contact damage.
+    // Charge contact damage (and a charge into a tree shakes its fruit down).
+    if (charging > 0) knockTree();
     if (charging > 0)
       for (const n of npcs)
         if (!n.dead && !n.following && !P.chargeHit.has(n) && distTo(n) < reach(n) + 0.5) {
@@ -1510,7 +1891,8 @@ export function createCreatureStage(o) {
     const mouth = tmp.copy(P.body.mouthLocal).multiplyScalar(P.scale).applyAxisAngle(new THREE.Vector3(0, 1, 0), P.heading).add(P.pos);
     if (P.diet !== "meat")
       for (const f of world.fruits)
-        if (f.alive && Math.abs(f.x - mouth.x) < 1.6 && Math.abs(f.z - mouth.z) < 1.6) {
+        if (f.alive && Math.abs(f.x - mouth.x) < 1.6 && Math.abs(f.z - mouth.z) < 1.6 && (!f.hanging || mouth.y > f.y - 1.4) && !(f.vy && f.y > f.groundY + 1.2)) {
+          // Fruit up in a tree is only in reach of a tall creature; the rest has to be knocked down.
           f.alive = false;
           f.regrow = 40;
           world.syncFruit();
@@ -1562,10 +1944,14 @@ export function createCreatureStage(o) {
     }
 
     // Hunger, and the nest heals.
-    P.hunger = Math.max(0, P.hunger - dt * 0.42);
-    if (P.hunger <= 0) hurtPlayer(dt * 2.5, "You starved", true);
-    if (nearNest() && P.hunger > 0) P.health = Math.min(P.maxHealth, P.health + dt * 4);
-    else if (P.hunger > 30 && performance.now() - P.lastHurt > 6000) P.health = Math.min(P.maxHealth, P.health + dt * 1.2); // slow regen out of a fight
+    P.hunger = Math.max(0, P.hunger - dt * 0.3);
+    if (P.hunger <= 0) hurtPlayer(dt * 2, "You starved", true);
+    const ally = allyNestNear();
+    if ((nearNest() || ally) && P.hunger > 0) {
+      P.health = Math.min(P.maxHealth, P.health + dt * (ally && !nearNest() ? 4.5 : 6));
+      if (ally && P.health < P.maxHealth * 0.8) tipOnce("allyHeal", "Your allies' nest is safe ground: rest here to heal.");
+    }
+    else if (P.hunger > 30 && performance.now() - P.lastHurt > 5000) P.health = Math.min(P.maxHealth, P.health + dt * 2); // slow regen out of a fight
     P.invulnerable = Math.max(0, P.invulnerable - dt);
     P.aggro = Math.max(0, P.aggro - dt);
     P.cardCooldown = Math.max(0, P.cardCooldown - dt);
@@ -1597,6 +1983,7 @@ export function createCreatureStage(o) {
       P.body.setAir(null);
       dust(P.pos.x, P.pos.z, swimming ? 4 : 3, swimming ? splashMat : dustMat);
       o.sfx(swimming ? "splash" : "land", { pitch: 1 / Math.sqrt(P.scale) });
+      if (!swimming) knockTree(1.5);
     }
   }
   const DIG_TIME = 2.4;
@@ -1609,10 +1996,10 @@ export function createCreatureStage(o) {
   const dustMat = new THREE.MeshStandardMaterial({ color: 0xc9b07c, roughness: 1, transparent: true, opacity: 0.9, flatShading: true });
   const dusts = [];
   /** Little clods of sand kicked up by digging. */
-  function dust(x, z, n, material = dustMat) {
+  function dust(x, z, n, material = dustMat, y = null) {
     for (let i = 0; i < n; i++) {
       const m = new THREE.Mesh(dustGeo, material);
-      m.position.set(x, Math.max(heightAt(x, z), 0.2) + 0.3, z);
+      m.position.set(x, y ?? Math.max(heightAt(x, z), 0.2) + 0.3, z);
       m.userData.v = new THREE.Vector3((Math.random() - 0.5) * 4, 3 + Math.random() * 3, (Math.random() - 0.5) * 4);
       m.userData.life = 0.9;
       m.scale.setScalar((0.5 + Math.random() * 0.8) * (material === dustMat ? 1 : 0.45));
@@ -1643,8 +2030,8 @@ export function createCreatureStage(o) {
     pop(P, "🦴", "good");
     const owned = unlockedParts();
     const pool = CREATURE_PARTS.filter((p) => p.cost > 0 && !owned.has(p.id)).sort((a, z) => a.cost - z.cost);
-    // Deeper rings hide better parts.
-    const lo = Math.min(pool.length - 1, Math.floor(((b.ring - 1) / 5) * pool.length));
+    // The bigger your brain, the better the parts the fossils give up.
+    const lo = Math.min(pool.length - 1, Math.floor(((P.brain - 1) / 5) * pool.length));
     const pick = pool.length ? pool[Math.min(pool.length - 1, lo + Math.floor(Math.random() * 6))] : null;
     gainXp(14);
     if (pick) {
@@ -1804,6 +2191,7 @@ export function createCreatureStage(o) {
         n.body.update(dt, 0);
         continue;
       }
+      if (n.abducted) continue; // the UFO has it
       if (n.temporary !== undefined && (n.temporary -= dt) <= 0) {
         n.dead = true;
         despawnNPC(n);
@@ -1813,16 +2201,19 @@ export function createCreatureStage(o) {
       n.body.setLOD(d < 40 ? 1 : 0);
       n.cool = Math.max(0, n.cool - dt);
       n.calm = Math.max(0, n.calm - dt);
+      n.wake = Math.max(0, (n.wake || 0) - dt);
+      const wasAsleep = !!n.asleep;
+      n.asleep = false;
       let want = null,
         pace = 0;
       const home = n.nest
         ? n.nest.site
         : n.family || n.raider
-          ? ISLAND.nest
+          ? nestAt
           : n.epic
-            ? { x: Math.cos(n.epic.angle) * (n.epic.ring === 5 ? 22 : 52), z: Math.sin(n.epic.angle) * (n.epic.ring === 5 ? 22 : 52) }
+            ? epicHome(n.epic)
             : n.rogue
-              ? { x: Math.cos(n.rogue.angle) * ROGUE_RADIUS[n.rogue.ring], z: Math.sin(n.rogue.angle) * ROGUE_RADIUS[n.rogue.ring] }
+              ? rogueHome(n.rogue)
               : P.pos;
       const homeD = Math.hypot(n.pos.x - home.x, n.pos.z - home.z);
       // Friends heal slowly when nothing is biting them.
@@ -1841,7 +2232,7 @@ export function createCreatureStage(o) {
         // Raiders giving up: they run off inland and are gone once out of sight.
         n.hunting = false;
         n.retreat -= dt;
-        want = { x: n.pos.x + (n.pos.x - ISLAND.nest.x), z: n.pos.z + (n.pos.z - ISLAND.nest.z) };
+        want = { x: n.pos.x + (n.pos.x - nestAt.x), z: n.pos.z + (n.pos.z - nestAt.z) };
         pace = 5;
         if ((n.retreat <= 0 && d > 35) || n.retreat < -30) {
           despawnNPC(n);
@@ -1865,6 +2256,15 @@ export function createCreatureStage(o) {
           want = home;
           pace = 2.4;
         }
+      } else if (n.family && n.trek && P.migration && !n.following && d < 45) {
+        // Migrating: the family trails along behind you in a loose line.
+        const k = family.indexOf(n) + 1;
+        const back = 4 + k * 2.2,
+          side = (k % 2 ? 1 : -1) * (1 + k * 0.4);
+        const bx = -Math.cos(P.heading),
+          bz = Math.sin(P.heading);
+        want = { x: P.pos.x + bx * back - bz * side, z: P.pos.z + bz * back + bx * side };
+        pace = Math.min(7, 1 + Math.hypot(want.x - n.pos.x, want.z - n.pos.z) * 1.2);
       } else if (n.following) {
         // Pack members: fight your target, otherwise trot behind you.
         // Allies only join a fight: never a social round, and never against their own nest.
@@ -1897,15 +2297,36 @@ export function createCreatureStage(o) {
         const cowed = n.nest?.cowed > 0;
         const hostile = !n.member?.friend && n.calm <= 0 && !cowed && ((n.nest && n.nest.angry > 0) || sp.temper === "hostile" || n.epic || n.rogue);
         // Sneaking shrinks how far away they notice you; once on your trail they follow further.
-        const aggro = ((n.epic ? 20 : n.rogue ? 16 : 9 + sp.ring * 1.5) + (night ? 5 : 0)) * sneakScale();
+        // Epics and rogues prowl at night; everyone else is asleep.
+        const aggro = ((n.epic ? 18 : n.rogue ? 15 : 8 + (sp.level || 1) * 1.1) + ((n.epic || n.rogue) && night ? 4 : 0)) * sneakScale();
         const leash = n.rogue ? 70 : 40;
-        if (hostile && d < (n.hunting ? aggro * 1.7 : aggro) && homeD < leash && P.deadTimer <= 0) {
+        // Night, as in Spore: nest creatures go home and sleep. A sleeper wakes if attacked, spoken to,
+        // or if you blunder right into it (sneak and you can tiptoe past).
+        const sleepy =
+          night && (n.nest || n.family) && courtship?.n !== n && !n.epic && !n.rogue && !(n.nest?.angry > 0) && !(n.nest?.migrating > 0) && !n.social && !n.hunting && n.wake <= 0 && !(P.aggro > 0 && d < 10);
+        if (sleepy && !(d < (P.sneaking ? 1.6 : 3.4) + reach(n) * 0.5)) {
+          n.hunting = false;
+          if (homeD > 5) {
+            want = home;
+            pace = 2.2;
+          } else {
+            n.asleep = true;
+            if (d < 30 && (n.zzz = (n.zzz ?? Math.random() * 3) - dt) <= 0) {
+              n.zzz = 3.2 + Math.random() * 1.5;
+              pop(n, "💤", "sleep");
+            }
+          }
+        } else if (sleepy) {
+          // Bumped awake: a moment's surprise, then whatever it would do by day.
+          n.wake = 20;
+          pop(n, "❗", "bad");
+        } else if (hostile && d < (n.hunting ? aggro * 1.7 : aggro) && homeD < leash && P.deadTimer <= 0) {
           n.hunting = true;
           // A packmate in the way gets bitten first.
           const ally = nearest(packMembers(), n.pos, reach(n) + 0.4);
           want = ally && Math.hypot(ally.pos.x - n.pos.x, ally.pos.z - n.pos.z) < d ? ally.pos : P.pos;
-          pace = 4.5 + sp.ring * 0.4 + (n.epic ? 1.5 : 0) + (n.rogue ? 0.8 : 0);
-          const bite = (3.6 + (sp.abilities.bite || 1) * 3.6) * Math.sqrt(n.scale) * (n.epic ? 2 : n.rogue ? 1.3 : 1);
+          pace = 4.2 + (sp.level || 1) * 0.3 + (n.epic ? 1.4 : 0) + (n.rogue ? 0.7 : 0);
+          const bite = (3 + (sp.abilities.bite || 1) * 3) * Math.sqrt(n.scale) * (n.epic ? 1.8 : n.rogue ? 1.25 : 1);
           if (n.backT > 0) {
             // Just bit: it backs off and circles round for a new angle, which leaves you an opening.
             n.backT -= dt;
@@ -1917,13 +2338,13 @@ export function createCreatureStage(o) {
             want = { x: P.pos.x + (ux * ca - uz * sa) * r, z: P.pos.z + (ux * sa + uz * ca) * r };
             pace *= 0.85;
           } else if (ally && n.cool <= 0 && want === ally.pos) {
-            n.cool = 1.6;
+            n.cool = 1.8;
             act(n, "bite");
             voice(n, "bite");
             hurtAlly(ally, bite * 0.8, time);
             backOff(n);
           } else if (d < reach(n) + 0.6 && n.cool <= 0) {
-            n.cool = n.epic ? 1.9 : 1.5;
+            n.cool = n.epic ? 2.1 : 1.7;
             act(n, "bite");
             voice(n, "bite");
             hurtPlayer(bite, "A " + sp.name + " got you");
@@ -1973,7 +2394,9 @@ export function createCreatureStage(o) {
           dz = want.z - n.pos.z,
           dd = Math.hypot(dx, dz);
         if (dd > 0.6) {
-          const target = Math.atan2(-dz, dx);
+          // Round the mountains rather than into them (only walls nearer than the goal count).
+          const way = steerAround(n.pos.x, n.pos.z, dx, dz, 0.6 * n.scale, Math.min(9, dd));
+          const target = Math.atan2(-way.z, way.x);
           const delta = THREE.MathUtils.euclideanModulo(target - n.heading + Math.PI, TAU) - Math.PI;
           n.heading += THREE.MathUtils.clamp(delta, -3 * dt, 3 * dt);
           n.speed += (pace - n.speed) * Math.min(1, dt * 3);
@@ -1987,9 +2410,24 @@ export function createCreatureStage(o) {
       n.pos.y = Math.max(heightAt(n.pos.x, n.pos.z), -0.4);
       n.body.root.position.copy(n.pos);
       n.body.root.rotation.y = n.heading;
-      if (d < 70) n.body.update(dt, n.speed);
+      if (n.asleep !== wasAsleep) n.body.setSleep(n.asleep);
+      if (d < 70) {
+        // Creatures close by watch you: always if they're hunting you or talking to you.
+        const watching = d < 14 || n.hunting || (n.social && d < 24);
+        n.body.lookAt(watching && P.deadTimer <= 0 ? lookTmp.set(P.pos.x, P.pos.y + P.body.height * P.scale * 0.8, P.pos.z) : null);
+        n.body.update(dt, n.speed);
+      }
     }
     nests.forEach((nest) => {
+      nest.members.forEach((m) => {
+        if (m.away > 0) m.away -= dt;
+      });
+      // Eaten eggs are laid again, one at a time.
+      if (nest.eggs < 3 && nest.status !== "extinct" && (nest.eggRegrow -= dt) <= 0) {
+        nest.mesh.children[nest.eggs + 1].visible = true;
+        nest.eggs++;
+        nest.eggRegrow = 150;
+      }
       nest.angry = Math.max(0, nest.angry - dt);
       nest.snub = Math.max(0, nest.snub - dt);
       nest.migrating = Math.max(0, nest.migrating - dt);
@@ -2072,14 +2510,14 @@ export function createCreatureStage(o) {
         n.cool = 1.7;
         act(n, "bite");
         voice(n, "bite");
-        hurtPlayer((3.6 + (n.species.abilities.bite || 1) * 3.6) * Math.sqrt(n.scale), "A raiding " + n.species.name + " got you");
+        hurtPlayer((3 + (n.species.abilities.bite || 1) * 3) * Math.sqrt(n.scale), "A raiding " + n.species.name + " got you");
       }
       return;
     }
     n.hunting = false;
     const prey = nearest(family, n.pos, 80);
     if (!prey) {
-      n.want = ISLAND.nest;
+      n.want = nestAt;
       n.pace = 3;
       return;
     }
@@ -2109,17 +2547,24 @@ export function createCreatureStage(o) {
     $h("#chXp").parentElement.classList.toggle("ready", brainReady);
     $h("#chDna").textContent = "🧬 " + P.dna;
     const atNest = nearNest();
-    $h("#chMate").hidden = !(brainReady && atNest) || !!courtship;
+    $h("#chMate").hidden = !(brainReady && atNest) || !!courtship || !!P.migration;
+    const eggs = eggNest();
+    $h("#chEgg").hidden = !eggs || !$h("#chMate").hidden;
+    if (eggs) tipOnce("eggs", "You can steal an egg from this nest, but they won't forgive you if they see.", 4.5);
+    if (world.isNight && P.deadTimer <= 0) tipOnce("night", "Night falls. Most creatures sleep at their nests: sneak past, or catch them napping.", 5);
+    if (P.diet !== "meat" && world.fruitTreeNear(P.pos.x, P.pos.z, 9)) tipOnce("treeFruit", "Fruit up in that tree! Bite, strike or charge the trunk to knock it down.", 4.5);
     const allied = nests.filter((n) => n.status === "allied").length,
       extinct = nests.filter((n) => n.status === "extinct").length;
     $h("#chObjective").textContent =
       P.brain >= 5
         ? "Brain level 5 reached. Open ☰ to try the Tribe Stage prototype."
-        : brainReady
-          ? "Brain ready: go back to your nest and call a mate."
-          : P.hunger < 25
-            ? "You're starving. Find " + (P.diet === "meat" ? "a carcass or prey" : P.diet === "plant" ? "fruit bushes" : "fruit or meat") + "."
-            : "Befriend or hunt the nests: " + allied + " allied, " + extinct + " extinct of " + nests.length + ". " + RING_NAMES[ringAt(P.pos.x, P.pos.z)];
+        : P.migration
+          ? "Migrate: lead your family to the new nest · " + Math.round(Math.hypot(P.migration.x - P.pos.x, P.migration.z - P.pos.z)) + "m" + (brainReady ? ". Then call a mate there." : "")
+          : brainReady
+            ? "Brain ready: go back to your nest and call a mate."
+            : P.hunger < 25
+              ? "You're starving. Find " + (P.diet === "meat" ? "a carcass or prey" : P.diet === "plant" ? "fruit bushes" : "fruit or meat") + "."
+              : "Befriend or hunt the nests: " + allied + " allied, " + extinct + " extinct of " + nests.length + ". " + areaAt(P.pos.x, P.pos.z);
     // Cooldown rings.
     hud.querySelectorAll(".chAb").forEach((b) => {
       const k = b.dataset.ab,
@@ -2202,7 +2647,7 @@ export function createCreatureStage(o) {
           : t.rogue
             ? "A loner carrying a rare part"
             : nest
-              ? nest.members.filter((m) => m.friend).length + " of " + nest.members.filter((m) => m.alive).length + " befriended · " + RING_NAMES[nest.site.ring || ringAt(nest.site.x, nest.site.z)]
+              ? nest.members.filter((m) => m.friend).length + " of " + nest.members.filter((m) => m.alive).length + " befriended · Level " + nest.species.level
               : "Roams the island alone";
       // What this species likes to see, with the level it expects.
       const likes = canSocialise(t)
@@ -2249,18 +2694,22 @@ export function createCreatureStage(o) {
       .sort((a, b) => a.d - b.d)
       .slice(0, 3);
     let html = "";
+    mini = minimap.element.getBoundingClientRect();
+    goal = $h("#chObjective").getBoundingClientRect();
     for (const { n } of marks) {
       const pt = project(tmp.set(n.site.x, heightAt(n.site.x, n.site.z) + 6, n.site.z));
-      if (pt.behind) continue;
+      // Not behind you, not up among the vitals and buttons at the top, not under the minimap.
+      if (pt.behind || pt.y < (innerWidth <= 900 ? 135 : 90) || pt.x < 0 || pt.x > innerWidth || underMini(pt.x, pt.y)) continue;
       // Keep labels out from under the encounter arc.
       if (arcShown.mode && Math.abs(pt.x - innerWidth / 2) < 170 && pt.y < (innerWidth <= 900 ? 330 : 200)) continue;
       let icon = n.status === "allied" ? "💚" : n.status === "extinct" ? "🦴" : n.species.temper === "hostile" ? "⚠" : "◌";
       const known = P.discovered.has(n.species.id);
       if (n.migrating > 0) icon = "🐾";
-      html += `<span class="chMark ${n.status}" style="left:${pt.x}px;top:${pt.y}px">${icon} ${known ? n.species.name : "???"}</span>`;
+      html += `<span class="chMark ${n.status}" style="left:${pt.x}px;top:${pt.y}px">${icon} ${known ? n.species.name : "???"}${n.status === "neutral" ? ` <small>Lv ${n.species.level}</small>` : ""}</span>`;
     }
-    const hp = project(tmp.set(ISLAND.nest.x, heightAt(ISLAND.nest.x, ISLAND.nest.z) + 6, ISLAND.nest.z));
-    if (!hp.behind && (raid || Math.hypot(ISLAND.nest.x - P.pos.x, ISLAND.nest.z - P.pos.z) > 10))
+    if (P.migration) html += edgeMark(P.migration, "migrate", "🐾 New nest · " + Math.round(Math.hypot(P.migration.x - P.pos.x, P.migration.z - P.pos.z)) + "m");
+    const hp = project(tmp.set(nestAt.x, heightAt(nestAt.x, nestAt.z) + 6, nestAt.z));
+    if (!hp.behind && !underMini(hp.x, hp.y) && !P.migration && (raid || Math.hypot(nestAt.x - P.pos.x, nestAt.z - P.pos.z) > 10))
       html += raid ? `<span class="chMark home raid" style="left:${hp.x}px;top:${hp.y}px">⚠ Raid!</span>` : `<span class="chMark home" style="left:${hp.x}px;top:${hp.y}px">🏠 Your nest</span>`;
     // The nearest fossil you haven't dug yet, so parts are easy to find.
     let bone = null,
@@ -2275,11 +2724,43 @@ export function createCreatureStage(o) {
     }
     if (bone && boneD > 6) {
       const bp = project(tmp.set(bone.x, heightAt(bone.x, bone.z) + 3.2, bone.z));
-      if (!bp.behind) html += `<span class="chMark bone" style="left:${bp.x}px;top:${bp.y}px">🦴 Fossil · ${Math.round(boneD)}m</span>`;
+      if (!bp.behind && !underMini(bp.x, bp.y)) html += `<span class="chMark bone" style="left:${bp.x}px;top:${bp.y}px">🦴 Fossil · ${Math.round(boneD)}m</span>`;
     }
     $h("#chMarkers").innerHTML = html;
   }
 
+  /**
+   * A marker for a far-off goal. On screen it sits over the spot; off screen it slides to the edge
+   * in the direction to walk, with an arrow pointing the way.
+   */
+  /** The minimap's box on screen, refreshed each HUD update; labels keep out from under it. */
+  let mini = null,
+    goal = null;
+  const inBox = (r, x, y) => !!r && r.width > 0 && x > r.left - 70 && x < r.right + 70 && y > r.top - 16 && y < r.bottom + 16;
+  const underMini = (x, y) => inBox(mini, x, y) || inBox(goal, x, y);
+  function edgeMark(at, cls, text) {
+    const y = heightAt(at.x, at.z) + 8;
+    const pt = project(tmp.set(at.x, y, at.z));
+    const top = innerWidth <= 900 ? 150 : 110,
+      bottom = innerHeight - (innerWidth <= 900 ? 250 : 170),
+      side = 86;
+    if (!pt.behind && pt.x > side && pt.x < innerWidth - side && pt.y > top && pt.y < bottom) return `<span class="chMark ${cls}" style="left:${pt.x}px;top:${pt.y}px">${text}</span>`;
+    // Direction on screen from the camera's heading: 0 is straight ahead (up).
+    const fx = Math.cos(camYaw),
+      fz = -Math.sin(camYaw);
+    const dx = at.x - P.pos.x,
+      dz = at.z - P.pos.z;
+    const ang = Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz);
+    const cx = innerWidth / 2,
+      cy = (top + bottom) / 2;
+    const sx = Math.sin(ang),
+      sy = -Math.cos(ang);
+    const k = Math.min((innerWidth / 2 - side) / Math.max(1e-3, Math.abs(sx)), ((bottom - top) / 2) / Math.max(1e-3, Math.abs(sy)));
+    let ex = cx + sx * k,
+      ey = cy + sy * k;
+    if (underMini(ex, ey)) ey = Math.max(inBox(mini, ex, ey) ? mini.bottom : 0, inBox(goal, ex, ey) ? goal.bottom : 0) + 18; // slide down past the minimap and objective
+    return `<span class="chMark ${cls} edge" style="left:${ex}px;top:${ey}px"><i class="mArrow" style="transform:rotate(${ang}rad)">▲</i>${text}</span>`;
+  }
   const cardShown = { t: null, rel: null };
   const arcShown = { face: null, ask: null, mode: null };
   function updateArc(t) {
@@ -2443,10 +2924,10 @@ export function createCreatureStage(o) {
       entry(ownSpecies(), "Your nest", "own");
       for (const nest of nests) {
         if (!P.discovered.has(nest.species.id)) continue;
-        entry(nest.species, RING_NAMES[nest.site.ring || ringAt(nest.site.x, nest.site.z)], nest.status, { members: nest.members.filter((m) => m.alive).length });
+        entry(nest.species, areaAt(nest.site.x, nest.site.z) + " · Level " + nest.species.level, nest.status, { members: nest.members.filter((m) => m.alive).length });
       }
       for (const e of [...epics, ...rogues])
-        if (P.discovered.has(e.species.id)) entry(e.species, RING_NAMES[e.ring] || "Wanders", e.alive ? (e.species.epic ? "epic" : "rogue") : "defeated");
+        if (P.discovered.has(e.species.id)) entry(e.species, "Wanders", e.alive ? (e.species.epic ? "epic" : "rogue") : "defeated");
       return out;
     },
     update(dt) {
@@ -2470,7 +2951,10 @@ export function createCreatureStage(o) {
       updateMonster(dt);
       updateNPCs(dt, timeUniform.value);
       updateRaid(dt);
+      updateMigration();
+      updateUfo(dt);
       regrowFamily(dt);
+      if (beacon.visible) beacon.material.opacity = 0.2 + 0.08 * Math.sin(timeUniform.value * 2.4);
       arcState.sour = Math.max(0, arcState.sour - dt);
       if (arcState.win > 0 && (arcState.win -= dt) <= 0) arcState.winEnc = null;
       if ((migrateClock -= dt) <= 0) {
@@ -2509,6 +2993,10 @@ export function createCreatureStage(o) {
         hudClock = 0.1;
         updateHUD();
       }
+      if ((mapClock -= dt) <= 0) {
+        mapClock = 0.08;
+        minimap.draw({ x: P.pos.x, z: P.pos.z, yaw: camYaw, heading: P.heading, time: timeUniform.value, markers: mapMarkers(false) });
+      }
       if (toastTimer > 0 && (toastTimer -= dt) <= 0) $h("#chToast").classList.remove("show");
       saveClock -= dt;
       if (saveClock <= 0) {
@@ -2539,6 +3027,20 @@ export function createCreatureStage(o) {
       select,
       migrateNests,
       evolveIsland,
+      /** Call the UFO now (tests). */
+      ufoNow() {
+        ufoClock = 0;
+      },
+      get ufo() {
+        return ufo;
+      },
+      toggleMap: () => toggleMap(),
+      /** Point the camera (tests and screenshots). */
+      aim(yaw, pitch = 0) {
+        camYaw = yaw;
+        view.pitch = pitch;
+        view.lastManual = performance.now();
+      },
       startRaid,
       setSneak,
       jump,
@@ -2555,6 +3057,10 @@ export function createCreatureStage(o) {
     },
     dispose() {
       saveState();
+      clearTimeout(picTimer);
+      islandMap?.close();
+      endUfo();
+      leafMat.dispose();
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onKeyUp);
       canvas.removeEventListener("pointerdown", onDown);

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Creature gallery (dev)</title>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<style>html,body{margin:0;background:#7fb069;overflow:hidden}canvas{display:block}</style></head>
+<body><canvas id="c"></canvas>
+<script type="module">
+// Dev only: renders creatures close up from a few angles. ?parts=eyes,arm&view=front|side|three
+import * as THREE from "three";
+import { buildCreatureBody } from "../creature/body3d.js";
+import { validateCreature } from "../creature/format.js";
+
+const q = new URLSearchParams(location.search);
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color("#9cc98a");
+scene.add(new THREE.HemisphereLight(0xdff3ff, 0x4a6a3a, 1.4));
+const sun = new THREE.DirectionalLight(0xfff1d6, 2.4);
+sun.position.set(4, 9, 6);
+scene.add(sun);
+const ground = new THREE.Mesh(new THREE.CircleGeometry(30, 40).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x6f9e52 }));
+scene.add(ground);
+const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 100);
+
+const base = {
+  name: "Test",
+  colors: { base: 0x3be0d8, pattern: 0x9df6ee, accent: 0xffedbc },
+  pattern: "speckle",
+  spine: [
+    { x: -1.5, y: 0, r: 0.35 },
+    { x: -0.75, y: 0.14, r: 0.55 },
+    { x: 0, y: 0.2, r: 0.62 },
+    { x: 0.75, y: 0.14, r: 0.5 },
+    { x: 1.5, y: 0.35, r: 0.42 },
+  ],
+  legs: [{ t: 0.3, length: 1.1 }, { t: 0.72, length: 1.1 }],
+  foot: "pads",
+  parts: [],
+  arms: [],
+};
+window.__gallery = { THREE, scene, renderer, camera, buildCreatureBody, validateCreature, base };
+let rigs = [];
+window.__show = (records, view = "three", zoom = 1) => {
+  rigs.forEach((r) => {
+    scene.remove(r.root);
+    r.dispose();
+  });
+  rigs = records.map((rec, i) => {
+    const b = buildCreatureBody(validateCreature({ ...base, ...rec }), { quality: "high" });
+    b.root.position.set((i - (records.length - 1) / 2) * 4.2, 0, 0);
+    if (view === "front") b.root.rotation.y = -Math.PI / 2;
+    else if (view === "three") b.root.rotation.y = -0.7;
+    scene.add(b.root);
+    b.update(0, 0);
+    return b;
+  });
+  const w = records.length * 4.2;
+  camera.position.set(0, 1.2 + 1.1 / zoom, Math.max(6.5, w * 1.1) / zoom);
+  camera.lookAt(view === "front" ? 0 : 0.6, 1.2, 0);
+};
+window.__show([{ parts: [{ id: "beak", t: 1, angle: 0 }, { id: "eyes", t: 0.86, angle: 0.75 }] }]);
+function frame(t) {
+  rigs.forEach((r) => r.update(0.016, 0));
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script></body></html>

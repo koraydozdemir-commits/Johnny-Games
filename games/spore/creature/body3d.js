@@ -1,7 +1,8 @@
 /**
  * Builds a land creature from a creature record: a round body swept along a side-profile spine,
- * legs whose feet always reach the ground, and parts oriented to the surface. Returns a small rig
- * that walks, bobs, performs abilities, flinches and dies.
+ * legs whose feet always reach the ground, jointed arms with hands, eyes that blink and look about,
+ * and parts oriented to the surface. Returns a small rig that walks, bobs, performs abilities,
+ * flinches and dies.
  *
  * Local frame: +x is forward (head), +y is up, +z is the creature's left. Ground is y = 0.
  */
@@ -9,8 +10,20 @@ import * as THREE from "three";
 import { getMembraneTexture, getPartMaterial } from "../gfx/materials.js";
 import { spineSamples, vivid } from "../gfx/body.js";
 import { creaturePart, partGeometry } from "./parts.js";
+import { EYE_SPECS, buildEye } from "./eyes.js";
 
 const UP = new THREE.Vector3(0, 1, 0);
+/** Translucent copies of shared materials, for sneaking (made once, on first use). */
+const ghostCopies = new WeakMap();
+function ghostOf(mat) {
+  if (!ghostCopies.has(mat)) {
+    const g = mat.clone();
+    g.transparent = true;
+    g.opacity = 0.42;
+    ghostCopies.set(mat, g);
+  }
+  return ghostCopies.get(mat);
+}
 
 /** Sweep the spine as a round body. Also returns a surface lookup used to seat legs and parts. */
 function sweepBody(spine, rings, around) {
@@ -206,11 +219,180 @@ export function buildCreatureBody(record, opts = {}) {
   // How far the body drops in a full crouch, so the feet stay planted.
   const crouchDrop = legs.length ? legs.reduce((sum, l) => sum + l.seg * (reachOf(restPose(l.bend)) - reachOf(restPose(l.bend, 1))), 0) / legs.length : 0;
 
+  /*
+   * Arms: the same three-bone chain as a leg (upper arm, forearm, wrist) hung from a shoulder on the
+   * flank, with the arm pair's hand (a grasper, or a foot) on the end. bend raises the arm and folds
+   * the elbow. Arms are free: they never take the body's weight.
+   */
+  const arms = [];
+  const handMeshes = [];
+  const armRest = (bend) => ({ u: 0.3 + bend * 0.45, k: 0.95 + bend * 0.55, a: 0.15 + bend * 0.15, splay: 0.32 });
+  (record.arms || []).forEach((a, pair) => {
+    for (const side of [1, -1]) {
+      const s = sweep.surface(a.t, side * a.angle);
+      const len = a.length;
+      const thick = 0.055 + len * 0.03;
+      const bone = (r0, r1, l) => {
+        const g = new THREE.CylinderGeometry(r1, r0, l, 10).translate(0, -l / 2, 0);
+        disposables.push(g);
+        return new THREE.Mesh(g, limbMat);
+      };
+      const jointGeo = new THREE.SphereGeometry(thick * 1.2, 10, 8);
+      disposables.push(jointGeo);
+      const shoulder = new THREE.Group();
+      shoulder.position.copy(s.point).addScaledVector(s.normal, -thick * 0.4);
+      shoulder.add(new THREE.Mesh(jointGeo, limbMat));
+      const upper = bone(thick, thick * 0.85, len * 0.5);
+      const elbow = new THREE.Group();
+      elbow.position.y = -len * 0.5;
+      const elbowBall = new THREE.Mesh(jointGeo, limbMat);
+      elbowBall.scale.setScalar(0.85);
+      elbow.add(elbowBall);
+      const fore = bone(thick * 0.85, thick * 0.7, len * 0.42);
+      const wrist = new THREE.Group();
+      wrist.position.y = -len * 0.42;
+      const wristBall = new THREE.Mesh(jointGeo, limbMat);
+      wristBall.scale.setScalar(0.7);
+      wrist.add(wristBall);
+      let hand = null;
+      if (a.hand) {
+        const def = creaturePart(a.hand);
+        hand = new THREE.Mesh(partGeometry(a.hand, colors.base), getPartMaterial());
+        // Hands are modelled along +x from the wrist, palm down: turn them to hang along the arm.
+        // A foot on an arm is worn like a foot, sole toward the ground at rest.
+        if (def?.slot === "hand") hand.rotation.z = -Math.PI / 2;
+        else {
+          // Undo the arm's rest angles so the sole faces the ground, like a forefoot.
+          const r = armRest(a.bend || 0);
+          hand.rotation.z = -(r.u + r.k + r.a);
+          hand.position.y = -thick * 0.4;
+        }
+        hand.scale.setScalar(0.75 + len * 0.25);
+        if (side < 0) {
+          // The far side's hand is a true mirror image.
+          const holder = new THREE.Group();
+          holder.scale.z = -1;
+          holder.add(hand);
+          wrist.add(holder);
+        } else wrist.add(hand);
+        handMeshes.push(hand);
+      }
+      fore.add(wrist);
+      elbow.add(fore);
+      upper.add(elbow);
+      shoulder.add(upper);
+      body.add(shoulder);
+      arms.push({ pair, side, shoulder, upper, elbow, fore, wrist, hand, bend: a.bend || 0, phase: pair * 0.6 + (side > 0 ? Math.PI : 0) });
+    }
+  });
+  /** Pose every arm: walking swing, a pose for each ability, and the rest pose from the design. */
+  function poseArms(moving, k, held, swell, ability) {
+    for (const arm of arms) {
+      const rest = armRest(arm.bend);
+      let u = rest.u + Math.sin(anim.phase + arm.phase) * 0.4 * moving,
+        kk = rest.k,
+        w = rest.a,
+        splay = rest.splay;
+      const s = arm.side;
+      if (ability === "strike") {
+        // Wind up, then a raking slash forward and down.
+        const swing = k < 0.35 ? -k / 0.35 : Math.sin(((k - 0.35) / 0.65) * Math.PI);
+        u += swing * 1.6;
+        kk -= Math.max(0, swing) * 0.8;
+      } else if (ability === "bite" || ability === "charge") {
+        u -= swell * 0.5; // arms tucked back out of the way
+      } else if (ability === "sing") {
+        // Arms spread wide, swaying with the song.
+        u += held * 0.9;
+        kk -= held * 0.6;
+        splay += held * (0.9 + Math.sin(k * Math.PI * 4 + s) * 0.15);
+      } else if (ability === "dance") {
+        // Alternating waves overhead.
+        u += swell * (1.7 + Math.sin(k * Math.PI * 6 + (s > 0 ? 0 : Math.PI)) * 0.6);
+        kk -= swell * 0.4;
+        splay += swell * 0.4;
+      } else if (ability === "charm") {
+        // Hands brought together under the chin, a shy little wave.
+        u += held * 1.2;
+        kk += held * 0.5;
+        splay -= held * 0.25;
+        w += held * Math.sin(k * Math.PI * 8) * 0.4;
+      } else if (ability === "pose") {
+        // Both arms flung up high.
+        u += held * 2.6;
+        kk -= held * 0.85;
+        splay += held * 0.35;
+      } else if (ability === "spit") {
+        u += swell * 0.4;
+      }
+      // While sneaking the arms stay drawn in; in the air they spread for balance.
+      u -= anim.crouch * 0.25;
+      splay += anim.airK * 0.5;
+      arm.upper.rotation.z = u;
+      arm.elbow.rotation.z = kk;
+      arm.wrist.rotation.z = w;
+      arm.shoulder.rotation.x = -s * splay;
+    }
+  }
+
+  /*
+   * Eyes: little rigs (see eyes.js). They sit forward-facing in the skin, blink now and then and look
+   * at whatever the creature is interested in.
+   */
+  const eyes = [];
+  const lidMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(vivid(colors.base)).multiplyScalar(0.92), roughness: 0.55, side: THREE.DoubleSide });
+  const stalkMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(vivid(colors.base)).multiplyScalar(0.85), roughness: 0.6 });
+  disposables.push(lidMat, stalkMat);
+  const eyeMats = { lidMat, stalkMat, compound: partGeometry("bugEyes", colors.base), compoundMat: getPartMaterial() };
+  const look = { target: null, yaw: 0, pitch: 0, toYaw: 0, toPitch: 0, wander: 1, blink: 0, nextBlink: 1 + Math.random() * 3, double: false, sleep: 0, sleepTarget: 0 };
+
+  const tmpV = new THREE.Vector3();
+  /** Blinking, and turning the eyes toward the target (or glancing about when there is none). */
+  function updateEyes(dt) {
+    if (!eyes.length) return;
+    // Blink every few seconds, sometimes twice; a closed eye takes about a tenth of a second.
+    look.nextBlink -= dt;
+    if (look.nextBlink <= 0 && look.blink === 0) look.blink = 0.001;
+    if (look.blink > 0) {
+      look.blink += dt / 0.16;
+      if (look.blink >= 1) {
+        look.blink = 0;
+        look.double = !look.double && Math.random() < 0.25;
+        look.nextBlink = look.double ? 0.12 : 2 + Math.random() * 4;
+      }
+    }
+    // Asleep, the lids close slowly and stay shut.
+    look.sleep += (look.sleepTarget - look.sleep) * Math.min(1, dt * 2.5);
+    const lid = Math.max(look.sleep, look.blink > 0 ? Math.sin(look.blink * Math.PI) : 0);
+    // Where to look: at the target if there is one, otherwise a new idle glance every second or two.
+    if (look.target) {
+      root.updateMatrixWorld();
+      tmpV.copy(look.target);
+      body.worldToLocal(tmpV);
+      tmpV.sub(gazeFrom);
+      look.toYaw = THREE.MathUtils.clamp(Math.atan2(tmpV.z, tmpV.x), -0.75, 0.75);
+      look.toPitch = THREE.MathUtils.clamp(Math.atan2(tmpV.y, Math.hypot(tmpV.x, tmpV.z)), -0.45, 0.45);
+    } else if ((look.wander -= dt) <= 0) {
+      look.wander = 0.8 + Math.random() * 2.2;
+      look.toYaw = (Math.random() - 0.5) * 0.9;
+      look.toPitch = (Math.random() - 0.5) * 0.35;
+    }
+    // Eyes snap to a new point quickly, the way real eyes do.
+    const ease = Math.min(1, dt * 14);
+    look.yaw += (look.toYaw - look.yaw) * ease;
+    look.pitch += (look.toPitch - look.pitch) * ease;
+    for (const e of eyes) {
+      e.rig.setBlink(lid);
+      // A mirrored eye sees the world flipped left to right.
+      e.rig.setGaze(e.mirror ? -look.yaw : look.yaw, look.pitch);
+    }
+  }
+
   /* Parts */
   const partMeshes = [];
   let mouth = new THREE.Vector3(sweep.maxX, sweep.head.p.y, 0);
-  const place = (id, point, outward, scale, index, mirror = false, roll = 0, bend = 0) => {
-    const mesh = new THREE.Mesh(partGeometry(id, colors.base, bend), getPartMaterial());
+  const place = (id, point, outward, scale, index, mirror = false, roll = 0) => {
+    const mesh = new THREE.Mesh(partGeometry(id, colors.base), getPartMaterial());
     mesh.userData.partIndex = index;
     mesh.userData.partId = id;
     mesh.position.copy(point);
@@ -240,18 +422,55 @@ export function buildCreatureBody(record, opts = {}) {
     if (t < 0.12) out.addScaledVector(sweep.tail.tan, -(0.12 - t) * 6);
     return { point: s.point, out: out.normalize(), tip: false };
   };
+  /** An eye rig at a mount point, looking forward along the body (a little outward), upright. */
+  const placeEye = (id, point, normal, scale, index, mirror) => {
+    const spec = EYE_SPECS[id];
+    const rig = buildEye(id, eyeMats);
+    const g = rig.group;
+    g.scale.setScalar(scale);
+    // Seated part-way into the skin so it bulges out like an eye, not stuck on like a marble.
+    g.position.copy(point).addScaledVector(normal, spec.stalk ? -0.02 : spec.r * scale * 0.5);
+    const fwd = new THREE.Vector3(1, 0, 0).addScaledVector(normal, 0.45);
+    fwd.y = Math.max(fwd.y * 0.4, -0.1);
+    fwd.normalize();
+    // Basis: +x = look direction, +y = as close to world-up as possible.
+    const zAxis = new THREE.Vector3().crossVectors(fwd, UP).normalize();
+    const yAxis = new THREE.Vector3().crossVectors(zAxis, fwd).normalize();
+    g.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(fwd, yAxis, zAxis));
+    rig.meshes.forEach((m) => {
+      m.userData.partIndex = index;
+      m.userData.partId = id;
+      m.userData.eye = true;
+      partMeshes.push(m);
+    });
+    if (mirror) {
+      const holder = new THREE.Group();
+      holder.scale.z = -1;
+      holder.add(g);
+      body.add(holder);
+    } else body.add(g);
+    eyes.push({ rig, mirror });
+  };
   (record.parts || []).forEach((p, index) => {
     const def = creaturePart(p.id);
     if (!def) return;
     let scale = p.scale || 1;
+    if (EYE_SPECS[p.id]) {
+      const s = sweep.surface(p.t, p.angle);
+      placeEye(p.id, s.point, s.normal, scale, index, false);
+      if (Math.abs(p.angle) > 0.15 && Math.abs(p.angle) < Math.PI - 0.15) placeEye(p.id, s.point, s.normal, scale, index, true);
+      return;
+    }
     const m = mount(def, p.t, p.angle);
     if (def.slot === "mouth" && m.tip) scale *= Math.max(0.8, sweep.head.r * 2.2);
-    place(p.id, m.point, m.out, scale, index, false, p.roll || 0, p.bend || 0);
+    place(p.id, m.point, m.out, scale, index, false, p.roll || 0);
     if (def.slot === "mouth") mouth = m.point.clone().addScaledVector(m.out, 0.35);
     // Anything off the midline gets its mirror twin on the other flank.
-    if (!m.tip && Math.abs(p.angle) > 0.15 && Math.abs(p.angle) < Math.PI - 0.15) place(p.id, m.point, m.out, scale, index, true, p.roll || 0, p.bend || 0);
+    if (!m.tip && Math.abs(p.angle) > 0.15 && Math.abs(p.angle) < Math.PI - 0.15) place(p.id, m.point, m.out, scale, index, true, p.roll || 0);
   });
   mouth.y += lift;
+  // Eyes judge directions from the head.
+  const gazeFrom = new THREE.Vector3(sweep.head.p.x, sweep.head.p.y, 0);
 
   /* Rig */
   const anim = { phase: 0, ability: null, abilityT: 0, hit: 0, dead: -1, lod: 1, crouch: 0, crouchTarget: 0, air: null, airK: 0 };
@@ -313,6 +532,10 @@ export function buildCreatureBody(record, opts = {}) {
         spin = 0,
         roll = 0,
         pulse = 1;
+      let armK = 0,
+        armHeld = 0,
+        armSwell = 0,
+        armAbility = null;
       if (anim.ability) {
         anim.abilityT += dt;
         const k = Math.min(1, anim.abilityT / (ABILITY_TIME[anim.ability] || 0.6)),
@@ -349,7 +572,15 @@ export function buildCreatureBody(record, opts = {}) {
           pulse = 1 + held * 0.13;
           roll = held * Math.sin(k * Math.PI * 14) * 0.035;
         }
+        armK = k;
+        armHeld = held;
+        armSwell = swell;
+        armAbility = anim.ability;
         if (k >= 1) anim.ability = null;
+      }
+      if (anim.lod > 0) {
+        poseArms(moving, armK, armHeld, armSwell, armAbility);
+        updateEyes(dt);
       }
       if (anim.air === "glide") lean += -0.12 * anim.airK + Math.sin(anim.phase * 0.7) * 0.04;
       lean += anim.crouch * 0.06; // head low when stalking
@@ -374,7 +605,22 @@ export function buildCreatureBody(record, opts = {}) {
     get dead() {
       return anim.dead >= 1;
     },
+    /** Something to look at (a world position), or null to glance about. */
+    lookAt(worldPos) {
+      look.target = worldPos ? (look.target || new THREE.Vector3()).copy(worldPos) : null;
+    },
+    /** The near-side hand (or wrist), for holding things; null with no arms. */
+    handAnchor() {
+      const arm = arms.find((a) => a.side > 0);
+      return arm ? arm.wrist : null;
+    },
+    armCount: (record.arms || []).length,
     /** Sneaking pose: 0 standing, 1 full crouch. Eases in over a few frames. */
+    /** Asleep: eyes shut and the body settles low. Pass false to wake. */
+    setSleep(on) {
+      look.sleepTarget = on ? 1 : 0;
+      anim.crouchTarget = on ? 1 : 0;
+    },
     setCrouch(v) {
       anim.crouchTarget = v;
     },
@@ -400,22 +646,27 @@ export function buildCreatureBody(record, opts = {}) {
         disposables.push(ghostParts);
       }
       const partMat = on ? ghostParts : getPartMaterial();
-      partMeshes.forEach((m) => (m.material = partMat));
+      partMeshes.forEach((m) => {
+        if (!m.userData.eye) return (m.material = partMat);
+        // Eye pieces have their own materials; swap each for its see-through twin.
+        m.userData.solidMat ||= m.material;
+        m.material = on ? ghostOf(m.userData.solidMat) : m.userData.solidMat;
+      });
       legs.forEach((l) => (l.foot.material = partMat));
+      handMeshes.forEach((h) => (h.material = partMat));
     },
     /**
-     * World positions of every leg joint (for the editor's joint handles).
-     * @returns {{pair:number, side:number, hip:THREE.Vector3, knee:THREE.Vector3, foot:THREE.Vector3}[]}
+     * World positions of every limb joint (for the editor's joint handles).
+     * @returns {{kind:"leg"|"arm", pair:number, side:number, hip:THREE.Vector3, knee:THREE.Vector3, foot:THREE.Vector3}[]}
      */
     joints() {
       root.updateMatrixWorld(true);
-      return legs.map((l) => ({
-        pair: l.pair,
-        side: l.side,
-        hip: l.hip.getWorldPosition(new THREE.Vector3()),
-        knee: l.knee.getWorldPosition(new THREE.Vector3()),
-        foot: l.foot.getWorldPosition(new THREE.Vector3()),
-      }));
+      const at = (o) => o.getWorldPosition(new THREE.Vector3());
+      return [
+        ...legs.map((l) => ({ kind: "leg", pair: l.pair, side: l.side, hip: at(l.hip), knee: at(l.knee), foot: at(l.foot) })),
+        // For arms: hip = shoulder, knee = elbow, foot = the hand's end.
+        ...arms.map((a) => ({ kind: "arm", pair: a.pair, side: a.side, hip: at(a.shoulder), knee: at(a.elbow), foot: at(a.hand || a.wrist) })),
+      ];
     },
     /** 0 = far: hide small parts and freeze legs. */
     setLOD(level) {

@@ -720,7 +720,11 @@ html body.cinematic.creatureMode .moveStick,html body.cinematic .mobileControls{
 @keyframes chFacePop{0%{opacity:0;transform:translate(-50%,-20%) scale(.3)}16%{opacity:1;transform:translate(-50%,-80%) scale(1.3)}30%{transform:translate(-50%,-75%) scale(1)}78%{opacity:1}100%{opacity:0;transform:translate(-50%,-170%) scale(.9)}}
 @keyframes chFacePopDown{0%{opacity:0;transform:translate(-50%,-20%) scale(.3)}16%{opacity:1;transform:translate(-50%,-80%) scale(1.3)}26%{transform:translate(-58%,-75%) rotate(-10deg)}36%{transform:translate(-42%,-75%) rotate(10deg)}46%{transform:translate(-50%,-75%)}78%{opacity:1}100%{opacity:0;transform:translate(-50%,-150%) scale(.9)}}
 .creatureHUD .chMark.bone{border-color:#ffe69a;color:#fff3c9}
-.creatureHUD .chMark.raid{background:#ef4b48;border-color:#ffb3ad;animation:chBlink .6s infinite}
+.creatureHUD .chMark small{font-size:9px;font-weight:800;opacity:.75;letter-spacing:.04em}
+.chMark.migrate{background:#5a3d0fe6;border-color:#ffd98a;color:#fff3c9;font-size:12px;padding:4px 10px;box-shadow:0 0 14px #ffd98a55}
+.chMark.edge{transform:translate(-50%,-50%);display:flex;align-items:center;gap:6px}
+.chMark .mArrow{display:inline-block;font-style:normal;font-size:10px;color:#ffd98a}
+.chMark.raid{background:#ef4b48;border-color:#ffb3ad;animation:chBlink .6s infinite}
 /* Pack bar */
 .creatureHUD .chPack{position:absolute;left:10px;top:calc(max(10px,env(safe-area-inset-top)) + 172px);display:flex;flex-direction:column;gap:9px}
 .creatureHUD .chPackMember{position:relative;display:flex;align-items:center;gap:5px;animation:arcAskIn .35s}
@@ -799,6 +803,8 @@ body.growthPullback #gameHUD,body.growthPullback #radarWrap,body.growthPullback 
 .crEditor.testing .ceGrips,.crEditor.placing .ceGrips{display:none}
 @media (pointer:coarse){.crEditor .ceGrip{width:40px;height:40px;margin:-20px 0 0 -20px}.crEditor .ceGrip.knee,.crEditor .ceGrip.elbow{width:32px;height:32px;margin:-16px 0 0 -16px}}
 .crEditor .ceLeg{grid-template-columns:auto 1fr 1fr 1fr auto}
+.crEditor .ceArm b small{display:block;font-weight:500;font-size:10px;opacity:.75;white-space:nowrap}
+.crEditor .ceGrip.hand{background:#ffd9b0}
 .crEditor .ceStats{top:66px;max-height:calc(100dvh - min(42vh,330px) - 78px);overflow:auto;scrollbar-width:thin}
 @media (max-width:760px){.crEditor .ceStats{top:auto;max-height:none;overflow:visible}}
 @media (max-width:760px){.crEditor .ceLeg{grid-template-columns:1fr 1fr 1fr auto}.crEditor .ceLeg>b{grid-column:1/-1}}
@@ -859,6 +865,45 @@ html body.tribeMode.creatureMode .mobileControls,html body.tribeMode.creatureMod
 .tribeHUD .tsTool span{font-size:26px}.tribeHUD .tsTool small{font-size:11px;color:#cfe0e6}.tribeHUD .tsTool em{font-style:normal;font-weight:800;color:#ffe08a;font-size:12px}
 .tribeHUD .tsTool[aria-disabled=true]{opacity:.5}
 .tribeHUD .tsHelp{margin:10px 0 0;padding-left:18px;display:grid;gap:6px;font-size:12.5px;color:#e4f0f3}
+.tribeHUD .trSheet{max-height:calc(100dvh - 300px);overflow:auto;overscroll-behavior:contain}
+.tribeHUD .tsKind{margin:12px 0 0;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#9fd8e2}
+.tribeHUD .tsTools .tsTool.fight{border-color:#b5523a88}.tribeHUD .tsTools .tsTool.music{border-color:#d9a44188}.tribeHUD .tsTools .tsTool.village{border-color:#6aa84f88}
+.tribeHUD .tsBtns:has(#tsGift){grid-template-columns:1fr 1fr 1fr}
+.tribeHUD .tsBtns .gift{background:#f5c75a;color:#2b1d00}
+.tribeHUD .tsBtns button:not(.good):not(.bad):not(.gift){background:#ffffff1f;color:#fff}
+.tribeHUD .tsWon{font-size:17px}.tribeHUD .tsWon b{font-size:18px;color:#ffe08a}
+.tribeHUD .tsWonText{margin:10px 0;font-size:13.5px;color:#e4f0f3}
+.tribeHUD .tsStats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0 4px}
+.tribeHUD .tsStats span{display:flex;flex-direction:column;align-items:center;padding:8px 4px;border-radius:12px;background:#ffffff12;font-size:11px;color:#bcd3db}.tribeHUD .tsStats b{font-size:20px;color:#fff}
+/* The social arc (same look as the creature stage's) and the band's instruments */
+.tribeHUD .trArc{position:absolute;top:calc(max(10px,env(safe-area-inset-top)) + 138px);left:50%;width:240px;height:128px;margin-left:-120px;pointer-events:none;filter:drop-shadow(0 6px 14px #0009);transform-origin:top center}
+.tribeHUD .trArc[hidden],.tribeHUD .trBand[hidden]{display:none}
+.tribeHUD .trArc .arcSvg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.tribeHUD .arcRim{fill:none;stroke:#ffffff59;stroke-width:20;stroke-linecap:round}
+.tribeHUD .arcTrack{fill:none;stroke:#0b1c28;stroke-width:17;stroke-linecap:round}
+.tribeHUD .arcFill{fill:none;stroke:#3fc26e;stroke-width:10.5;stroke-linecap:round;stroke-dasharray:0 100;transition:stroke-dasharray .4s cubic-bezier(.3,1.35,.5,1),stroke .3s}
+.tribeHUD .arcFace{position:absolute;left:50%;bottom:0;width:58px;height:58px;margin-left:-29px}
+.tribeHUD .arcAsk{position:absolute;left:50%;top:30px;width:44px;height:44px;margin-left:-22px;display:grid;place-items:center;background:#fff;border-radius:50%;box-shadow:0 3px 10px #0008}
+.tribeHUD .arcAsk[hidden]{display:none}
+.tribeHUD .arcAsk svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.tribeHUD .arcAskTrack{fill:none;stroke:#00000016;stroke-width:4}
+.tribeHUD .arcAskTime{fill:none;stroke:#3fc26e;stroke-width:4;stroke-linecap:round}
+.tribeHUD .arcAsk.hurry .arcAskTime{stroke:#ef4b48}
+.tribeHUD .arcAsk span{position:relative;font-size:22px;line-height:1}
+.tribeHUD .arcLabel{position:absolute;left:-20px;right:-20px;top:100%;margin-top:2px;text-align:center;font-size:11.5px;font-weight:800;text-shadow:0 2px 6px #000d;white-space:nowrap}
+.tribeHUD .trArc.miss{animation:trArcMiss .45s}.tribeHUD .trArc.good .arcSvg{animation:trArcGood .4s}
+@keyframes trArcMiss{20%{transform:translateX(-9px) rotate(-3deg)}45%{transform:translateX(8px) rotate(3deg)}70%{transform:translateX(-4px)}}
+@keyframes trArcGood{40%{transform:scale(1.06)}}
+.tribeHUD .trBand{pointer-events:auto;display:flex;justify-content:center;gap:10px;margin:0 auto}
+.tribeHUD .trBand button{position:relative;width:76px;min-height:70px;border-radius:18px;border:2px solid #ffffff33;background:linear-gradient(#3a2a58f0,#1c1430f0);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:inherit;cursor:pointer;transition:transform .12s,box-shadow .2s}
+.tribeHUD .trBand button span{font-size:26px;line-height:1}.tribeHUD .trBand button small{font-size:10px;font-weight:800}
+.tribeHUD .trBand button kbd{position:absolute;top:3px;right:6px;font:700 9px system-ui;opacity:.6}
+.tribeHUD .trBand button:disabled{opacity:.35;cursor:default}
+.tribeHUD .trBand button.wanted:not(:disabled){border-color:#ffe08a;box-shadow:0 0 0 3px #ffe08a88,0 0 18px #ffe08a88;animation:trWanted .7s ease-in-out infinite}
+.tribeHUD .trBand button:active:not(:disabled){transform:scale(.94)}
+@keyframes trWanted{50%{transform:translateY(-3px)}}
+.tribeHUD.playing .trActions{display:none}
+@media (max-height:520px){.tribeHUD .trArc{top:max(6px,env(safe-area-inset-top));transform:scale(.72)}}
 .tribeHUD .trMenuPanel{pointer-events:auto;position:absolute;top:calc(max(10px,env(safe-area-inset-top)) + 52px);right:10px;display:flex;flex-direction:column;gap:8px;background:#0d2232f2;border:1px solid #ffffff22;border-radius:14px;padding:10px;z-index:3}
 .tribeHUD .trMenuPanel[hidden]{display:none}
 .tribeHUD .trMenuPanel button{border:0;border-radius:10px;padding:11px 16px;font-weight:700;background:#ffffff22}.tribeHUD .trMenuPanel button.primary{background:#f5c75a;color:#132532}
@@ -901,6 +946,39 @@ body.dangerNear:not(.cellEditorMode):not(.creatureMode)::after{box-shadow:inset 
 .partDragGhost{position:fixed;width:84px;height:63px;pointer-events:none;z-index:9999;transform:translate(-50%,-50%) scale(1.1);filter:drop-shadow(0 6px 10px #000a);transition:opacity .12s}
 body.cellEditorMode #partsPanel .partCard{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 body.cellEditorMode #partsPanel .catalog{overflow-y:auto;overflow-x:hidden;min-height:0;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y}
+
+/* Creature stage: minimap and island map (Spore-style) */
+.creatureHUD .chMini{pointer-events:auto;position:absolute;top:calc(max(10px,env(safe-area-inset-top)) + 56px);right:12px;width:132px;height:132px;padding:0;border-radius:50%;border:2px solid #e8f3ee99;background:#0d2232;box-shadow:0 6px 20px #0008,inset 0 0 0 1px #0006;overflow:visible;transition:opacity .25s}
+.creatureHUD .chMini canvas{display:block;width:100%;height:100%;border-radius:50%}
+.creatureHUD .chMiniN{position:absolute;transform:translate(-50%,-50%);width:17px;height:17px;border-radius:50%;background:#0d2232;border:1px solid #e8f3ee99;font:900 9px/15px system-ui,sans-serif;text-align:center;color:#fff;pointer-events:none}
+.creatureHUD .chMini:focus-visible{outline:2px solid #ffe7a6;outline-offset:3px}
+@media (max-width:900px){.creatureHUD .chMini{top:calc(max(10px,env(safe-area-inset-top)) + 50px);right:10px;width:92px;height:92px}.creatureHUD.arcOn .chMini{opacity:0;pointer-events:none}}
+@media (max-height:520px){.creatureHUD .chMini{width:78px;height:78px;top:calc(max(6px,env(safe-area-inset-top)) + 48px)}}
+.chMap{position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom));background:#03111bcc;backdrop-filter:blur(3px);animation:chMapIn .2s ease-out}
+@keyframes chMapIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
+.chMapCard{width:min(560px,94vw);max-height:100%;overflow:auto;background:#0d2232f2;border:1px solid #ffffff2a;border-radius:18px;padding:12px;box-shadow:0 18px 60px #000b;color:#eef7f4}
+.chMapHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.chMapHead b{font-size:16px;letter-spacing:.04em}
+.chMapClose{width:40px;height:40px;border-radius:12px;padding:0;font-size:16px;background:#ffffff14;border:1px solid #ffffff2a}
+.chMapCanvas{display:block;width:min(100%,calc(100dvh - 200px));aspect-ratio:1;margin:0 auto;border-radius:12px;background:#24668e}
+.chMapKey{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px 12px;justify-content:center;font-size:11px;color:#cfe2e8}
+.chMapKey li{display:flex;align-items:center;gap:5px}
+.chMapKey i{display:inline-block;width:11px;height:11px;border-radius:50%;background:var(--c);border:1px solid #10202b}
+.chMapKey i.house{border-radius:2px;clip-path:polygon(50% 0,100% 45%,85% 45%,85% 100%,15% 100%,15% 45%,0 45%)}
+.chMapKey i.bone{height:6px;border-radius:4px}
+.chMapKey i.tri{border-radius:0;clip-path:polygon(50% 0,100% 100%,0 100%)}
+.creatureHUD .chEgg{background:#ffe7a8;color:#3b2a06;box-shadow:0 6px 20px #ffd76a55;animation:none}
+.creatureHUD .chPop.sleep{font-size:18px;opacity:.85;animation-duration:2.4s}
+/* TEMPORARY stage switcher (playtesting aid) */
+.devStages{position:fixed;z-index:80;left:0;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:6px;pointer-events:none}
+.devStagesToggle{pointer-events:auto;writing-mode:vertical-rl;min-width:26px;min-height:58px;padding:8px 4px;border:1px dashed #ffcf6e;border-left:0;border-radius:0 9px 9px 0;background:#2a1d08e6;color:#ffd98a;font:800 10px/1 "Trebuchet MS",system-ui,sans-serif;letter-spacing:.22em;box-shadow:0 3px 14px #0007}
+.devStagesToggle[aria-expanded=true]{background:#5a3d0fef}
+.devStagesMenu{pointer-events:auto;display:flex;flex-direction:column;gap:6px;padding:10px;border:1px dashed #ffcf6e;border-radius:11px;background:#1d1606f2;box-shadow:0 8px 28px #000a}
+.devStagesMenu[hidden]{display:none}
+.devStagesMenu small{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#e8c77f}
+.devStagesMenu button{min-height:44px;min-width:132px;text-align:left;font-weight:700;background:linear-gradient(#4b3a1a,#2b2010);border-color:#c9a25a88}
+.devStagesMenu button[aria-current=true]{border-color:#ffd98a;background:linear-gradient(#7a5a1f,#4a3412);color:#fff4d6}
+.devStagesToggle:focus-visible,.devStagesMenu button:focus-visible{outline:2px solid #ffe7a6;outline-offset:2px}
 </style>
 </head>
 <body>
@@ -947,6 +1025,16 @@ body.cellEditorMode #partsPanel .catalog{overflow-y:auto;overflow-x:hidden;min-h
 <div class="worldToast" id="toast"></div><div id="worldWaypoint" aria-hidden="true"><span class="waypointArrow">➤</span><span class="waypointText"><b id="waypointTitle">METEOR</b><small id="waypointSubtitle">DNA FRAGMENT</small></span></div><div class="controlHint" id="controlHint"><span id="controlHintText">STEER · EAT · EVOLVE</span><button id="dismissControlHint" aria-label="Dismiss controls hint">×</button></div>
 <div class="overlay" id="intro"><div class="dialog"><h1>PRIMORDIAL SOUP</h1><p>A meteor brings life to the soup. Build your first cell, then eat to grow, find new parts in meteor shards and fallen cells, and choose your path: plants, meat, or both.</p><p><b>Swim:</b> WASD / arrows · <b>Jet:</b> Space · <b>Call mate:</b> M · <b>Editor:</b> Tab<br>On mobile, use the virtual joystick and the Boost / Mate / Pause buttons. In the editor, drag the spine and radius handles directly.</p><div class="options"><button id="begin" class="primary">Begin life</button></div></div></div>
 <div id="hatchCinematic" aria-label="Meteor impact and life beginning"><div class="hatchStarfield"></div><div class="hatchOrbit hatchOrbitOne"></div><div class="hatchOrbit hatchOrbitTwo"></div><div class="hatchMeteorTrail"></div><div class="hatchMeteor"></div><div class="hatchRipple"></div><div class="hatchEgg" id="hatchEgg"></div><div class="hatchCaption"><small>PRIMORDIAL SOUP</small><b id="hatchTitle">LIFE BEGINS</b><span>ONE CELL. ONE CHANCE.</span></div><button id="skipHatch">SKIP ›</button></div><div class="overlay" id="dialogOverlay" style="display:none"><div class="dialog"><h1 id="dialogTitle"></h1><p id="dialogText"></p><div class="options" id="dialogOptions"></div></div></div>
+<!-- TEMPORARY: stage switcher for playtesting. Remove before release. -->
+<div id="devStages" class="devStages" data-temporary>
+<button id="devStagesToggle" class="devStagesToggle" aria-expanded="false" aria-controls="devStagesMenu" aria-label="Temporary stage switcher">DEV</button>
+<div id="devStagesMenu" class="devStagesMenu" role="group" aria-label="Jump to stage" hidden>
+<small>Temporary · jump to stage</small>
+<button data-stage="cell"><span aria-hidden="true">🦠</span> Cell</button>
+<button data-stage="creature"><span aria-hidden="true">🦎</span> Creature</button>
+<button data-stage="tribe"><span aria-hidden="true">🛖</span> Tribe</button>
+</div>
+</div>
 <script type="module" src="spore/main.js"></script>
 <div class="tipBubble" id="tipBubble" role="status" aria-live="polite"><span class="tipIcon">!</span><span id="tipText"></span><button id="tipClose" aria-label="Dismiss hint">Got it</button></div>
 <div class="srOnly" id="growthAnnounce" aria-live="polite"></div><div class="stageBanner" id="stageBanner" aria-live="polite"><small id="stageBannerKicker">STAGE 1</small><strong id="stageBannerTitle">Microbe</strong><span id="stageBannerText"></span></div>

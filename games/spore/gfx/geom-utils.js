@@ -115,7 +115,8 @@ export function taperedTube(points, radius, { radial = 7, segments = 18, swayAmp
         b = s * radial + ((k + 1) % radial),
         c = (s + 1) * radial + k,
         d = (s + 1) * radial + ((k + 1) % radial);
-      indices.push(a, c, b, b, c, d);
+      // Counter-clockwise seen from outside, so the faces (and back-face culling) agree with the normals.
+      indices.push(a, b, c, b, d, c);
     }
   if (capEnd) {
     const tipIndex = positions.length / 3;
@@ -125,7 +126,7 @@ export function taperedTube(points, radius, { radial = 7, segments = 18, swayAmp
     normals.push(dir.x, dir.y, dir.z);
     sways.push(swayAmp);
     const last = segments * radial;
-    for (let k = 0; k < radial; k++) indices.push(last + k, tipIndex, last + ((k + 1) % radial));
+    for (let k = 0; k < radial; k++) indices.push(last + k, last + ((k + 1) % radial), tipIndex);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
