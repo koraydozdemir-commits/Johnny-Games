@@ -287,10 +287,29 @@ render();
 const invitedCode=new URLSearchParams(location.search).get("room");
 if(invitedCode&&/^[A-Z]{4}$/i.test(invitedCode))$("room-input").value=invitedCode.toUpperCase();
 (async function resumeRoom(){
- const code=(invitedCode||localStorage.getItem("jg_chess_last_room")||"").toUpperCase();
+ const storedCode=(invitedCode||localStorage.getItem("jg_chess_last_room")||"").toUpperCase();
+ // Only the current four-letter room format is resumable. Discard stale legacy codes.
+ if(!/^[A-Z]{4}$/.test(storedCode)){
+  if(!invitedCode&&storedCode){
+   localStorage.removeItem("jg_chess_last_room");
+   localStorage.removeItem("jg_chess_token_"+storedCode);
+   localStorage.removeItem("jg_chess_color_"+storedCode);
+  }
+  return;
+ }
+ const code=storedCode;
  const savedToken=localStorage.getItem("jg_chess_token_"+code),savedColor=localStorage.getItem("jg_chess_color_"+code);
- if(!code||!savedToken||!savedColor)return;
- try{const d=await request("?code="+encodeURIComponent(code));room=d.room;token=savedToken;color=savedColor;applyRoom(room);watchRoom();$("connection").textContent="RECONNECTING";say("Your previous game has been restored.","success")}catch(e){say("Previous game could not be restored: "+e.message,"error")}
+ if(!savedToken||!savedColor)return;
+ try{
+  const d=await request("?code="+encodeURIComponent(code));
+  if(!d.room||d.room.code!==code)throw new Error("The saved room code did not match the room returned.");
+  room=d.room;token=savedToken;color=savedColor;applyRoom(room);watchRoom();$("connection").textContent="RECONNECTING";say("Your previous game has been restored.","success");
+ }catch(e){
+  localStorage.removeItem("jg_chess_last_room");
+  localStorage.removeItem("jg_chess_token_"+code);
+  localStorage.removeItem("jg_chess_color_"+code);
+  say("The old saved room was cleared. Create or join a 4-letter room.","error");
+ }
 })();
 </script>
 </body>
