@@ -60,24 +60,24 @@ export const DIET_CARDS = {
 };
 
 /**
- * The evolution track: one consequence slot per stage. Only the Cell Stage awards a card in this
- * build; the Creature Stage is a preview and the rest are still to come.
+ * The evolution track: one consequence slot per stage. Cell, Creature and Tribal are playable;
+ * Civilisation and Space are still to come.
  */
 export const STAGE_TRACK = [
   { id: "cell", title: "Cell", status: "playable", icon: "◉" },
   { id: "creature", title: "Creature", status: "playable", icon: "🦎" },
-  { id: "tribe", title: "Tribe", status: "future", icon: "⛺" },
-  { id: "civ", title: "Civilisation", status: "future", icon: "🏛" },
+  { id: "tribe", title: "Tribe", status: "playable", icon: "⛺" },
+  { id: "civ", title: "Civilization", status: "playable", icon: "🏛" },
   { id: "space", title: "Space", status: "future", icon: "🪐" },
 ];
 
 /** Creature Stage consequence traits, from how the island's species were handled. */
 export const CREATURE_CARDS = {
-  predator: { id: "predator", title: "Predator", trait: "red", color: TRAIT_COLORS.red, icon: "🦖", ability: "War Cry", text: "Your pack hits harder for a while. Earned by driving species to extinction." },
-  charmer: { id: "charmer", title: "Charmer", trait: "green", color: TRAIT_COLORS.green, icon: "🎶", ability: "Peace Offering", text: "An angry group stops attacking. Earned by befriending species." },
+  predator: { id: "predator", title: "Aggressive", trait: "red", color: TRAIT_COLORS.red, icon: "🦖", ability: "War Cry", text: "Your pack hits harder for a while. Earned by driving species to extinction." },
+  charmer: { id: "charmer", title: "Social", trait: "green", color: TRAIT_COLORS.green, icon: "🎶", ability: "Peace Offering", text: "An angry group stops attacking. Earned by befriending species." },
   adaptable: { id: "adaptable", title: "Adaptable", trait: "blue", color: TRAIT_COLORS.blue, icon: "🧭", ability: "Quick Recovery", text: "Heal your whole pack at once. Earned by mixing friendship and force." },
 };
-/** Mostly extinctions → Predator (red), mostly alliances → Charmer (green), a mix → Adaptable (blue). */
+/** Mostly extinctions → Aggressive (red), mostly alliances → Social (green), a mix → Adaptable (blue). */
 export function creatureCard(alliances, extinctions) {
   const total = alliances + extinctions;
   if (!total) return "adaptable";

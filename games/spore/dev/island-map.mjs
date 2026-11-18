@@ -1,14 +1,15 @@
 /* global Buffer, process */
 // Top-down map of the creature island as a PPM image: terrain height and colour, nests, fossils, start.
-// Usage: node games/spore/dev/island-map.mjs out.ppm
+// Usage: node games/spore/dev/island-map.mjs out.ppm [region]
 import * as THREE from "three";
 import { writeFileSync } from "node:fs";
-import { ISLAND, PEAKS, createIsland, heightAt, areaAt } from "../creature/world.js";
+import { ISLAND, PEAKS, createIsland, heightAt, groundColor } from "../creature/world.js";
 
 const scene = new THREE.Scene();
-const world = createIsland(scene, "medium");
+const world = createIsland(scene, "medium", process.argv[3] || "coast");
 const N = 480, half = 240;
 const img = Buffer.alloc(N * N * 3);
+const col = new THREE.Color();
 const put = (x, z, rgb, rad = 0) => {
   for (let i = -rad; i <= rad; i++) for (let j = -rad; j <= rad; j++) {
     const px = Math.round(x + half) + i, pz = Math.round(z + half) + j;
@@ -17,10 +18,11 @@ const put = (x, z, rgb, rad = 0) => {
   }
 };
 for (let pz = 0; pz < N; pz++) for (let px = 0; px < N; px++) {
-  const x = px - half, z = pz - half, h = heightAt(x, z), a = areaAt(x, z);
+  const x = px - half, z = pz - half, h = heightAt(x, z);
   const shade = Math.max(0, Math.min(1, 0.55 + (heightAt(x + 1, z) - h) * 0.6));
-  let c = Math.hypot(x, z) > ISLAND.shore ? [47, 143, 192] : a === "Beach" ? [227, 207, 149] : a === "Mountains" ? [120, 115, 105] : a === "Foothills" ? [150, 150, 95] : [110, 180, 80];
-  c = c.map((v) => Math.round(v * (0.7 + shade * 0.5)));
+  const g = groundColor(x, z, col);
+  let c = h < 0.2 ? [60, 110, 140] : [g.r * 255, g.g * 255, g.b * 255];
+  c = c.map((v) => Math.max(0, Math.min(255, Math.round(v * (0.7 + shade * 0.5)))));
   img.set(c, (pz * N + px) * 3);
 }
 world.nestSites.forEach((n) => put(n.x, n.z, [220, 40, 40], 3));

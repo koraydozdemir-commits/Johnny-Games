@@ -72,7 +72,7 @@ test("rogues are tough loners carrying a rare part", () => {
     assert.ok(creaturePart(r.rare).cost >= 20, "the part is a rare one");
     assert.equal(r.temper, "hostile");
     assert.equal(r.members, 1);
-    assert.ok(r.maxHealth > base.maxHealth * 2 && r.scale > base.scale);
+    assert.ok(r.maxHealth > base.maxHealth * 1.7 && r.scale > base.scale, "an elite: much tougher than its kind (balance.js rogue role)");
     assert.deepEqual(validateCreature(r.record), r.record, "a valid record");
     assert.deepEqual(generateRogue(seed, 3).record, r.record, "the same every time");
   }

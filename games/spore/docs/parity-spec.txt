@@ -1,0 +1,1600 @@
+JOHNNY GAMES SPORE — COMPLETE SPORE PARITY UPDATE
+
+From microscopic life to galactic civilisation
+
+THE OBJECTIVE
+
+I want Johnny Games Spore to become a genuinely comprehensive spiritual successor to the original 2008 Spore.
+
+The goal is to achieve feature and gameplay parity with the original Spore wherever reasonably possible, while incorporating its original development vision, interesting cut concepts and additional systems that improve upon the original.
+
+This is a major project-wide update.
+
+The finished game should contain:
+
+1. Cell Stage.
+2. Creature Stage.
+3. Tribal Stage.
+4. Civilization Stage.
+5. Space Stage.
+6. A fully interactive galaxy.
+7. Procedurally generated planets and ecosystems.
+8. Multiple independent save universes.
+9. A complete Sporepedia.
+10. A global creation collection and discovery-sharing system.
+11. A comprehensive set of creation editors.
+12. A continuous evolutionary history connecting everything.
+
+The most important principle: this must feel like ONE game.
+
+The player’s cell becomes their creature. Their creature becomes their tribe. Their tribe becomes a civilisation. Their civilisation becomes a space-faring empire.
+
+The same species, its appearance, history, choices and creations must persist throughout the entire experience.
+
+Do not create five disconnected mini-games.
+
+⸻
+
+PART 1 — AUDIT AND PRESERVE THE EXISTING GAME
+
+Before implementing anything, inspect the latest repository and understand its actual architecture.
+
+Repository:
+koraydozdemir-commits/Johnny-Games
+
+Important existing files:
+
+* games/Spore.html
+* games/spore/main.js
+* games/spore/stages.js
+* games/spore/slots.js
+* games/spore/cell-format.js
+* games/spore/creature/stage.js
+* games/spore/creature/editor.js
+* games/spore/creature/format.js
+* games/spore/tribe/stage.js
+* games/spore/tribe/rules.js
+
+The project uses Three.js and modular JavaScript.
+
+Existing functionality that must be preserved
+
+Cell Stage
+
+* Four growth tiers.
+* DNA progression.
+* Cell editor.
+* Body and part customisation.
+* Different diets.
+* Meteor discoveries.
+* Predators and prey.
+* Cell progression and evolutionary history.
+
+Creature Stage
+
+* Open 3D island.
+* Creature editor.
+* Spine, legs, arms and body customisation.
+* Creature parts and abilities.
+* Brain progression.
+* Nests and species.
+* Hunting and befriending.
+* Combat and social encounters.
+* Migration.
+* Family and generations.
+* Creature cards and history.
+
+Tribal Stage
+
+* Village and buildings.
+* Food gathering.
+* Hunting and fishing.
+* Population and babies.
+* Weapons and instruments.
+* Rival tribes.
+* Gifts and diplomacy.
+* Musical interactions.
+* Raids and warfare.
+* Tribe victory conditions.
+
+Known shortcomings in the current implementation
+
+Address these as part of the project:
+
+* The Tribal Stage is still explicitly labelled as an early prototype.
+* Its rules currently describe three neighbouring tribes rather than the full five-rival-tribe structure of the original.
+* The Creature Stage still describes the Tribal Stage as a prototype in its progression interface.
+* The existing save-slot implementation supports three slots and uses localStorage key parking.
+* Existing save formats do not yet provide a complete universe-wide record of all stages, discoveries and generated worlds.
+* There is no complete Civilization Stage.
+* There is no complete Space Stage.
+* There is no implemented galaxy explorer.
+* There is no complete Sporepedia or Planetpedia.
+* There is no global creation collection.
+* There is no complete procedural planetary universe.
+
+Do not assume something is implemented simply because there is a button or data structure for it.
+
+Inspect actual functionality.
+
+Preserve working systems and existing player saves. Do not restart the project.
+
+⸻
+
+PART 2 — COMPLETE THE FIVE STAGES
+
+The game must ultimately reproduce the original Spore’s five-stage evolutionary journey.
+
+Each stage must have a distinct gameplay style while maintaining the same species and evolutionary history.
+
+2.1 Cell Stage — complete the microscopic experience
+
+Bring the Cell Stage as close as possible to the original Spore experience.
+
+Expand the existing four growth tiers into a richer biological progression.
+
+Include:
+
+* A proper microscopic ocean environment.
+* Different depths and environmental zones.
+* Plant-eating and meat-eating gameplay.
+* Predatory cells.
+* Scavenging.
+* Cell-to-cell combat.
+* Different movement parts.
+* Defensive and offensive parts.
+* Poison and electrical abilities.
+* Different feeding methods.
+* Meteor fragments containing genetic parts.
+* Mating and the Cell Editor.
+* Increasing organism complexity.
+* A proper transition into multicellular life.
+
+The Cell Editor should support:
+
+* Adding and removing parts.
+* Body shape customisation.
+* Symmetry.
+* Rotation and positioning.
+* Colour and patterns.
+* DNA costs.
+* Functional statistics.
+
+The player’s chosen diet must influence Creature Stage.
+
+Introduce the original Spore-style early creature editor transition, allowing the player to adapt their aquatic organism for life on land.
+
+Evolutionary consequence cards
+
+At the end of Cell Stage, award an evolutionary trait based on the player’s behaviour.
+
+For example:
+
+* Predominantly eating plants: peaceful or adaptable trait.
+* Predominantly eating other cells: aggressive or predatory trait.
+* A balanced diet: adaptable or versatile trait.
+
+Do not make the result arbitrary.
+
+Record the player’s actual behaviour and use it to determine the result.
+
+The trait should carry forward into later stages.
+
+⸻
+
+2.2 Creature Stage — fully polished and balanced
+
+Use the existing Creature Stage as the foundation.
+
+This stage should closely reproduce the original Spore experience:
+
+* Third-person open-world exploration.
+* A home nest.
+* Other species and their nests.
+* Hunting and socialisation.
+* Brain progression.
+* DNA collection.
+* Creature editing.
+* Migration.
+* Pack members.
+* Mating and generations.
+* Epic creatures.
+* Rare encounters.
+* Environmental events.
+
+Expand the current ecosystem into a believable world.
+
+Complete creature anatomy
+
+Every body part must have a meaningful function.
+
+Include:
+
+* Mouths and feeding types.
+* Eyes and vision.
+* Ears and hearing.
+* Legs and movement.
+* Arms and manipulation.
+* Claws and weapons.
+* Defensive features.
+* Wings and gliding.
+* Swimming adaptations.
+* Vocal organs.
+* Social features.
+
+The creature editor should allow creative body designs, not just variations of one humanoid creature.
+
+Procedural animation must adapt to the creature’s anatomy.
+
+Full creature ecosystem
+
+Species must have:
+
+* Different diets.
+* Different temperaments.
+* Different habitats.
+* Different behaviours.
+* Different social tendencies.
+* Different combat strategies.
+* Different environmental adaptations.
+
+Implement functional food chains and autonomous behaviour.
+
+Herbivores graze, predators hunt, prey flee, scavengers consume carcasses and species compete for resources.
+
+Full social and combat progression
+
+Make befriending and hunting equally viable.
+
+Include:
+
+* Singing.
+* Dancing.
+* Charming.
+* Displaying.
+* Intimidating.
+* Feeding.
+* Fighting.
+* Biting.
+* Clawing.
+* Charging.
+* Defensive abilities.
+
+Social abilities should depend on creature anatomy.
+
+Combat must be properly balanced, with clear animations, cooldowns, damage, range and reactions.
+
+Migration and generations
+
+Migration should introduce new regions, challenges and opportunities.
+
+Preserve family members, inherited traits, creature appearance and species history.
+
+The player should feel that their species is developing through generations.
+
+Creature Stage conclusion
+
+Reaching sapience must produce a meaningful transition into Tribal Stage.
+
+The creature’s final anatomy, appearance, colours, inherited abilities and evolutionary history must become the foundation of the tribe.
+
+Remove all prototype labels.
+
+⸻
+
+2.3 Tribal Stage — full finished experience
+
+Complete Tribal Stage to the quality of a finished game.
+
+It must include the core features of the original Spore Tribal Stage.
+
+Six tribes
+
+The player’s tribe should encounter five rival tribes.
+
+Each tribe must have:
+
+* Unique colours.
+* Unique appearances.
+* Unique village designs.
+* Distinctive personalities.
+* Different equipment.
+* Different strategies.
+* Different relationships with the player.
+
+Village management
+
+Include:
+
+* Main hut.
+* Fire.
+* Food storage.
+* Housing.
+* Weapon structures.
+* Instrument structures.
+* Gathering tools.
+* Healing structures.
+* Decorations.
+* Village customisation.
+
+Allow buildings to be placed, upgraded and repaired.
+
+Tribe population
+
+Include:
+
+* Population growth.
+* Food requirements.
+* Babies and adults.
+* Chiefs.
+* Equipment.
+* Assignable roles.
+* Population capacity.
+* Tribe member health.
+* Recruitment.
+
+Resource gathering
+
+Support:
+
+* Fruit gathering.
+* Hunting.
+* Fishing.
+* Food carrying.
+* Storage.
+* Resource delivery.
+* Food consumption.
+
+Equipment
+
+Create meaningful progression through:
+
+* Clubs.
+* Axes.
+* Spears.
+* Torches.
+* Musical instruments.
+* Gathering tools.
+* Healing equipment.
+
+Equipment must be visible on tribe members.
+
+Diplomacy
+
+Include:
+
+* Musical performances.
+* Gifts.
+* Food offerings.
+* Alliances.
+* Trading.
+* Relationship development.
+* Peaceful recruitment.
+
+Warfare
+
+Include:
+
+* Unit selection.
+* Group commands.
+* Movement.
+* Attack.
+* Defence.
+* Retreat.
+* Raids.
+* Hut destruction.
+* Enemy reinforcements.
+* Coordinated attacks.
+
+Independent rival AI
+
+Rival tribes must operate independently.
+
+They should gather, build, defend, expand, attack and form relationships without waiting for the player.
+
+Tribe victory
+
+Allow both peaceful and military victory.
+
+At the conclusion, record the tribe’s identity, history, population, equipment, buildings and major decisions.
+
+Remove every prototype label and unfinished menu.
+
+⸻
+
+2.4 Civilization Stage — build the missing fourth stage
+
+This is a major missing part of the current project.
+
+Create a complete Civilization Stage inspired by the original Spore.
+
+The player should transition from controlling an entire tribe to controlling a nation.
+
+The premise
+
+The player’s species has spread across its home planet.
+
+Different nations of the same species have developed.
+
+The player controls one nation and must unite or conquer the planet.
+
+Three ideological paths
+
+Reproduce the three major approaches from the original game:
+
+Military
+
+* Build armies.
+* Create combat vehicles.
+* Attack rival cities.
+* Capture territory.
+* Destroy enemy defences.
+
+Economic
+
+* Establish trade routes.
+* Build trade vehicles.
+* Generate income.
+* Negotiate economic agreements.
+* Purchase or acquire rival cities.
+
+Religious
+
+* Build religious structures.
+* Create missionary vehicles.
+* Influence other cities.
+* Convert rival populations.
+* Expand religious influence.
+
+Each path should have different gameplay, advantages and weaknesses.
+
+Do not make all three approaches identical with different animations.
+
+Cities
+
+The player should control a main city and expand into additional cities.
+
+Each city needs:
+
+* Population.
+* Buildings.
+* Production.
+* Income.
+* Defences.
+* City type.
+* Territory.
+* Happiness or stability.
+
+Cities should visibly develop.
+
+Building editor
+
+Create a proper building creator.
+
+Allow the player to construct:
+
+* Residential buildings.
+* Factories.
+* Entertainment buildings.
+* Religious buildings.
+* Military structures.
+* City decorations.
+* Special buildings.
+
+Use modular parts and allow extensive customisation.
+
+Vehicle editor
+
+Create a functional vehicle editor.
+
+Support:
+
+* Land vehicles.
+* Sea vehicles.
+* Aircraft.
+
+Allow players to customise:
+
+* Chassis.
+* Engines.
+* Wings.
+* Weapons.
+* Decorations.
+* Colours.
+* Parts and attachments.
+
+Vehicle design should influence gameplay statistics.
+
+Vehicles should be reusable and saved to Sporepedia.
+
+Planetary conquest
+
+Create rival nations with different strategies.
+
+The player must use military, economic or religious influence to gain control of the planet.
+
+Include:
+
+* Diplomacy.
+* City capture.
+* Rival attacks.
+* Trade.
+* Vehicle combat.
+* Territory expansion.
+* City defences.
+* Superweapons as late-game options.
+
+Civilization consequence card
+
+The player’s actions should determine a civilization archetype.
+
+Carry this into Space Stage.
+
+For example:
+
+* Military domination.
+* Economic expansion.
+* Religious conversion.
+
+The exact archetype should be based on the player’s actual playstyle.
+
+⸻
+
+2.5 Space Stage — the complete galactic experience
+
+Space Stage should be the largest and most open-ended stage.
+
+This is where the player’s civilisation becomes an interstellar empire.
+
+The player should control a custom spaceship and explore the galaxy.
+
+Spaceship editor
+
+Create a full spaceship editor using the same modular creation principles as the creature, building and vehicle editors.
+
+Support:
+
+* Hull shapes.
+* Engines.
+* Wings.
+* Cockpits.
+* Weapons.
+* Decorations.
+* Colours.
+* Functional equipment.
+
+The ship should have meaningful statistics.
+
+Interstellar travel
+
+Allow the player to travel between stars.
+
+Travel should have:
+
+* Energy costs.
+* Range limitations.
+* Different star distances.
+* Navigation.
+* Discoveries.
+* Fuel or energy management.
+
+Introduce wormhole travel and advanced navigation upgrades.
+
+Alien civilisations
+
+Generate other intelligent species and empires.
+
+Each empire should have:
+
+* Its own species.
+* Appearance.
+* Home planet.
+* Personality.
+* Government or ideology.
+* Technology.
+* Military strength.
+* Economic strength.
+* Diplomatic relationships.
+
+Allow:
+
+* First contact.
+* Trade.
+* Alliances.
+* Gifts.
+* Missions.
+* War.
+* Peace treaties.
+* Espionage or sabotage where appropriate.
+
+Planet colonisation
+
+Allow players to:
+
+* Visit planets.
+* Establish colonies.
+* Build structures.
+* Collect resources.
+* Manage planetary conditions.
+* Terraform worlds.
+* Expand their empire.
+
+Terraforming
+
+Create a meaningful planetary terraforming system.
+
+Planet conditions should include:
+
+* Temperature.
+* Atmosphere.
+* Water.
+* Ecology.
+* Habitability.
+
+Allow the player to change these conditions using appropriate equipment.
+
+Terraforming should affect the planet’s appearance and biological suitability.
+
+Missions and exploration
+
+Add a large range of missions:
+
+* Discover a new species.
+* Investigate a planet.
+* Establish a colony.
+* Deliver resources.
+* Defend an ally.
+* Fight pirates.
+* Explore unusual systems.
+* Resolve diplomatic disputes.
+* Discover rare artefacts.
+
+Galactic progression
+
+Create a long-term progression system.
+
+Include:
+
+* Galactic achievements.
+* Space upgrades.
+* Diplomatic progression.
+* Exploration progression.
+* Colonisation.
+* Advanced technology.
+* Galactic Core objectives.
+
+Reaching the Galactic Core should be a major milestone, but not the end of the sandbox.
+
+The player should be able to continue exploring after reaching it.
+
+⸻
+
+PART 3 — THE GALAXY AND PROCEDURAL UNIVERSE
+
+Create the full galaxy system.
+
+This must integrate with the Space Stage, save selection and Sporepedia.
+
+3.1 Galaxy map
+
+Create a large interactive galaxy.
+
+Include:
+
+* Thousands of generated star systems.
+* Different star colours.
+* Nebulae.
+* Galactic regions.
+* Star selection.
+* Camera panning.
+* Smooth zoom.
+* System previews.
+* Navigation markers.
+* Discovery markers.
+* Player location.
+
+Use a procedural seed.
+
+A galaxy should remain consistent across sessions.
+
+3.2 Star systems
+
+Generate:
+
+* Star types.
+* Planet counts.
+* Orbital distances.
+* Planet sizes.
+* Moons.
+* Gas giants.
+* Rocky planets.
+* Unusual systems.
+* Binary systems where practical.
+
+Each star system needs a persistent identity.
+
+3.3 Procedural planets
+
+Generate unique planets with:
+
+* Surface terrain.
+* Oceans.
+* Continents.
+* Mountains.
+* Deserts.
+* Ice.
+* Forests.
+* Swamps.
+* Volcanic regions.
+* Atmospheres.
+* Clouds.
+* Rings.
+* Moons.
+
+Include different planet types:
+
+* Terrestrial.
+* Oceanic.
+* Desert.
+* Ice.
+* Volcanic.
+* Jungle.
+* Toxic.
+* Barren.
+* Frozen.
+* Gas giant.
+* Tundra.
+* Swamp.
+* Rocky.
+* Unusual worlds.
+
+Planets must have coherent environmental data.
+
+Their climates should influence terrain and ecosystems.
+
+3.4 Planet ecosystems
+
+Generate ecosystems using the existing creature and plant creation systems.
+
+Each suitable planet should have:
+
+* Plants.
+* Herbivores.
+* Carnivores.
+* Omnivores.
+* Predators.
+* Prey.
+* Rare species.
+* Unique organisms.
+
+Generated organisms must be real game entities with actual anatomy and statistics, not random decorative models.
+
+Give each species:
+
+* A name.
+* A design.
+* A diet.
+* A habitat.
+* A temperament.
+* A rarity.
+* A danger rating.
+* A discovery record.
+
+3.5 Rare discoveries
+
+Introduce extremely rare planetary discoveries.
+
+Examples:
+
+* Unusual creatures.
+* Giant organisms.
+* Strange plants.
+* Ancient ruins.
+* Meteor impact sites.
+* Unusual planetary formations.
+* Rare atmospheric phenomena.
+* Unexplained artefacts.
+* Abandoned alien structures.
+* Unusual star systems.
+
+Some discoveries should be genuinely difficult to find.
+
+Give them unique appearances, descriptions and catalogue entries.
+
+Do not make rare discoveries simply different colours of ordinary objects.
+
+3.6 Galaxy seed sharing
+
+Implement a galaxy seed-sharing system.
+
+Players should be able to:
+
+* Copy their galaxy seed.
+* Share it with friends.
+* Import another player’s galaxy seed.
+* Generate the same galaxy from the same seed.
+* Explore the same star systems and planets.
+
+The same seed must reproduce the same base galaxy and generated planetary data.
+
+Planet modifications and discoveries should remain specific to each player’s save unless explicitly shared.
+
+This is seed sharing, not necessarily live multiplayer.
+
+3.7 Procedural generation performance
+
+Do not generate the entire universe in full detail at once.
+
+Use:
+
+* Deterministic seeds.
+* Lazy generation.
+* Caching.
+* Level of detail.
+* Distance-based rendering.
+* Efficient ecosystem simulation.
+
+Galaxy view should render stars.
+
+System view should render planets.
+
+Planet view should render surfaces.
+
+Exploration view should render detailed environments and organisms.
+
+The game must remain performant on iPad and iPhone.
+
+⸻
+
+PART 4 — SAVE UNIVERSES AND MULTIPLE PLAYTHROUGHS
+
+Upgrade the current three-slot system into a proper universe manager.
+
+The existing three slots must remain compatible with previous saves.
+
+4.1 Universe selection
+
+Create a dedicated universe selection screen.
+
+Each universe should have:
+
+* A name.
+* A species.
+* A homeworld.
+* A galaxy seed.
+* A current stage.
+* Evolutionary history.
+* Progress.
+* Playtime.
+* Last played date.
+* Discovery statistics.
+* A visual thumbnail.
+
+Allow:
+
+* Create.
+* Load.
+* Rename.
+* Duplicate.
+* Delete.
+* Export.
+* Import.
+
+Support more than three universes.
+
+Do not impose an arbitrary low save limit.
+
+4.2 Independent universes
+
+Every universe must be completely independent.
+
+Separate:
+
+* Species.
+* Planets.
+* Galaxy.
+* Progression.
+* Evolution history.
+* Creations.
+* Discoveries.
+* Civilisations.
+* Empires.
+* Planet modifications.
+* Sporepedia records.
+
+Loading one universe must never affect another.
+
+4.3 Save architecture
+
+The current slots.js localStorage parking system must be upgraded carefully.
+
+Use a scalable save architecture, preferably IndexedDB for larger records.
+
+Keep small settings in localStorage where appropriate.
+
+Use:
+
+* Versioned saves.
+* Migration.
+* Autosaving.
+* Manual saves.
+* Safe writes.
+* Import validation.
+* Corruption recovery.
+* Storage management.
+
+Preserve old saves.
+
+Migrate the current Cell, Creature and Tribal save keys into the new universe format without losing data.
+
+Do not reset anyone’s progress.
+
+4.4 Export and import
+
+Support exporting and importing complete universes.
+
+Use portable versioned JSON packages.
+
+Allow:
+
+* Full universe export.
+* Full universe import.
+* Individual creation export.
+* Galaxy seed export.
+* Planet export.
+* Creature export.
+
+Validate everything before loading.
+
+⸻
+
+PART 5 — COMPLETE SPOREPEDIA
+
+Create a full Sporepedia-inspired creation and discovery database.
+
+It must be integrated into the entire game.
+
+5.1 Local Sporepedia
+
+Each universe must have its own Sporepedia.
+
+Categories:
+
+1. Creatures.
+2. Species.
+3. Cells.
+4. Plants.
+5. Planets.
+6. Stars.
+7. Star systems.
+8. Buildings.
+9. Vehicles.
+10. Spaceships.
+11. Discoveries.
+12. Tribes.
+13. Civilisations.
+14. Empires.
+15. Favourites.
+
+Every player-created or discovered object should be stored as actual game data.
+
+5.2 Creaturepedia
+
+Every creature should have:
+
+* Its full design.
+* Statistics.
+* Diet.
+* Anatomy.
+* Abilities.
+* Personality.
+* Habitat.
+* Homeworld.
+* Generational history.
+* Discovery record.
+
+Allow:
+
+* Inspect.
+* Rotate.
+* Compare.
+* Favourite.
+* Rename.
+* Export.
+* Reopen in editor.
+
+5.3 Planetpedia
+
+Every discovered planet should have:
+
+* Name.
+* Planet type.
+* Surface preview.
+* Environment.
+* Climate.
+* Gravity.
+* Atmosphere.
+* Resources.
+* Ecosystem.
+* Known species.
+* Discovery status.
+* Exploration history.
+
+Allow planet comparison and favourites.
+
+5.4 Plantpedia
+
+Catalogue all generated and created plants.
+
+Store:
+
+* Appearance.
+* Type.
+* Habitat.
+* Environmental requirements.
+* Resource properties.
+* Planet of origin.
+
+5.5 Creation editors and catalogue
+
+Store all creations:
+
+* Cell designs.
+* Creatures.
+* Buildings.
+* Vehicles.
+* Spaceships.
+* Plants.
+
+Each creation must reopen in its corresponding editor.
+
+Do not save only screenshots.
+
+Store the actual modular design data.
+
+5.6 Discovery catalogue
+
+Track important discoveries.
+
+Examples:
+
+* First planet discovered.
+* First star system.
+* First new species.
+* Rare creature.
+* Rare plant.
+* First alien civilisation.
+* First colony.
+* First unusual planetary event.
+* Galactic milestone.
+
+Avoid recording meaningless repeated actions.
+
+⸻
+
+PART 6 — GLOBAL SPOREPEDIA
+
+This is an additional feature beyond the original local collection.
+
+Create a separate Global Sporepedia that combines creations from all the player’s universes.
+
+This is distinct from each universe’s own Sporepedia.
+
+A player should be able to:
+
+* Browse every creature they have ever created.
+* Find creations from old universes.
+* Reopen saved creatures.
+* Search across all their creations.
+* Favourite creations globally.
+* Compare creations from different universes.
+
+Deleting a universe must not automatically delete its entries from the global collection.
+
+Offer an option to preserve or remove its associated creations.
+
+The global collection should also be designed for future online sharing.
+
+If an online backend is needed, keep it optional and do not make the core game dependent on an external service.
+
+⸻
+
+PART 7 — ADDITIONAL ORIGINAL SPORE VISIONS
+
+Go beyond simply recreating the released game.
+
+Research documented early Spore demonstrations and development concepts.
+
+Implement the most interesting ideas as original features.
+
+Possible additions include:
+
+Aquatic evolution
+
+A richer aquatic environment and an optional aquatic evolution experience.
+
+Include:
+
+* Underwater exploration.
+* Different depths.
+* Aquatic predators.
+* Schools of fish.
+* Aquatic vegetation.
+* Swimming adaptations.
+* Underwater ecosystems.
+
+This should be treated as an optional extension or additional evolutionary route, not something that breaks the five-stage main progression.
+
+More complex biological evolution
+
+Add richer generation-to-generation changes.
+
+Allow species to adapt to environmental conditions and ecological pressures.
+
+More extensive procedural creativity
+
+Expand editors so that players can create highly unusual creatures, structures, plants and vehicles.
+
+Greater environmental interaction
+
+Make planets feel more alive through:
+
+* Weather.
+* Day and night.
+* Seasonal changes where practical.
+* Environmental hazards.
+* Natural disasters.
+* Planetary events.
+
+Historical cut-content claims must be verified where possible. Do not present uncertain fan theories as confirmed developer plans.
+
+⸻
+
+PART 8 — MAKE THE WHOLE GAME CONNECTED
+
+This is the most important technical and design requirement.
+
+Create one shared universe data model.
+
+It must connect:
+
+Cell → Creature → Tribe → Civilization → Space.
+
+Cell to Creature
+
+Preserve:
+
+* Diet.
+* Cell anatomy.
+* Colour.
+* Patterns.
+* Evolutionary traits.
+* Genetic discoveries.
+
+Creature to Tribe
+
+Preserve:
+
+* Species appearance.
+* Body proportions.
+* Colours.
+* Anatomy.
+* Personality tendencies.
+* Social and combat traits.
+* Evolution history.
+* Family records.
+
+Tribe to Civilization
+
+Preserve:
+
+* Species identity.
+* Tribe appearance.
+* Tribe colours.
+* Equipment history.
+* Social behaviour.
+* Tribal achievements.
+* Evolutionary consequence.
+
+Civilization to Space
+
+Preserve:
+
+* Species.
+* Nation identity.
+* Ideology.
+* City designs.
+* Buildings.
+* Vehicles.
+* Technology.
+* Achievements.
+* Planetary history.
+
+Space Stage
+
+Preserve all previous information and allow the player to revisit their homeworld.
+
+The original species should remain recognisable throughout the entire game.
+
+⸻
+
+PART 9 — STAGE CONSEQUENCES AND ARCHETYPES
+
+Implement a proper consequence system.
+
+Each stage should award a trait based on the player’s actual decisions.
+
+These traits should influence the following stage.
+
+Examples:
+
+Cell Stage
+
+* Herbivore.
+* Omnivore.
+* Carnivore.
+
+Creature Stage
+
+* Social.
+* Aggressive.
+* Adaptable.
+
+Tribal Stage
+
+* Diplomatic.
+* Industrious.
+* Warlike.
+
+Civilization Stage
+
+* Economic.
+* Religious.
+* Military.
+
+The combination of these decisions should influence the player’s eventual Space Stage archetype.
+
+Do not make these consequences cosmetic.
+
+They should unlock meaningful abilities, bonuses, starting conditions or diplomatic tendencies.
+
+Do not make them restrictive enough to prevent alternative playstyles later.
+
+Create a visible evolutionary history screen showing how the player’s choices shaped their species.
+
+⸻
+
+PART 10 — UI AND PRESENTATION
+
+Create a cohesive interface across all stages.
+
+The original Spore’s visual identity is colourful, organic, playful, creative and slightly strange.
+
+Use that design philosophy.
+
+Do not simply copy proprietary UI assets.
+
+Main universe screen
+
+Show:
+
+* Current universe.
+* Homeworld.
+* Current stage.
+* Species.
+* Progress.
+* Galaxy access.
+* Sporepedia access.
+* Save management.
+
+Galaxy screen
+
+Show:
+
+* Stars.
+* Nebulae.
+* Star systems.
+* Planet previews.
+* Discovery markers.
+* Navigation.
+
+Sporepedia
+
+Show:
+
+* Visual cards.
+* Search.
+* Filters.
+* Categories.
+* Favourites.
+* Creation previews.
+* Discovery information.
+
+Editors
+
+Keep the editing interfaces consistent.
+
+Use modular parts, clear statistics, visible costs and live previews.
+
+Mobile
+
+The entire game must work on mobile Safari.
+
+Ensure:
+
+* Touch movement.
+* Camera movement.
+* Pinch zoom.
+* Editor dragging.
+* Unit selection.
+* Menus.
+* Readable text.
+* Proper viewport sizing.
+* No accidental browser zoom during gameplay.
+
+⸻
+
+PART 11 — TECHNICAL REQUIREMENTS
+
+The project must remain modular.
+
+Avoid turning main.js into an enormous collection of unrelated systems.
+
+Create separate modules for:
+
+* Universe management.
+* Save storage.
+* Galaxy generation.
+* Star systems.
+* Planet generation.
+* Ecosystem generation.
+* Sporepedia.
+* Creation formats.
+* Civilization Stage.
+* Space Stage.
+* Stage consequences.
+
+Use shared data formats for creatures, plants, buildings, vehicles and spaceships.
+
+Keep procedural generation deterministic.
+
+Keep the game playable when some optional features are unavailable.
+
+Do not require a paid external service for basic gameplay or saving.
+
+Do not use copyrighted Spore models, sounds, textures or source code.
+
+Create original assets and implementations.
+
+⸻
+
+PART 12 — TESTING
+
+This project is not complete simply because the interfaces look finished.
+
+Test every system.
+
+Existing stages
+
+* Cell progression.
+* Cell editing.
+* Creature transition.
+* Creature editing.
+* Creature combat.
+* Creature social encounters.
+* Creature migration.
+* Family and generations.
+* Tribal transition.
+* Village building.
+* Tribe diplomacy.
+* Tribe warfare.
+* Tribe victory.
+
+New stages
+
+* Civilization campaign.
+* All three ideological paths.
+* Building editor.
+* Vehicle editor.
+* City management.
+* Space travel.
+* Alien contact.
+* Colonisation.
+* Terraforming.
+* Missions.
+* Spaceship editor.
+
+Galaxy
+
+* Galaxy generation.
+* Seed consistency.
+* Star selection.
+* System selection.
+* Planet generation.
+* Ecosystem generation.
+* Rare discoveries.
+* Seed sharing.
+
+Saves
+
+* Multiple universes.
+* Creating and deleting saves.
+* Switching universes.
+* Exporting and importing.
+* Migration from existing saves.
+* Refreshing and resuming.
+* Corrupted save recovery.
+
+Sporepedia
+
+* Creation storage.
+* Search.
+* Filters.
+* Favourites.
+* Editing existing creations.
+* Global collection.
+* Discovery tracking.
+* Export and import.
+
+Compatibility
+
+* Desktop browsers.
+* iPhone Safari.
+* iPad Safari.
+* Performance under larger ecosystems.
+* Storage limits.
+
+Never claim a feature has been tested if it has only been inspected in code.
+
+If browser testing is unavailable, clearly identify what was and was not tested.
+
+⸻
+
+PART 13 — DEVELOPMENT ORDER
+
+Do not attempt to create every stage simultaneously and leave everything half-finished.
+
+Use this order:
+
+Phase 1 — Foundation
+
+* Audit existing architecture.
+* Preserve saves.
+* Create shared universe data.
+* Upgrade save architecture.
+* Build the universe selection screen.
+* Establish shared creation formats.
+
+Phase 2 — Complete existing stages
+
+* Finish Cell Stage.
+* Fully balance Creature Stage.
+* Finish Tribal Stage.
+* Remove prototype messaging.
+* Add proper evolutionary consequence systems.
+
+Phase 3 — Civilization Stage
+
+* City simulation.
+* Building editor.
+* Vehicle editor.
+* Military, economic and religious paths.
+* Campaign and victory.
+
+Phase 4 — Space Stage
+
+* Spaceship editor.
+* Galaxy travel.
+* Alien civilisations.
+* Missions.
+* Colonisation.
+* Terraforming.
+
+Phase 5 — Galaxy and Sporepedia
+
+* Procedural galaxy.
+* Star systems.
+* Planets.
+* Ecosystems.
+* Planetpedia.
+* Creaturepedia.
+* Plantpedia.
+* Global Sporepedia.
+
+Phase 6 — Polish and expansion
+
+* Rare discoveries.
+* Galaxy seed sharing.
+* Aquatic evolution extension.
+* Original development-vision features.
+* Performance optimisation.
+* Full regression testing.
+
+Each phase must produce functional gameplay, not placeholder menus.
+
+⸻
+
+PART 14 — EXTRA FEATURES THAT MUST NOT BE FORGOTTEN
+
+These are additional requirements and must be included, not treated as optional suggestions.
+
+1. Global Sporepedia
+
+A permanent collection of every creation across all universes.
+
+2. Galaxy seed sharing
+
+Players can share a seed and explore the same generated universe.
+
+3. Rare discoveries
+
+Unique planets, organisms, plants, artefacts and unusual events that encourage exploration.
+
+4. Independent universe saves
+
+Each universe has its own galaxy, species, planets, history and discoveries.
+
+5. Creation portability
+
+Players can export and import creatures, planets, plants, buildings, vehicles and spaceships.
+
+6. Evolutionary timeline
+
+A visual history of the player’s species from its original cell to its space-faring civilisation.
+
+7. Homeworld revisiting
+
+Players must eventually be able to revisit their original planet and see how it has changed throughout evolution.
+
+8. Persistent planetary changes
+
+Colonies, terraforming, buildings and other modifications must remain saved.
+
+9. Discovery rarity
+
+Some discoveries should be exceptionally rare and worth sharing.
+
+10. Cross-universe collection
+
+The player should be able to keep their favourite creations even after deleting or abandoning an individual universe.
+
+⸻
+
+FINAL DEFINITION OF SUCCESS
+
+Johnny Games Spore should eventually provide the following complete experience:
+
+* Start as a microscopic organism.
+* Eat, survive and evolve.
+* Build a custom creature.
+* Explore a living world.
+* Hunt, socialise, migrate and reproduce.
+* Develop a tribe.
+* Build a village.
+* Befriend or conquer neighbouring tribes.
+* Establish a civilisation.
+* Design buildings and vehicles.
+* Unite or conquer the home planet.
+* Build a spaceship.
+* Explore an enormous galaxy.
+* Discover procedurally generated planets.
+* Encounter alien civilisations.
+* Colonise and terraform worlds.
+* Create and catalogue an enormous variety of organisms and objects.
+* Manage multiple independent universes.
+* Share galaxies and creations.
+* Revisit the entire history of your species.
+
+I want players to feel that they have created an entire universe, not just completed a game.
+
+The ultimate target is the original Spore’s complete five-stage experience, its creative freedom and its galaxy-scale ambition, with the additional depth and features described here.
+
+Prioritise interconnected systems, actual gameplay, procedural creativity and persistence.
+
+Do not sacrifice quality to rush through the stages.
+
+Do not leave prototype labels, decorative buttons or fake functionality.
+
+Do not overwrite existing saves.
+
+Build this into the existing Johnny Games Spore project and make every stage feel like a natural continuation of the previous one.

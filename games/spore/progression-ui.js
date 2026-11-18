@@ -116,8 +116,18 @@ export function openHistoryScreen(d) {
       face = card
         ? '<div class="tcSlot earned" style="--c:' + card.color + '"><span>' + card.icon + "</span><b>" + card.title + "</b><small>" + card.ability + "</small></div>"
         : '<div class="tcSlot pending" style="--c:#f5c75a"><span>🧠</span><b>Brain ' + d.creature.brain + ' / 5</b><small>' + d.creature.alliances + " allied · " + d.creature.extinctions + " extinct</small></div>";
+    } else if (st.id === "tribe" && d.tribe) {
+      const t = d.tribe;
+      face = t.trait
+        ? '<div class="tcSlot earned" style="--c:' + t.trait.color + '"><span>' + t.trait.icon + "</span><b>" + t.trait.name + "</b><small>" + t.allied + " allied · " + t.conquered + " conquered</small></div>"
+        : '<div class="tcSlot pending" style="--c:#f5c75a"><span>🛖</span><b>' + (t.allied + t.conquered) + " / " + t.total + " settled</b><small>" + t.members + " members · hut " + t.hutLevel + "</small></div>";
+    } else if (st.id === "civ" && d.civ) {
+      const c = d.civ;
+      face = c.card
+        ? '<div class="tcSlot earned" style="--c:' + c.card.color + '"><span>' + c.card.icon + "</span><b>" + esc(c.card.name) + "</b><small>" + c.cities + " cities united</small></div>"
+        : '<div class="tcSlot pending" style="--c:#f5c75a"><span>🏛</span><b>' + c.cities + " / " + c.total + " cities</b><small>" + c.captures + " taken so far</small></div>";
     } else face = '<div class="tcSlot locked"><span>?</span><b>Coming later</b><small>&nbsp;</small></div>';
-    const here = d.creature ? "creature" : "cell";
+    const here = d.civ ? "civ" : d.tribe ? "tribe" : d.creature ? "creature" : "cell";
     return '<div class="trackStage ' + (st.id === here ? "current" : st.status) + '"><div class="tsHead">' + st.icon + " " + esc(st.title) + "</div>" + face + "</div>";
   }).join("");
   const lineage = d.history.length
@@ -145,6 +155,17 @@ export function openHistoryScreen(d) {
     : '<p style="color:#9fb8c2">Your first design will appear here once you leave the editor.</p>';
   const st = d.stats;
   const library = d.library ? libraryHtml(d.library) : "";
+  const STAGE_ICON = { cell: "◉", creature: "🦎", tribe: "⛺", civ: "🏛" };
+  const chronicle = d.chronicle?.length
+    ? "<h3>CHRONICLE · " + d.chronicle.length + " MOMENT" + (d.chronicle.length === 1 ? "" : "S") + '</h3><ol class="chronicle">' +
+      d.chronicle
+        .map((e) => '<li class="chr ' + esc(e.stage) + '"><span class="chrStage" title="' + esc(e.stage) + ' stage">' + STAGE_ICON[e.stage] + '</span><span class="chrIcon" aria-hidden="true">' + esc(e.icon) + "</span><span>" + esc(e.text) + "</span></li>")
+        .join("") +
+      "</ol>"
+    : "";
+  const legacy = d.legacy?.length
+    ? '<h3>LEGACY IN THE TRIBAL STAGE</h3><ul class="legacyList">' + d.legacy.map((l) => "<li>" + esc(l.icon) + " <b>" + esc(l.name) + "</b> " + esc(l.text) + "</li>").join("") + "</ul>"
+    : "";
   $("#pathPanel").innerHTML =
     '<button class="close" id="pathClose">Close</button><h2 id="pathTitle">' + esc(d.name) + " · Species history</h2>" +
     '<div style="color:#9fb8c2;font-size:13px">Every stage ends with a consequence trait: <b style="color:#ef4b48">red</b> for carnivores, <b style="color:#3fc26e">green</b> for herbivores, <b style="color:#3f9cf0">blue</b> for omnivores. Each one becomes an ability later on.</div>' +
@@ -155,6 +176,8 @@ export function openHistoryScreen(d) {
     (DIET_THRESHOLDS.carnivore - DIET_THRESHOLDS.herbivore) * 100 + '"></i><i class="dpZone carn" style="flex:' + (1 - DIET_THRESHOLDS.carnivore) * 100 +
     '"></i><i class="dpMark" style="left:' + lean * 100 + '%"></i></div>' +
     '<div class="dpCounts" style="margin-top:6px"><span>🌿 ' + d.plants + " plants</span><span>" + d.meat + " meat 🥩</span></div>" +
+    legacy +
+    chronicle +
     "<h3>LINEAGE · " + d.history.length + " GENERATION" + (d.history.length === 1 ? "" : "S") + "</h3>" +
     '<div class="lineage">' + lineage + "</div>" +
     library +

@@ -10,6 +10,7 @@ import { createEditorBackdrop } from "./backdrop.js";
 import { buildCreatureBody } from "./body3d.js";
 import { ARM_ANGLE, LIMITS, armPairsOf, creaturePartIds, validateCreature } from "./format.js";
 import { ABILITY_INFO, ARM_ABILITIES, COMBAT, CREATURE_PARTS, PART_SECTIONS, SOCIAL, STAT_INFO, abilitiesOf, abilityIcon, creaturePart, dietOfParts, fitsArm, partGeometry } from "./parts.js";
+import { movementOf, rate } from "./anatomy.js";
 
 const LEG_COST = 8;
 const ARM_COST = 8;
@@ -63,6 +64,8 @@ export function designCost(from, to) {
 export function openCreatureEditor(o) {
   const original = validateCreature(o.record);
   let rec = validateCreature(o.record);
+  // The part budget for this brain level, never below what the creature already carries.
+  const maxParts = Math.max(rec.parts.length, Math.min(LIMITS.maxParts, o.maxParts || LIMITS.maxParts));
   const undoStack = [],
     redoStack = [];
   const scene = new THREE.Scene();
@@ -97,7 +100,7 @@ export function openCreatureEditor(o) {
     <section class="cePanel" aria-label="Editor tools">
       <nav class="ceTabs" role="tablist">
         <button role="tab" data-tab="body" aria-selected="true">Body</button>
-        <button role="tab" data-tab="parts" aria-selected="false">Parts</button>
+        <button role="tab" data-tab="parts" aria-selected="false">Parts <small class="ceBudget" id="ceBudget"></small></button>
         <button role="tab" data-tab="paint" aria-selected="false">Paint</button>
       </nav>
       <div class="ceTab" data-pane="body"></div>
@@ -203,17 +206,33 @@ export function openCreatureEditor(o) {
     $("#ceRedo").disabled = !redoStack.length;
   }
   function renderStats() {
+    // The part budget: how many parts this brain can manage.
+    const budget = $("#ceBudget");
+    if (budget) {
+      budget.textContent = rec.parts.length + "/" + maxParts;
+      budget.classList.toggle("full", rec.parts.length >= maxParts);
+    }
     const ab = abilitiesOf(creaturePartIds(rec), rec.legs.length, armPairsOf(rec));
     const diet = dietOfParts(rec.parts.map((p) => p.id));
-    const row = (k, name, icon) => `<div class="ceStat"><span>${icon} ${name}</span><i>${[1, 2, 3, 4, 5].map((n) => `<b class="${n <= ab[k] ? "on" : ""}"></b>`).join("")}</i></div>`;
+    const bar = (v) => `<i>${[1, 2, 3, 4, 5].map((n) => `<b class="${n <= v ? "on" : ""}"></b>`).join("")}</i>`;
+    const row = (k, name, icon) => `<div class="ceStat"><span>${icon} ${name}</span>${bar(ab[k])}</div>`;
+    // How the body moves: plan, legs, bulk, tail and fins (see anatomy.js). Trade-offs, not upgrades.
+    const mv = movementOf(rec, ab);
+    const mrow = (icon, name, v, tip) => `<div class="ceStat" title="${tip}"><span>${icon} ${name}</span>${bar(v)}</div>`;
+    const bulk = mv.bulk < 0.85 ? "Light" : mv.bulk < 1.35 ? "Medium" : "Heavy";
     $("#ceStats").innerHTML =
-      `<h3>${diet === "meat" ? "Carnivore" : diet === "plant" ? "Herbivore" : "Omnivore"}</h3>` +
+      `<h3>${diet === "meat" ? "Carnivore" : diet === "plant" ? "Herbivore" : "Omnivore"} · ${mv.planName}</h3>` +
+      '<h4>Movement</h4>' +
+      mrow("💨", "Top speed", rate(mv.top, 3, 9), `${mv.top.toFixed(1)} m/s. Longer legs and fast feet help; bulk slows you.`) +
+      mrow("↻", "Agility", rate(mv.turn * mv.accel, 8, 36), "How quickly you turn and get going. More legs and a tail help; bulk hurts.") +
+      mrow("🌊", "Swimming", rate(mv.swim, 0.55, 1.35), "Fins, webbed feet and tentacles swim faster.") +
+      `<div class="ceStat" title="Heavy bodies hit harder in a charge but are spotted from further away."><span>⚖ Build</span><em>${bulk}</em></div>` +
       '<h4>Combat</h4>' +
       COMBAT.map((k) => row(k, ABILITY_INFO[k].name, ABILITY_INFO[k].icon)).join("") +
       '<h4>Social</h4>' +
       SOCIAL.map((k) => row(k, ABILITY_INFO[k].name, ABILITY_INFO[k].icon)).join("") +
       '<h4>Body</h4>' +
-      ["speed", "health", "sight", "sneak", "jump", "glide"].map((k) => row(k, STAT_INFO[k].name, STAT_INFO[k].icon)).join("");
+      ["health", "sight", "hearing", "sneak", "jump", "glide"].map((k) => row(k, STAT_INFO[k].name, STAT_INFO[k].icon)).join("");
   }
 
   /* ---- Body tab --------------------------------------------------------------- */
@@ -577,8 +596,8 @@ export function openCreatureEditor(o) {
     if (def.slot === "foot") rec.foot = id;
     else {
       if (def.slot === "mouth" || def.slot === "tail") rec.parts = rec.parts.filter((p) => creaturePart(p.id).slot !== def.slot);
-      if (rec.parts.length >= LIMITS.maxParts) {
-        hint("That's the most parts one creature can carry (" + LIMITS.maxParts + ").");
+      if (rec.parts.length >= maxParts) {
+        hint(maxParts < LIMITS.maxParts ? "Your brain can manage " + maxParts + " parts for now. A bigger brain carries more." : "That's the most parts one creature can carry (" + maxParts + ").");
         undoStack.pop();
         return;
       }
