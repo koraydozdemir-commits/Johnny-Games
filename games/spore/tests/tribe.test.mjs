@@ -44,20 +44,20 @@ test("tribe saves are read defensively", () => {
   assert.equal(readTribeSave({ food: 5 }), null);
   const d = readTribeSave({ food: 1e9, tools: { axe: 1 }, units: [{ tool: "sword" }, { tool: "horn" }], tribes: [{ relation: 500, status: "evil", alive: 99, hut: 3 }] });
   assert.equal(d.food, 9999);
-  assert.equal(d.tools.axe, true);
-  assert.equal(d.tools.horn, false);
-  assert.equal(Object.keys(d.tools).length, 8);
+  assert.equal(d.tools.axe, 1, "v1 yes/no tools become tier 1");
+  assert.equal(d.tools.horn, 0);
+  assert.equal(Object.keys(d.tools).length, 9);
   assert.equal(d.units[0].chief, true, "a chief is always restored");
   assert.deepEqual(
     d.units.map((u) => u.tool),
     [null, null, "horn"],
   );
-  assert.deepEqual(d.tribes[0], { relation: 100, status: "neutral", alive: 8, hut: 1 });
+  assert.deepEqual(d.tribes[0], { relation: 100, status: "neutral", alive: 8, hut: 1, food: 12, war: 0, peace: 0 });
 });
 
 import { ASK_TIME, DAMAGE, HUT_DAMAGE, INSTRUMENTS, TOOL_IDS, answerCall, nextAsk } from "../tribe/rules.js";
-test("eight tools in three kinds, with weapons that hit differently", () => {
-  assert.equal(TOOL_IDS.length, 8);
+test("nine tools in three kinds, with weapons that hit differently", () => {
+  assert.equal(TOOL_IDS.length, 9);
   assert.deepEqual(INSTRUMENTS, ["horn", "maracas", "didgeridoo"]);
   assert.ok(DAMAGE.axe > DAMAGE.none && HUT_DAMAGE.torch > HUT_DAMAGE.axe);
   assert.ok(ASK_TIME > 2);
@@ -86,7 +86,7 @@ test("answering a call raises the mood, missing it lowers it", () => {
 
 test("saves keep every tool, and drop unknown ones", () => {
   const d = readTribeSave({ food: 5, tools: { spear: true, laser: true }, units: [{ chief: true, tool: "torch" }], tribes: [], won: true });
-  assert.equal(d.tools.spear, true);
+  assert.equal(d.tools.spear, 1);
   assert.equal(d.tools.laser, undefined);
   assert.equal(d.units[0].tool, "torch");
   assert.equal(d.won, true);

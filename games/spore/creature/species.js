@@ -8,6 +8,7 @@
 import { makeRng } from "../cell-format.js";
 import { armPairsOf, creaturePartIds, validateCreature } from "./format.js";
 import { abilitiesOf, creaturePart } from "./parts.js";
+import { npcHealth } from "./balance.js";
 
 const PALETTES = {
   plant: [
@@ -52,13 +53,30 @@ export function atLevel(sp, level) {
   if (sp.diet !== "plant") abilities.bite = Math.min(5, Math.max(abilities.bite, Math.ceil(level * 0.8)));
   if (sp.rogue) abilities.bite = Math.min(5, Math.max(abilities.bite, level + 1));
   let scale = LEVEL_SCALE[level] * (sp.sizeJitter || 1);
-  let maxHealth = Math.round((40 + level * 22 + abilities.health * 12) * scale);
-  if (sp.rogue) {
-    scale *= 1.3;
-    maxHealth = Math.round(maxHealth * 2.4);
-  }
+  if (sp.rogue) scale *= 1.3;
+  // Health comes from the balance model (level, armour, role), not from size.
+  const role = sp.role || (sp.rogue ? "rogue" : sp.diet === "plant" ? "grazer" : sp.diet === "meat" ? "predator" : "standard");
+  const maxHealth = npcHealth(level, abilities.health, role);
   return { ...sp, level, abilities, favourite: social.slice(0, 3).map((s) => s.k), scale, maxHealth };
 }
+
+/**
+ * Personalities change how a species takes to you: how patient it is in a social round, how much a
+ * fumbled move costs, how warmly it starts, and whether it can be stared down.
+ */
+export const PERSONALITIES = {
+  shy: { name: "Shy", ask: 1.25, miss: 1.4, start: -0.05, resolve: 0.7, fearsBig: true },
+  proud: { name: "Proud", ask: 1, miss: 1, start: 0, resolve: 1.1 },
+  playful: { name: "Playful", ask: 0.8, miss: 0.8, start: 0.05, resolve: 0.9 },
+  fierce: { name: "Fierce", ask: 0.9, miss: 1.2, start: -0.05, resolve: 1.2 },
+  curious: { name: "Curious", ask: 1.1, miss: 0.8, start: 0.1, resolve: 0.85 },
+};
+const PERSONALITY_BY_DIET = { plant: ["shy", "playful", "curious", "proud"], omni: ["curious", "playful", "proud", "fierce", "shy"], meat: ["fierce", "proud", "fierce", "curious"] };
+/** A species' personality: fixed by its seed (no random draw, so its look never changes). */
+export const personalityOf = (seed, diet) => {
+  const list = PERSONALITY_BY_DIET[diet] || PERSONALITY_BY_DIET.omni;
+  return list[(Math.imul(seed >>> 0, 2654435761) >>> 0) % list.length];
+};
 
 /** A species for a nest. diet: plant | meat | omni. level: 1..5 (higher grows more parts). */
 export function generateSpecies(seed, diet, level) {
@@ -123,6 +141,7 @@ export function generateSpecies(seed, diet, level) {
       members: 3 + Math.min(3, Math.floor(rng() * 2) + Math.floor(ring / 2)),
       // Carnivores attack on sight; omnivores turn hostile if you linger; herbivores flee or fight back.
       temper: diet === "meat" ? "hostile" : diet === "omni" ? "wary" : "skittish",
+      personality: personalityOf(seed, diet),
     },
     ring,
   );
@@ -133,7 +152,7 @@ export function generateEpic(seed, level) {
   const sp = generateSpecies(seed, "meat", Math.min(5, level));
   sp.name = "Great " + sp.name;
   sp.scale = 4 + (level - 4) * 0.6;
-  sp.maxHealth = 1200;
+  sp.maxHealth = npcHealth(level, 1, "apex");
   sp.abilities.bite = 5;
   sp.members = 1;
   sp.epic = true;

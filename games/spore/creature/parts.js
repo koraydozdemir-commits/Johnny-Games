@@ -28,6 +28,7 @@ export const STAT_INFO = {
   speed: { name: "Speed", icon: "💨" },
   health: { name: "Health", icon: "❤" },
   sight: { name: "Sight", icon: "👁" },
+  hearing: { name: "Hearing", icon: "👂" },
   sneak: { name: "Sneak", icon: "👣" },
   jump: { name: "Jump", icon: "⤒" },
   glide: { name: "Glide", icon: "🕊" },
@@ -56,8 +57,8 @@ export const CREATURE_PARTS = [
   { id: "stalkEyes", name: "Stalk Eyes", slot: "eye", cost: 10, abilities: { sight: 3, pose: 1 }, desc: "Eyes on stalks see danger sooner and look striking." },
   { id: "bugEyes", name: "Compound Eyes", slot: "eye", cost: 16, abilities: { sight: 4, sneak: 1 }, desc: "Faceted eyes that miss nothing." },
   { id: "doeEyes", name: "Doe Eyes", slot: "eye", cost: 14, abilities: { sight: 2, charm: 3 }, desc: "Big lashed eyes nobody can say no to." },
-  { id: "antennae", name: "Antennae", slot: "eye", cost: 10, abilities: { sight: 2, charm: 1, sneak: 2 }, desc: "Feelers that taste the air, so you can creep up on anything." },
-  { id: "ears", name: "Leaf Ears", slot: "eye", cost: 10, abilities: { sing: 2, charm: 1, sight: 1 }, desc: "Big ears for picking up a tune." },
+  { id: "antennae", name: "Antennae", slot: "eye", cost: 10, abilities: { sight: 2, charm: 1, sneak: 2, hearing: 2 }, desc: "Feelers that taste the air: creep up on anything, and feel anything creeping up on you." },
+  { id: "ears", name: "Leaf Ears", slot: "eye", cost: 10, abilities: { sing: 2, charm: 1, sight: 1, hearing: 4 }, desc: "Big ears: pick up a tune, and hear hunters long before they reach you." },
   // Limbs.
   { id: "paw", name: "Paws", slot: "hand", cost: 0, abilities: { strike: 1, sneak: 1 }, desc: "Simple padded hands." },
   // Flanks: hands and arms.
@@ -131,7 +132,7 @@ export const STARTER_CREATURE_PARTS = { plant: ["beak", "eyes", "pads"], meat: [
 
 /** Ability levels for a set of part ids: the best level per ability, capped at 5. */
 export function abilitiesOf(partIds, legPairs = 2, armPairs = 0) {
-  const out = { bite: 0, strike: 0, charge: 0, spit: 0, sing: 0, dance: 0, charm: 0, pose: 0, speed: 0, health: 0, sight: 0, sneak: 0, jump: 0, glide: 0 };
+  const out = { bite: 0, strike: 0, charge: 0, spit: 0, sing: 0, dance: 0, charm: 0, pose: 0, speed: 0, health: 0, sight: 0, hearing: 0, sneak: 0, jump: 0, glide: 0 };
   for (const id of partIds) {
     const p = creaturePart(id);
     if (!p) continue;
@@ -142,6 +143,7 @@ export function abilitiesOf(partIds, legPairs = 2, armPairs = 0) {
   out.charge = Math.max(out.charge, 1);
   out.dance = Math.max(out.dance, legPairs > 0 ? 1 : 0);
   out.pose = Math.max(out.pose, 1);
+  out.hearing = Math.max(out.hearing, 1); // everyone hears a little
   out.sing = Math.max(out.sing, 1);
   out.jump = legPairs > 0 ? Math.max(out.jump, 1) : 0; // anything with legs can hop
   return out;

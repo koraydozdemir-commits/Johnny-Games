@@ -20,6 +20,8 @@ import { LEGACY_ARM_HANDS, STARTER_CREATURE_PARTS, creaturePart, fitsArm } from 
 export const CREATURE_FORMAT = "johnny-spore-creature";
 export const CREATURE_VERSION = 1;
 export const CREATURE_SAVE_KEY = "johnny-spore-creature-stage";
+/** Parts a creature can carry at a brain level: a growing budget (8 at first, the full 14 by brain 4). */
+export const partsLimit = (brain) => Math.min(14, 6 + 2 * Math.max(1, brain || 1));
 export const LIMITS = { minNodes: 3, maxNodes: 8, minR: 0.18, maxR: 0.95, maxLegPairs: 3, maxArmPairs: 2, maxParts: 14, minLeg: 0.5, maxLeg: 2.2, minArm: 0.5, maxArm: 1.8 };
 /** Arms sit on the flanks, never on the spine itself (they come in mirrored pairs). */
 export const ARM_ANGLE = { min: 0.55, max: 2.5 };

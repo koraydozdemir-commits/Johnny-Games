@@ -3,7 +3,8 @@
  * nests by how they feel about you, your nest, fossils and anything hunting you. Tap it for a map of
  * the whole island. Drawing is plain 2D canvas over a relief picture of the island made once.
  */
-import { ISLAND, areaAt, heightAt } from "./world.js";
+import * as THREE from "three";
+import { ISLAND, REGION, groundColor, heightAt, poolAt } from "./world.js";
 
 const WORLD = ISLAND.size / 2; // the picture covers -WORLD..WORLD on both axes
 
@@ -24,8 +25,9 @@ export const MAP_COLORS = {
 const pictures = new Map();
 /** A north-up relief picture of the island, `size` pixels square. Made once (the island never changes). */
 export function islandPicture(size = 320) {
-  if (!pictures.has(size)) pictures.set(size, drawIsland(size));
-  return pictures.get(size);
+  const key = REGION.id + ":" + size; // one picture per region
+  if (!pictures.has(key)) pictures.set(key, drawIsland(size));
+  return pictures.get(key);
 }
 function drawIsland(size) {
   const canvas = document.createElement("canvas");
@@ -33,6 +35,7 @@ function drawIsland(size) {
   const ctx = canvas.getContext("2d");
   const img = ctx.createImageData(size, size);
   const step = (WORLD * 2) / size;
+  const col = new THREE.Color();
   const hs = new Float32Array(size * size);
   for (let j = 0; j < size; j++) for (let i = 0; i < size; i++) hs[j * size + i] = heightAt(-WORLD + (i + 0.5) * step, -WORLD + (j + 0.5) * step);
   for (let j = 0; j < size; j++)
@@ -42,13 +45,16 @@ function drawIsland(size) {
         h = hs[j * size + i],
         d = Math.hypot(x, z);
       let c;
-      if (d > ISLAND.shore + 1) {
+      const pool = poolAt(x, z);
+      if (d > ISLAND.shore + 1 || (h < 0.2 && !pool)) {
         // Sea: lighter in the shallows.
-        const deep = Math.min(1, (d - ISLAND.shore) / 40);
+        const deep = Math.min(1, Math.max(0, d - ISLAND.shore) / 40);
         c = [56 - deep * 22, 150 - deep * 40, 196 - deep * 26];
+      } else if (pool && Math.hypot(x - pool.x, z - pool.z) < pool.r * 0.85) {
+        c = pool.kind === "lava" ? [255, 110, 30] : [80, 104, 74];
       } else {
-        const area = areaAt(x, z);
-        c = area === "Beach" ? [228, 208, 150] : area === "Mountains" ? (h > 26 ? [236, 240, 244] : [140, 134, 120]) : area === "Foothills" ? [146, 150, 96] : [104, 170, 78];
+        groundColor(x, z, col);
+        c = [col.r * 255, col.g * 255, col.b * 255];
         // Hill shading: lit from the north-west.
         const west = hs[j * size + Math.max(0, i - 1)],
           north = hs[Math.max(0, j - 1) * size + i];
@@ -217,7 +223,7 @@ export function createMinimap(host, o) {
   host.appendChild(button);
   let picture = null,
     size = 0;
-  const RANGE = 80; // metres from the centre to the rim
+
   return {
     element: button,
     /** Give it the island picture (made once by the stage). */
@@ -238,7 +244,7 @@ export function createMinimap(host, o) {
       }
       const ctx = canvas.getContext("2d");
       const c = size / 2,
-        k = c / RANGE; // pixels per metre
+        k = c / (v.range || 80); // pixels per metre (sharper eyes see further)
       const sin = Math.sin(v.yaw),
         cos = Math.cos(v.yaw);
       // World to map, so that the camera's forward is up: X = dx·sin + dz·cos, Y = dz·sin − dx·cos.
@@ -303,7 +309,7 @@ export function openIslandMap(host, o) {
   wrap.setAttribute("aria-label", "Island map");
   wrap.innerHTML = `
     <div class="chMapCard">
-      <div class="chMapHead"><b>Island map</b><button class="chMapClose" aria-label="Close map">✕</button></div>
+      <div class="chMapHead"><b>${o.title || "Island map"}</b><button class="chMapClose" aria-label="Close map">✕</button></div>
       <canvas class="chMapCanvas" role="img" aria-label="Map of the island with nests, your nest and fossils"></canvas>
       <ul class="chMapKey">
         <li><i style="--c:${MAP_COLORS.home}" class="house"></i>Your nest</li>
@@ -314,8 +320,19 @@ export function openIslandMap(host, o) {
         <li><i style="--c:${MAP_COLORS.fossil}" class="bone"></i>Fossil</li>
         <li><i style="--c:${MAP_COLORS.danger}" class="tri"></i>Epic or rogue</li>
       </ul>
+      ${
+        o.regions
+          ? `<div class="chRegions" role="group" aria-label="Regions">${o.regions
+              .map(
+                (r, i) =>
+                  `${i ? '<i aria-hidden="true">›</i>' : ""}<button data-region="${r.id}" ${r.here || !r.open ? "disabled" : ""} class="${r.here ? "here" : r.open ? "open" : "locked"}" aria-label="${r.name}${r.here ? ", you are here" : r.open ? ", travel here" : ", not reached yet"}">${r.open ? "" : "🔒 "}${r.home ? "🏠 " : ""}${r.name}${r.here ? " <small>here</small>" : ""}</button>`,
+              )
+              .join("")}</div><p class="chRegionsNote">Each migration takes your species on to the next region. Tap one you've lived in to travel back.</p>`
+          : ""
+      }
     </div>`;
   host.appendChild(wrap);
+  wrap.querySelectorAll("[data-region]").forEach((b) => b.addEventListener("click", () => o.onTravel?.(b.dataset.region)));
   const canvas = wrap.querySelector("canvas");
   const close = () => {
     window.removeEventListener("keydown", onKey, true);

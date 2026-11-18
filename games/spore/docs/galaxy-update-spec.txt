@@ -1,0 +1,783 @@
+JOHNNY GAMES SPORE — GALAXY, SAVE UNIVERSE & SPOREPEDIA UPDATE
+
+Overall vision
+
+I want to introduce a complete galaxy system inspired by the original Spore’s Galaxy view, with procedurally generated planets, individual save files, species discovery and a fully functional Sporepedia-style database.
+
+This should make Johnny Games Spore feel like a living universe.
+
+The galaxy should not just be a decorative background. It should be an explorable, persistent universe containing planets, stars, creatures, species, ecosystems and player-created discoveries.
+
+Build this into the existing project without breaking Cell, Creature or Tribal Stage.
+
+The three main systems are:
+
+1. Galaxy Explorer: A procedurally generated galaxy containing thousands of possible star systems and planets.
+2. Save Universe: A system for creating, loading, managing and continuing separate evolutionary playthroughs.
+3. Sporepedia: A searchable collection of every creature, species, planet and creation discovered or created by the player.
+
+⸻
+
+PART 1 — GALAXY EXPLORER
+
+1.1 Galaxy view
+
+Create a beautiful, interactive galaxy screen inspired by Spore’s galaxy interface.
+
+The galaxy should feature:
+
+* A large star-filled galaxy.
+* Hundreds or thousands of generated star systems.
+* Stars with different colours and brightness.
+* Different planetary systems.
+* Visually distinct regions of space.
+* Nebulae and distant galaxies as background details.
+* Smooth camera movement.
+* Zooming in and out.
+* Interactive star selection.
+* Planetary system previews.
+
+The galaxy should feel enormous.
+
+Use procedural generation rather than manually placing every star.
+
+The galaxy should have a consistent seed so that the same galaxy can be recreated when the player loads their save.
+
+The player should be able to:
+
+* Drag to move around the galaxy.
+* Zoom in and out.
+* Select stars.
+* Inspect planetary systems.
+* Open planets.
+* Return to the wider galaxy.
+
+Make the controls intuitive on both desktop and mobile.
+
+1.2 Star systems
+
+Every star should have a generated planetary system.
+
+Each system should contain:
+
+* A star.
+* A generated star type.
+* A variable number of planets.
+* Different orbital distances.
+* Different planet sizes.
+* Different planet types.
+* Optional moons.
+* Different environmental conditions.
+
+Generate a variety of star types:
+
+* Yellow stars.
+* Red dwarfs.
+* Blue stars.
+* White stars.
+* Orange stars.
+* Binary systems where technically practical.
+
+Each star system should have its own unique identity and persistent seed.
+
+Planets should orbit their star visually when the system is inspected.
+
+The orbital presentation does not need to be a full physics simulation, but it should feel believable.
+
+1.3 Procedural planet generation
+
+This is one of the most important systems.
+
+Generate planets using procedural algorithms and deterministic seeds.
+
+Every planet should be different.
+
+Generate:
+
+* Planet name.
+* Planet type.
+* Radius and scale.
+* Surface colours.
+* Terrain.
+* Continents or landmasses.
+* Oceans.
+* Mountains.
+* Deserts.
+* Forests.
+* Ice regions.
+* Volcanic regions.
+* Atmospheric appearance.
+* Cloud coverage.
+* Rings where appropriate.
+* Number of moons.
+* Gravity.
+* Temperature.
+* Atmosphere.
+* Environmental hazards.
+
+Possible planet types:
+
+* Terrestrial.
+* Oceanic.
+* Desert.
+* Ice.
+* Volcanic.
+* Jungle.
+* Toxic.
+* Barren.
+* Frozen.
+* Gas giant.
+* Tundra.
+* Swamp.
+* Rocky.
+* Artificial or unusual worlds.
+
+Not every planet needs to be habitable.
+
+Create different levels of environmental suitability.
+
+Some planets should be:
+
+* Easily habitable.
+* Difficult to inhabit.
+* Hostile.
+* Completely barren.
+* Rich in resources.
+* Biologically diverse.
+
+1.4 Planet exploration
+
+Selecting a planet should open a detailed inspection screen.
+
+Show:
+
+* Planet name.
+* Planet image or rendered preview.
+* Star system.
+* Planet type.
+* Temperature.
+* Gravity.
+* Atmosphere.
+* Water coverage.
+* Biological diversity.
+* Resources.
+* Environmental danger.
+* Discovery status.
+
+Add a button to explore the planet.
+
+Planet exploration should eventually support landing on the surface.
+
+For now, create a meaningful planet exploration interface where the player can discover:
+
+* Plants.
+* Animals.
+* Creatures.
+* Natural landmarks.
+* Resources.
+* Environmental hazards.
+* Unique locations.
+
+Each planet should have a generated ecosystem based on its environmental properties.
+
+A cold planet should not randomly generate a tropical ecosystem. A desert planet should have species adapted to dry environments.
+
+The generated creatures and plants should be saved as actual discoverable entities.
+
+1.5 Planetary ecosystems
+
+Generate interconnected ecosystems for suitable planets.
+
+Each ecosystem should include:
+
+* Plants.
+* Herbivores.
+* Carnivores.
+* Omnivores.
+* Predators.
+* Prey.
+* Rare species.
+* Unique environmental organisms.
+
+Use the existing Creature Stage creature-generation systems where possible.
+
+Do not generate random meaningless creatures that have no connection to the game’s existing creature editor.
+
+Generated organisms should use the same underlying body-part, anatomy, colour and trait data as player-created creatures.
+
+Give each species:
+
+* A procedural name.
+* A generated appearance.
+* A diet.
+* A habitat.
+* A temperament.
+* A rarity.
+* A danger rating.
+* A short description.
+
+Planets should have distinct biological identities.
+
+Some should have only a few simple organisms, while others should contain extremely diverse ecosystems.
+
+1.6 Planet names and discovery
+
+Generate convincing names for stars, planets and species.
+
+Avoid repetitive names or obvious combinations of random letters.
+
+Names should be deterministic based on the generated seed.
+
+Allow the player to rename:
+
+* Stars.
+* Planets.
+* Species.
+* Individual discoveries.
+
+Track:
+
+* First discovered by.
+* Discovery date.
+* Discovery location.
+* Discovery type.
+* Whether the player has fully explored the planet.
+
+Include a discovery notification when something new is found.
+
+⸻
+
+PART 2 — MULTIPLE SAVE FILES AND UNIVERSES
+
+I want a save selection system similar in spirit to Spore’s save universe and adventure selection.
+
+Players should be able to create completely separate playthroughs.
+
+2.1 Save selection screen
+
+Create a dedicated universe selection screen.
+
+Every save should have its own:
+
+* Universe name.
+* Species.
+* Current evolutionary stage.
+* Starting galaxy seed.
+* Progress.
+* Playtime.
+* Last played date.
+* Discovery statistics.
+* Planet and star information.
+
+Show saves as attractive visual cards.
+
+Each card should include:
+
+* A thumbnail of the player’s creature or current stage.
+* The universe name.
+* Species name.
+* Current stage.
+* Progress indicator.
+* Last played information.
+
+The player should be able to:
+
+* Create a new universe.
+* Load an existing universe.
+* Rename a universe.
+* Duplicate a universe.
+* Delete a universe.
+* Export a universe.
+* Import a universe.
+
+Deletion must have a confirmation screen.
+
+Never overwrite a different universe accidentally.
+
+2.2 Independent universes
+
+Every save must have its own completely independent game state.
+
+This means:
+
+* Different species.
+* Different evolutionary histories.
+* Different starting conditions.
+* Different galaxy seeds.
+* Different discoveries.
+* Different planet states.
+* Different progression.
+* Different unlocked content.
+
+Loading one universe must never overwrite another.
+
+A player should be able to have multiple species evolving in completely separate galaxies.
+
+2.3 Save architecture
+
+Create a robust save architecture.
+
+Separate:
+
+* Universe metadata.
+* Player progression.
+* Species data.
+* Creature designs.
+* Evolution history.
+* Planet data.
+* Star system data.
+* Discovery records.
+* Sporepedia entries.
+* Settings.
+
+Use versioned save formats and migration logic.
+
+Preserve all existing single-playthrough saves.
+
+If the current game uses localStorage, inspect its limits and implement a suitable storage strategy, preferably IndexedDB for larger universes.
+
+Use localStorage only for small metadata or preferences where appropriate.
+
+Autosave at safe points and provide manual saving.
+
+Show a clear save indicator.
+
+Handle:
+
+* Corrupted saves.
+* Missing data.
+* Interrupted writes.
+* Old save versions.
+* Import conflicts.
+* Storage limits.
+
+Do not silently delete or reset existing saves.
+
+2.4 Export and import
+
+Allow players to export individual universes.
+
+Use a portable JSON-based save format with a version identifier.
+
+Allow players to:
+
+* Download a universe.
+* Import a previously exported universe.
+* Duplicate an imported universe.
+* Rename imported universes.
+
+Validate imported files before loading them.
+
+Do not allow malformed save data to crash the game.
+
+Provide clear error messages when imports fail.
+
+⸻
+
+PART 3 — SPOREPEDIA
+
+Create a fully functional Sporepedia-inspired collection and discovery database.
+
+This should be one of the most important permanent features of the game.
+
+The player should be able to open Sporepedia from the main menu and access everything they have created or discovered.
+
+3.1 Main Sporepedia interface
+
+Create a polished library interface.
+
+Categories:
+
+1. Creatures.
+2. Species.
+3. Planets.
+4. Stars and systems.
+5. Plants.
+6. Discoveries.
+7. Evolution history.
+8. Tribal creations.
+9. Favourites.
+10. Recently viewed.
+
+Use visual cards with thumbnails.
+
+Allow the player to search, filter, sort and inspect entries.
+
+Include:
+
+* Search bar.
+* Category filters.
+* Sorting options.
+* Rarity filters where applicable.
+* Favourites.
+* Recently discovered.
+* Recently created.
+
+Make the interface responsive and mobile-friendly.
+
+3.2 Creaturepedia
+
+Create a dedicated creature collection.
+
+Every creature the player creates or discovers should have an entry.
+
+Each entry should show:
+
+* Creature name.
+* Full creature preview.
+* Species.
+* Diet.
+* Size.
+* Abilities.
+* Body-part configuration.
+* Personality.
+* Habitat.
+* Home planet.
+* Discovery information.
+* Evolution history.
+
+Allow players to:
+
+* View creatures in detail.
+* Rotate or inspect their appearance where supported.
+* View statistics.
+* Compare two creatures.
+* Add favourites.
+* Rename player-owned creations.
+* Export creations.
+* Reopen player-created creatures in the editor.
+
+The creature entry should use the actual saved creature data, not a static screenshot.
+
+3.3 Planetpedia
+
+Create a planet collection.
+
+Every discovered or generated planet that the player has explored should be eligible for a Planetpedia entry.
+
+Show:
+
+* Planet name.
+* Planet type.
+* Surface preview.
+* Star system.
+* Atmosphere.
+* Temperature.
+* Gravity.
+* Water coverage.
+* Resources.
+* Biological diversity.
+* Known species.
+* Discovery date.
+* Exploration status.
+
+Allow the player to compare planets.
+
+Allow favourites.
+
+Show a visual distinction between:
+
+* Generated but undiscovered.
+* Discovered.
+* Explored.
+* Fully catalogued.
+
+3.4 Species and evolutionary history
+
+Create a species database.
+
+A species entry should include:
+
+* Species name.
+* Species appearance.
+* Homeworld.
+* Diet.
+* Evolutionary traits.
+* Generations.
+* Major evolutionary changes.
+* Creature Stage history.
+* Tribal Stage history.
+* Current stage.
+* Achievements.
+
+Show a timeline of the species’ development.
+
+Allow players to inspect previous generations and compare their differences.
+
+This should be linked directly to the existing save and evolution systems.
+
+3.5 Plantpedia
+
+Add a plant collection.
+
+Store plants created or discovered by the player.
+
+Each entry should include:
+
+* Plant name.
+* Appearance.
+* Type.
+* Habitat.
+* Environmental requirements.
+* Fruit or resource properties.
+* Planet of origin.
+* Discovery details.
+
+Plants should be reusable in any future planet customisation or ecosystem editing systems where appropriate.
+
+3.6 Discovery catalogue
+
+Create a universal discovery log.
+
+Every important discovery should be recorded.
+
+Examples:
+
+* First discovery of a planet.
+* First discovery of a star system.
+* First encounter with a species.
+* First discovery of a rare creature.
+* Discovery of a unique plant.
+* Discovery of a dangerous predator.
+* Discovery of an unusual environment.
+* First visit to a planet with an extreme climate.
+
+Give discoveries appropriate notifications and entries.
+
+Avoid filling the catalogue with meaningless repeated events.
+
+3.7 Favourites and sharing
+
+Allow players to favourite entries.
+
+Add export options for:
+
+* Individual creatures.
+* Species.
+* Plants.
+* Planets.
+* Entire universes.
+
+Use validated, portable data formats.
+
+Sharing should not require an online backend initially.
+
+Design the data format so online sharing can be added later.
+
+⸻
+
+PART 4 — PROCEDURAL GENERATION QUALITY
+
+The universe must feel designed, not random.
+
+Use deterministic procedural generation.
+
+A seed should determine:
+
+* Galaxy layout.
+* Star positions.
+* Star systems.
+* Planet types.
+* Planet appearances.
+* Planetary environments.
+* Ecosystem generation.
+* Generated species.
+* Names.
+
+The same seed should always recreate the same base universe.
+
+Use separate sub-seeds for different systems so that modifying one planet’s ecosystem does not regenerate the entire galaxy.
+
+Ensure procedural generation produces coherent results.
+
+Examples:
+
+* A planet’s atmosphere should make sense for its environment.
+* Its temperature should influence its climate.
+* Climate should influence its vegetation.
+* Vegetation should influence herbivore populations.
+* Herbivores should influence predator populations.
+* Gravity should influence creature design or movement where supported.
+
+Generate a variety of beautiful worlds, not just spheres with different colours.
+
+Use visual techniques appropriate to the existing game engine and performance budget.
+
+Do not attempt to render thousands of fully detailed planets simultaneously.
+
+Use levels of detail:
+
+* Galaxy view: star points and simple effects.
+* System view: orbiting planet previews.
+* Planet view: higher-detail surface presentation.
+* Exploration view: detailed environment and organisms.
+
+⸻
+
+PART 5 — UI AND VISUAL DIRECTION
+
+The design should evoke the wonder and creativity of Spore’s original interface without directly copying its proprietary assets.
+
+Galaxy screen
+
+* Deep-space background.
+* Bright star points.
+* Colourful nebulae.
+* Smooth zoom.
+* Selected star highlighting.
+* Planetary system previews.
+* Clear navigation controls.
+
+Save selection
+
+* Large universe cards.
+* Creature thumbnails.
+* Distinct universe identities.
+* Clear progress and stage information.
+* Easy create/load/delete actions.
+
+Sporepedia
+
+* Visual library layout.
+* Attractive organism and planet previews.
+* Clean categories.
+* Search and filters.
+* Detailed inspection pages.
+* Consistent presentation.
+
+Use original graphics and interface assets.
+
+Avoid excessive visual effects that hurt readability or mobile performance.
+
+⸻
+
+PART 6 — INTEGRATION WITH THE EXISTING GAME
+
+This system must connect to the actual game.
+
+When a player completes Cell Stage:
+
+* Their species is stored in the current universe.
+* Their creature is added to Sporepedia.
+* Evolution history is updated.
+
+When a player completes Creature Stage:
+
+* Their evolved species is stored.
+* Previous generations are preserved.
+* Their creature is added to Creaturepedia.
+* The species history is updated.
+
+When a player completes Tribal Stage:
+
+* Their tribe is recorded.
+* Their village and equipment identity are preserved.
+* Their species entry receives the new history.
+* The universe save records the completed stage.
+
+Planet and galaxy data must belong to the correct universe.
+
+Sporepedia should never mix discoveries from different saves unless the player explicitly opens a separate global collection.
+
+Every save should have its own discovery database.
+
+⸻
+
+PART 7 — FUTURE-PROOFING FOR CIVILIZATION AND SPACE STAGE
+
+Do not implement incomplete Civilization or Space Stage gameplay as part of this batch.
+
+However, design the architecture so future stages can integrate naturally.
+
+The galaxy system should eventually support:
+
+* Spacecraft.
+* Planet landing.
+* Colonies.
+* Planet terraforming.
+* Interstellar travel.
+* Alien species.
+* Diplomacy.
+* Trading.
+* Space combat.
+* Galactic exploration.
+
+Planet data should already contain the information required for future colonisation and terraforming.
+
+Sporepedia should be capable of cataloguing future vehicles, buildings, spacecraft and other creations.
+
+⸻
+
+PART 8 — PERFORMANCE, COMPATIBILITY AND TESTING
+
+The game must continue to work on desktop and mobile Safari.
+
+Test:
+
+* Galaxy dragging.
+* Zoom controls.
+* Star selection.
+* Planet selection.
+* Planet inspection.
+* Universe creation.
+* Multiple independent saves.
+* Save loading.
+* Save duplication.
+* Save deletion.
+* Save export.
+* Save import.
+* Sporepedia search.
+* Sporepedia filtering.
+* Creature entries.
+* Planet entries.
+* Species history.
+* Discovery tracking.
+* Stage transitions.
+* Reloading and persistence.
+
+Test with multiple universes and large discovery collections.
+
+Ensure procedural generation does not block the main thread for long periods.
+
+Use caching and lazy generation where possible.
+
+Do not generate every planet and organism in the entire galaxy at once.
+
+Handle storage limits gracefully.
+
+Do not break existing saves or the current game.
+
+⸻
+
+PART 9 — FINAL ACCEPTANCE CRITERIA
+
+This update is complete when:
+
+1. Players can create multiple independent universes.
+2. Each universe has its own deterministic galaxy.
+3. The galaxy can be explored through an interactive interface.
+4. Star systems contain procedurally generated planets.
+5. Planets have coherent generated environments.
+6. Suitable planets have generated ecosystems.
+7. Discoveries are recorded persistently.
+8. Players can inspect stars and planets.
+9. Sporepedia contains actual player creations and discoveries.
+10. Creatures can be reopened in the creature editor.
+11. Species history is linked to real evolutionary progression.
+12. Planetpedia and Plantpedia contain meaningful entries.
+13. Save files can be exported and imported.
+14. Loading one universe never corrupts another.
+15. Existing stages and save files remain functional.
+16. Mobile Safari performance remains acceptable.
+
+Final instruction
+
+Make this feel like a real universe.
+
+I want players to be able to start several different evolutionary journeys, explore enormous galaxies, discover unique planets, catalogue strange organisms, create their own species and revisit everything they have ever made.
+
+The galaxy, planets, creatures, species and save files must all be connected through real game data.
+
+Do not make this a collection of decorative menus. Every button must work, every discovery must be saved, and every generated object must have a consistent identity.
+
+Prioritise deterministic generation, persistence, visual quality and proper integration with the existing Johnny Games Spore project.

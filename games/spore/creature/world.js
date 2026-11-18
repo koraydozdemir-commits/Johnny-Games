@@ -1,52 +1,72 @@
 /**
- * The Creature Stage island: open grassy plains ringed by a sandy beach, with a few mountain ranges
- * and outcrops of tall rock that nothing can climb. Nests are spread over the plains; how tough they
- * are depends on you, not on where they are (see the stage). Props are instanced (a few draw calls
- * for hundreds of trees and tufts), collisions use a coarse grid plus the mountains' solid cores, and
- * a day/night cycle moves the sun.
+ * The Creature Stage's regions (see regions.js). Each is a landmass ringed by shore: the coast's open
+ * meadows, the forest's dense woods, the swamp's pools, the badlands' mesas, the volcanic highlands'
+ * lava. One region is active at a time; heightAt, PEAKS and the rest describe the active one.
+ * Props are instanced (a few draw calls for hundreds of trees and tufts), collisions use a coarse
+ * grid plus the solid cores of mountains and lava, and a day/night cycle moves the sun.
  */
 import * as THREE from "three";
 import { makeRng } from "../cell-format.js";
+import { REGIONS, regionById } from "./regions.js";
 
 export const ISLAND = { shore: 205, size: 480, nest: { x: 0, z: 178 }, beach: 178 };
 const TAU = Math.PI * 2;
 
 /*
- * Mountains: overlapping peaks make ranges. A peak rises h metres over radius r with a smoothstep
- * profile (gentle foothills, steep flanks, rounded top). Past SOLID_RISE metres it is a wall.
+ * Mountains: overlapping peaks make ranges. A peak rises h metres over radius r: smooth hills
+ * (gentle foothills, steep flanks, rounded top), flat-topped mesas, or a volcano with a crater.
+ * Past SOLID_RISE metres it is a wall.
  */
 const SOLID_RISE = 3.2;
-export const PEAKS = [
-  // The northern range, a long wall across the far side of the island.
-  { x: -96, z: -96, r: 26, h: 30 },
-  { x: -63, z: -122, r: 30, h: 36 },
-  { x: -25, z: -140, r: 28, h: 42 },
-  { x: 15, z: -137, r: 30, h: 38 },
-  { x: 52, z: -118, r: 25, h: 31 },
-  // The western ridge.
-  { x: -150, z: -24, r: 24, h: 28 },
-  { x: -138, z: 13, r: 26, h: 33 },
-  { x: -149, z: 47, r: 19, h: 23 },
-  // The eastern massif.
-  { x: 128, z: -56, r: 26, h: 31 },
-  { x: 149, z: -22, r: 21, h: 25 },
-  // Lone peaks out on the plains.
-  { x: -42, z: 8, r: 18, h: 22 },
-  { x: 62, z: 30, r: 16, h: 18 },
-];
 const smooth = (k) => k * k * (3 - 2 * k);
-for (const p of PEAKS) {
-  // Solve smooth(k) = SOLID_RISE / h for the solid core's radius.
-  const v = SOLID_RISE / p.h;
-  let lo = 0,
-    hi = 1;
-  for (let i = 0; i < 30; i++) {
-    const mid = (lo + hi) / 2;
-    if (smooth(mid) < v) lo = mid;
-    else hi = mid;
+const PROFILE = {
+  smooth,
+  mesa: (k) => smooth(Math.min(1, k / 0.3)),
+  volcano: (k) => (k < 0.82 ? smooth(k) : smooth(0.82) - (k - 0.82) * 1.9),
+};
+/** The active region's settings, peaks and pools (live bindings: they change with the region). */
+export let REGION = REGIONS[0];
+export let PEAKS = [];
+/** Swamp pools (water) and lava pools: depressions; lava ones are also walls. */
+export let POOLS = [];
+let SOLIDS = [];
+
+/** Make a region the active one: terrain, peaks and pools. createIsland calls this. */
+export function setRegion(id) {
+  REGION = regionById(id);
+  PEAKS = REGION.peaks.map((p) => {
+    const f = PROFILE[p.profile || REGION.profile || "smooth"];
+    // Solve f(k) = SOLID_RISE / h for the solid core's radius (f rises monotonically to its top).
+    const v = SOLID_RISE / p.h;
+    let lo = 0,
+      hi = 0.8;
+    for (let i = 0; i < 30; i++) {
+      const mid = (lo + hi) / 2;
+      if (f(mid) < v) lo = mid;
+      else hi = mid;
+    }
+    return { ...p, f, solid: p.r * (1 - lo) };
+  });
+  // Pools come from their own random stream, so the rest of the region generates the same way.
+  const rng = makeRng(REGION.seed + 7);
+  POOLS = [];
+  const want = (REGION.pools || 0) + (REGION.lava || 0);
+  for (let tries = 0; POOLS.length < want && tries < 4000; tries++) {
+    const lava = POOLS.length >= (REGION.pools || 0);
+    const a = rng() * TAU,
+      d = 30 + Math.sqrt(rng()) * (ISLAND.beach - 45),
+      r = lava ? 6 + rng() * 7 : 7 + rng() * 11;
+    const x = Math.cos(a) * d,
+      z = Math.sin(a) * d;
+    if (Math.hypot(x - ISLAND.nest.x, z - ISLAND.nest.z) < 40 + r) continue; // keep the arrival clear
+    if (PEAKS.some((p) => Math.hypot(x - p.x, z - p.z) < p.r + r)) continue;
+    if (POOLS.some((p) => Math.hypot(x - p.x, z - p.z) < p.r + r + 8)) continue;
+    POOLS.push({ x, z, r, kind: lava ? "lava" : "water", depth: lava ? 1.4 : 1.6 + rng() * 1.2 });
   }
-  p.solid = p.r * (1 - lo);
+  SOLIDS = [...PEAKS.map((p) => ({ x: p.x, z: p.z, solid: p.solid })), ...POOLS.filter((p) => p.kind === "lava").map((p) => ({ x: p.x, z: p.z, solid: p.r * 0.78 }))];
+  return REGION;
 }
+setRegion("coast");
 
 /** How far the mountains lift the ground here (0 on the plains). */
 function mountainRise(x, z) {
@@ -57,15 +77,29 @@ function mountainRise(x, z) {
     const k = 1 - d / p.r;
     // Craggy detail grows towards the top, so the foothills stay smooth and the walls stay put.
     const crag = (Math.sin(x * 0.31 + p.z) * Math.cos(z * 0.27 + p.x) + Math.sin((x - z) * 0.17) * 0.6) * 0.06 * p.h * k * k;
-    best = Math.max(best, p.h * smooth(k) + crag);
+    best = Math.max(best, p.h * p.f(k) + crag);
   }
   return best;
 }
+/** How far pools sink the ground here. */
+function poolDip(x, z) {
+  let dip = 0;
+  for (const p of POOLS) {
+    const d = Math.hypot(x - p.x, z - p.z);
+    if (d < p.r) dip = Math.max(dip, (p.depth + 1.4) * smooth(1 - d / p.r));
+  }
+  return dip;
+}
+/** The pool at (x, z), if any. */
+export function poolAt(x, z) {
+  for (const p of POOLS) if (Math.hypot(x - p.x, z - p.z) < p.r) return p;
+  return null;
+}
 
-/** Distance from (x, z) to the nearest mountain wall; negative inside one. */
+/** Distance from (x, z) to the nearest wall (mountain core or lava); negative inside one. */
 export function mountainClear(x, z) {
   let best = Infinity;
-  for (const p of PEAKS) best = Math.min(best, Math.hypot(x - p.x, z - p.z) - p.solid);
+  for (const p of SOLIDS) best = Math.min(best, Math.hypot(x - p.x, z - p.z) - p.solid);
   return best;
 }
 
@@ -74,48 +108,67 @@ export function heightAt(x, z) {
   const noise = Math.sin(x * 0.045) * 1.6 + Math.cos(z * 0.05 + 1.3) * 1.3 + Math.sin((x + z) * 0.09) * 0.6 + Math.cos(x * 0.13 - z * 0.07) * 0.35;
   if (d > ISLAND.shore) return 1.2 - (d - ISLAND.shore) * 0.12 + noise * 0.2; // slopes into the sea
   const inland = 1 - d / ISLAND.shore;
-  // Rolling plains: a gentle rise inland and soft swells, so you can see a long way.
-  return 1.2 + Math.pow(inland, 1.2) * 4 + noise * (0.35 + inland * 0.5) + mountainRise(x, z);
+  // Rolling ground: a rise inland (hilly in the forest, nearly flat in the swamp) and soft swells.
+  return 1.2 + Math.pow(inland, 1.2) * REGION.hills + noise * (0.35 + inland * 0.5) * REGION.roughness + mountainRise(x, z) - (POOLS.length ? poolDip(x, z) : 0);
 }
 
 /** What kind of ground this is, for labels. */
+const AREA_NAMES = {
+  coast: ["Beach", "Plains", "Foothills", "Mountains"],
+  forest: ["Shore", "Woods", "Hills", "Mountains"],
+  swamp: ["Mudflats", "Marsh", "Rises", "Crags"],
+  badlands: ["Red sands", "Canyons", "Scree", "Mesa"],
+  volcanic: ["Black sands", "Ash fields", "Slopes", "Volcano"],
+};
 export function areaAt(x, z) {
-  if (Math.hypot(x, z) > ISLAND.beach - 4) return "Beach";
+  const names = AREA_NAMES[REGION.id] || AREA_NAMES.coast;
+  if (Math.hypot(x, z) > ISLAND.beach - 4) return names[0];
+  const pool = POOLS.length ? poolAt(x, z) : null;
+  if (pool) return pool.kind === "lava" ? "Lava" : "Pools";
   const rise = mountainRise(x, z);
-  return rise > SOLID_RISE ? "Mountains" : rise > 0.6 ? "Foothills" : "Plains";
+  return rise > SOLID_RISE ? names[3] : rise > 0.6 ? names[2] : names[1];
+}
+
+/** The ground colour at a spot, for the terrain and the maps. Writes into `c` and returns it. */
+const COL = {};
+export function groundColor(x, z, c) {
+  const k = REGION.colors;
+  if (COL.region !== REGION.id) {
+    COL.region = REGION.id;
+    for (const name of ["sand", "grassLight", "grassDark", "dirt", "rock", "cliff", "snow", "seabed"]) COL[name] = new THREE.Color(k[name]);
+    COL.mud = new THREE.Color(0x4a4230);
+    COL.ash = new THREE.Color(0x2a2522);
+  }
+  const band = (v, a, b) => THREE.MathUtils.smoothstep(v, a, b);
+  const d = Math.hypot(x, z),
+    rise = mountainRise(x, z);
+  // Big soft patches of lighter and darker ground.
+  const patch = 0.5 + 0.5 * Math.sin(x * 0.035 + Math.cos(z * 0.028) * 2) * Math.cos(z * 0.031 - x * 0.012);
+  c.copy(COL.grassDark).lerp(COL.grassLight, patch);
+  c.lerp(COL.dirt, band(rise, 0.6, 2.4) * 0.6);
+  c.lerp(COL.rock, band(rise, 2, 5));
+  c.lerp(COL.cliff, band(rise, 9, 16) * 0.7);
+  c.lerp(COL.snow, band(rise, 21, 27));
+  if (POOLS.length) {
+    const p = poolAt(x, z);
+    if (p) c.lerp(p.kind === "lava" ? COL.ash : COL.mud, smooth(Math.min(1, (1 - Math.hypot(x - p.x, z - p.z) / p.r) * 2.2)));
+  }
+  c.lerp(COL.sand, band(d, ISLAND.beach - 8, ISLAND.beach + 4));
+  if (d > ISLAND.shore) c.copy(COL.seabed);
+  return c;
 }
 
 function terrainMesh(segments) {
   const geo = new THREE.PlaneGeometry(ISLAND.size, ISLAND.size, segments, segments).rotateX(-Math.PI / 2);
   const pos = geo.attributes.position,
     colors = new Float32Array(pos.count * 3);
-  const sand = new THREE.Color(0xe3cf95),
-    grassLight = new THREE.Color(0x86c25a),
-    grassDark = new THREE.Color(0x5f9e45),
-    dirt = new THREE.Color(0x8e8a5a),
-    rock = new THREE.Color(0x8a8576),
-    cliff = new THREE.Color(0x6c665c),
-    snow = new THREE.Color(0xf4f7fb),
-    seabed = new THREE.Color(0xc9b98a),
-    c = new THREE.Color(),
+  const c = new THREE.Color(),
     t = new THREE.Color();
-  const band = (v, a, b) => THREE.MathUtils.smoothstep(v, a, b);
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i),
-      z = pos.getZ(i),
-      y = heightAt(x, z),
-      d = Math.hypot(x, z),
-      rise = mountainRise(x, z);
-    pos.setY(i, y);
-    // Meadows in big soft patches of lighter and darker grass.
-    const patch = 0.5 + 0.5 * Math.sin(x * 0.035 + Math.cos(z * 0.028) * 2) * Math.cos(z * 0.031 - x * 0.012);
-    c.copy(grassDark).lerp(grassLight, patch);
-    c.lerp(dirt, band(rise, 0.6, 2.4) * 0.6);
-    c.lerp(rock, band(rise, 2, 5));
-    c.lerp(cliff, band(rise, 9, 16) * 0.7);
-    c.lerp(snow, band(rise, 21, 27));
-    c.lerp(sand, band(d, ISLAND.beach - 8, ISLAND.beach + 4));
-    if (d > ISLAND.shore) c.copy(seabed);
+      z = pos.getZ(i);
+    pos.setY(i, heightAt(x, z));
+    groundColor(x, z, c);
     const n = Math.sin(x * 1.3) * Math.cos(z * 1.1) * 0.05 + Math.sin(x * 0.31 + z * 0.27) * 0.04;
     t.copy(c).offsetHSL(0, 0, n);
     colors.set([t.r, t.g, t.b], i * 3);
@@ -175,7 +228,7 @@ function resolveMountains(x, z, r) {
   for (let pass = 0; pass < 8; pass++) {
     let worst = null,
       depth = 0;
-    for (const p of PEAKS) {
+    for (const p of SOLIDS) {
       const over = p.solid + r - Math.hypot(x - p.x, z - p.z);
       if (over > depth) {
         depth = over;
@@ -214,7 +267,7 @@ export function steerAround(x, z, dx, dz, r = 1, look = 9) {
     uz = dz / len;
   let worst = null,
     worstT = Infinity;
-  for (const p of PEAKS) {
+  for (const p of SOLIDS) {
     const cx = p.x - x,
       cz = p.z - z;
     const along = cx * ux + cz * uz;
@@ -236,8 +289,10 @@ export function steerAround(x, z, dx, dz, r = 1, look = 9) {
   return { x: bx / bl, z: bz / bl };
 }
 
-export function createIsland(scene, quality = "medium") {
-  const rng = makeRng(20261117);
+export function createIsland(scene, quality = "medium", regionId = "coast") {
+  setRegion(regionId);
+  const rng = makeRng(REGION.seed);
+  const look = REGION.colors;
   const group = new THREE.Group();
   scene.add(group);
   const terrain = terrainMesh(quality === "low" ? 110 : quality === "medium" ? 140 : 180);
@@ -253,7 +308,8 @@ export function createIsland(scene, quality = "medium") {
     s = new THREE.Vector3(),
     yAxis = new THREE.Vector3(0, 1, 0);
   const start = ISLAND.nest;
-  const isOpen = (x, z, clear = 4, inland = ISLAND.beach - 2) => Math.hypot(x, z) < inland && mountainClear(x, z) > clear && grid.free(x, z, clear);
+  const wet = (x, z, pad = 0) => POOLS.length > 0 && POOLS.some((pl) => Math.hypot(x - pl.x, z - pl.z) < pl.r + pad);
+  const isOpen = (x, z, clear = 4, inland = ISLAND.beach - 2) => Math.hypot(x, z) < inland && mountainClear(x, z) > clear && grid.free(x, z, clear) && !wet(x, z, clear);
   /** A random open spot between minD and maxD from the centre, clear of the listed places. */
   const spot = (minD, maxD, clear = 3, away = [], gap = 0) => {
     for (let tries = 0; tries < 80; tries++) {
@@ -261,7 +317,7 @@ export function createIsland(scene, quality = "medium") {
         d = Math.sqrt(minD * minD + rng() * (maxD * maxD - minD * minD)); // even over the area
       const x = Math.cos(a) * d,
         z = Math.sin(a) * d;
-      if (mountainClear(x, z) <= clear || !grid.free(x, z, clear)) continue;
+      if (mountainClear(x, z) <= clear || !grid.free(x, z, clear) || wet(x, z, clear)) continue;
       if (away.some((o) => Math.hypot(o.x - x, o.z - z) < (o.r ?? gap))) continue;
       return { x, z };
     }
@@ -280,6 +336,90 @@ export function createIsland(scene, quality = "medium") {
     group.add(mesh);
     return mesh;
   };
+
+  /**
+   * Trees by region: broadleaf (coast), broadleaf and conifers (forest), mangroves (swamp), cacti
+   * (badlands), charred trunks (volcanic). Sets each tree's kind.
+   */
+  function plantTrees(list) {
+    const kind = REGION.trees.kind;
+    list.forEach((t, i) => (t.kind = kind === "forest" ? (i % 2 ? "conifer" : "broadleaf") : kind));
+    const of = (k) => list.filter((t) => t.kind === k);
+    const trunkMat = new THREE.MeshStandardMaterial({ color: look.trunk });
+    const leafMat = new THREE.MeshStandardMaterial({ color: look.leaf, flatShading: true });
+    const ground = (o) => heightAt(o.x, o.z) - 0.2;
+    const broad = of("broadleaf");
+    if (broad.length) {
+      instanced(new THREE.CylinderGeometry(0.35, 0.55, 5, 7).translate(0, 2.5, 0), trunkMat, broad, (o) => {
+        p.set(o.x, ground(o), o.z);
+        q.setFromAxisAngle(yAxis, o.r);
+        s.setScalar(o.s);
+      });
+      instanced(new THREE.IcosahedronGeometry(2.8, 1), leafMat, broad, (o) => {
+        p.set(o.x, heightAt(o.x, o.z) + 5.6 * o.s, o.z);
+        q.setFromAxisAngle(yAxis, o.r);
+        s.set(o.s, o.s * 0.85, o.s);
+      });
+    }
+    const conifers = of("conifer");
+    if (conifers.length) {
+      instanced(new THREE.CylinderGeometry(0.3, 0.5, 7, 7).translate(0, 3.5, 0), trunkMat, conifers, (o) => {
+        p.set(o.x, ground(o), o.z);
+        q.setFromAxisAngle(yAxis, o.r);
+        s.setScalar(o.s * 1.1);
+      });
+      // Three stacked cones make a fir.
+      const fir = mergeGeometries([0, 1, 2].map((k) => new THREE.ConeGeometry(2.6 - k * 0.65, 3.4, 8).translate(0, 3.4 + k * 2.2, 0)));
+      instanced(fir, new THREE.MeshStandardMaterial({ color: new THREE.Color(look.leaf).offsetHSL(0.03, -0.05, -0.06), flatShading: true }), conifers, (o) => {
+        p.set(o.x, ground(o), o.z);
+        q.setFromAxisAngle(yAxis, o.r);
+        s.setScalar(o.s * 1.1);
+      });
+    }
+    const mangroves = of("mangrove");
+    if (mangroves.length) {
+      // Splayed roots and a short trunk under a broad, low canopy.
+      const roots = mergeGeometries([0, 1, 2, 3].map((k) => new THREE.CylinderGeometry(0.12, 0.22, 2.4, 5).translate(0, 1.0, 0).rotateZ(0.5).rotateY((k / 4) * TAU)).concat([new THREE.CylinderGeometry(0.35, 0.5, 3.6, 7).translate(0, 2.4, 0)]));
+      instanced(roots, trunkMat, mangroves, (o) => {
+        p.set(o.x, ground(o), o.z);
+        q.setFromAxisAngle(yAxis, o.r);
+        s.setScalar(o.s);
+      });
+      instanced(new THREE.IcosahedronGeometry(2.6, 1), leafMat, mangroves, (o) => {
+        p.set(o.x, heightAt(o.x, o.z) + 4.4 * o.s, o.z);
+        q.setFromAxisAngle(yAxis, o.r);
+        s.set(o.s * 1.45, o.s * 0.5, o.s * 1.45);
+      });
+    }
+    const cacti = of("cactus");
+    if (cacti.length) {
+      const cactus = mergeGeometries([
+        new THREE.CylinderGeometry(0.42, 0.48, 4.2, 9).translate(0, 2.1, 0),
+        new THREE.CylinderGeometry(0.26, 0.28, 1.6, 8).translate(0, 0.8, 0).rotateZ(-0.0).translate(0.9, 2.0, 0),
+        new THREE.CylinderGeometry(0.28, 0.28, 0.9, 8).rotateZ(Math.PI / 2).translate(0.55, 1.8, 0),
+        new THREE.CylinderGeometry(0.24, 0.26, 1.3, 8).translate(-0.85, 2.9, 0),
+        new THREE.CylinderGeometry(0.26, 0.26, 0.8, 8).rotateZ(Math.PI / 2).translate(-0.5, 2.5, 0),
+      ]);
+      instanced(cactus, new THREE.MeshStandardMaterial({ color: 0x5b8a46, roughness: 0.8 }), cacti, (o) => {
+        p.set(o.x, ground(o), o.z);
+        q.setFromAxisAngle(yAxis, o.r);
+        s.setScalar(o.s * 0.9);
+      });
+    }
+    const charred = of("charred");
+    if (charred.length) {
+      const snag = mergeGeometries([
+        new THREE.CylinderGeometry(0.22, 0.5, 5.5, 6).translate(0, 2.75, 0),
+        new THREE.CylinderGeometry(0.08, 0.16, 2, 5).translate(0, 1, 0).rotateZ(0.9).translate(0.2, 3.6, 0),
+        new THREE.CylinderGeometry(0.07, 0.14, 1.6, 5).translate(0, 0.8, 0).rotateZ(-1).translate(-0.15, 4.2, 0),
+      ]);
+      instanced(snag, new THREE.MeshStandardMaterial({ color: 0x1c1816, roughness: 1 }), charred, (o) => {
+        p.set(o.x, ground(o), o.z);
+        q.setFromAxisAngle(yAxis, o.r);
+        s.setScalar(o.s);
+      });
+    }
+  }
 
   /* Nest sites: twelve, spread out over the plains, listed nearest your nest first. */
   let nestSites = [];
@@ -301,7 +441,7 @@ export function createIsland(scene, quality = "medium") {
   /* Rock outcrops: clusters of tall, sheer stones. Nothing climbs them; you go round. */
   const stones = [];
   const outcrops = [];
-  for (let i = 0; i < Math.round(22 * (0.7 + 0.3 * scaleQ)) && outcrops.length < 22; i++) {
+  for (let i = 0; i < Math.round(REGION.outcrops * (0.7 + 0.3 * scaleQ)) && outcrops.length < REGION.outcrops; i++) {
     const c = spot(20, ISLAND.beach - 8, 7, [...keepClear.map((k) => ({ ...k, r: k.r + 6 })), ...outcrops.map((o) => ({ ...o, r: 26 }))]);
     if (!c) continue;
     outcrops.push(c);
@@ -313,7 +453,7 @@ export function createIsland(scene, quality = "medium") {
     }
   }
   const stoneGeo = new THREE.DodecahedronGeometry(1, 0);
-  instanced(stoneGeo, new THREE.MeshStandardMaterial({ color: 0x7f796c, flatShading: true, roughness: 0.95 }), stones, (o) => {
+  instanced(stoneGeo, new THREE.MeshStandardMaterial({ color: look.stone, flatShading: true, roughness: 0.95 }), stones, (o) => {
     p.set(o.x, heightAt(o.x, o.z) + o.s * o.tall * 0.55, o.z);
     q.setFromEuler(new THREE.Euler(o.tilt, o.r, -o.tilt * 0.6));
     s.set(o.s, o.s * o.tall, o.s * 0.9);
@@ -334,7 +474,7 @@ export function createIsland(scene, quality = "medium") {
         z = pk.z + Math.sin(a) * d;
       if (Math.hypot(x, z) < ISLAND.beach && mountainClear(x, z) > 1) boulders.push({ x, z, s: 0.7 + rng() * 1.1, r: rng() * TAU });
     }
-  instanced(stoneGeo, new THREE.MeshStandardMaterial({ color: 0x8b8679, flatShading: true }), boulders, (o) => {
+  instanced(stoneGeo, new THREE.MeshStandardMaterial({ color: new THREE.Color(look.stone).offsetHSL(0, -0.03, 0.05), flatShading: true }), boulders, (o) => {
     p.set(o.x, heightAt(o.x, o.z) + o.s * 0.3, o.z);
     q.setFromEuler(new THREE.Euler(o.r, o.r * 2, 0));
     s.set(o.s, o.s * 0.7, o.s);
@@ -343,10 +483,10 @@ export function createIsland(scene, quality = "medium") {
 
   /* Trees: a few groves and lone trees. The plains stay open. */
   const trees = [];
-  for (let g = 0; g < 14; g++) {
+  for (let g = 0; g < REGION.trees.groves; g++) {
     const c = spot(20, ISLAND.beach - 12, 6, keepClear);
     if (!c) continue;
-    const count = Math.round((4 + rng() * 4) * scaleQ) + 1;
+    const count = Math.round((REGION.trees.perGrove + rng() * 4) * scaleQ) + 1;
     for (let k = 0; k < count; k++) {
       const a = rng() * TAU,
         d = rng() * 9;
@@ -355,25 +495,16 @@ export function createIsland(scene, quality = "medium") {
       if (isOpen(x, z, 1.5) && !keepClear.some((o) => Math.hypot(o.x - x, o.z - z) < o.r)) trees.push({ x, z, s: 0.8 + rng() * 0.6, r: rng() * TAU });
     }
   }
-  for (let i = 0; i < Math.round(28 * scaleQ); i++) {
+  for (let i = 0; i < Math.round(REGION.trees.lone * scaleQ); i++) {
     const t = spot(15, ISLAND.beach - 6, 3, keepClear);
     if (t) trees.push({ ...t, s: 0.9 + rng() * 0.6, r: rng() * TAU });
   }
-  instanced(new THREE.CylinderGeometry(0.35, 0.55, 5, 7).translate(0, 2.5, 0), new THREE.MeshStandardMaterial({ color: 0x6f5236 }), trees, (o) => {
-    p.set(o.x, heightAt(o.x, o.z) - 0.2, o.z);
-    q.setFromAxisAngle(yAxis, o.r);
-    s.setScalar(o.s);
-  });
-  instanced(new THREE.IcosahedronGeometry(2.8, 1), new THREE.MeshStandardMaterial({ color: 0x3f8f45, flatShading: true }), trees, (o) => {
-    p.set(o.x, heightAt(o.x, o.z) + 5.6 * o.s, o.z);
-    q.setFromAxisAngle(yAxis, o.r);
-    s.set(o.s, o.s * 0.85, o.s);
-  });
-  trees.forEach((o) => grid.add({ x: o.x, z: o.z, r: 0.8 * o.s }));
+  plantTrees(trees);
+  trees.forEach((o) => grid.add({ x: o.x, z: o.z, r: (o.kind === "cactus" ? 0.6 : 0.8) * o.s }));
 
-  // Beach palms.
+  // Beach palms (on the coast).
   const palms = [];
-  for (let i = 0; i < Math.round(45 * scaleQ); i++) {
+  for (let i = 0; REGION.palms && i < Math.round(45 * scaleQ); i++) {
     const a = rng() * TAU,
       d = ISLAND.beach + 2 + rng() * 18;
     const x = Math.cos(a) * d,
@@ -398,13 +529,13 @@ export function createIsland(scene, quality = "medium") {
     const parts = [0, 1, 2].map((k) => blade.clone().rotateZ((k - 1) * 0.35).rotateY(k * 2.1).translate((k - 1) * 0.12, 0, 0));
     const tuftGeo = mergeGeometries(parts);
     const tufts = [];
-    const want = quality === "low" ? 350 : quality === "medium" ? 800 : 1400;
+    const want = Math.round((quality === "low" ? 350 : quality === "medium" ? 800 : 1400) * REGION.tufts);
     for (let i = 0; tufts.length < want && i < want * 3; i++) {
       const a = rng() * TAU,
         d = Math.sqrt(rng()) * (ISLAND.beach - 6);
       const x = Math.cos(a) * d,
         z = Math.sin(a) * d;
-      if (mountainRise(x, z) < 1.2) tufts.push({ x, z, s: 0.7 + rng() * 0.8, r: rng() * TAU, shade: rng() });
+      if (mountainRise(x, z) < 1.2 && !wet(x, z, -1.5)) tufts.push({ x, z, s: 0.7 + rng() * 0.8, r: rng() * TAU, shade: rng() });
     }
     const mesh = instanced(tuftGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 }), tufts, (o) => {
       p.set(o.x, heightAt(o.x, o.z) - 0.05, o.z);
@@ -412,13 +543,15 @@ export function createIsland(scene, quality = "medium") {
       s.set(o.s, o.s * (0.8 + o.shade * 0.5), o.s);
     });
     const col = new THREE.Color();
-    tufts.forEach((o, i) => mesh.setColorAt(i, col.setHSL(0.26 + o.shade * 0.05, 0.5, 0.36 + o.shade * 0.12)));
+    // Each region's grass: lush green, olive marsh grass, dry red-brown scrub, grey ash.
+    const tint = { coast: [0.26, 0.5, 0.36], forest: [0.3, 0.5, 0.3], swamp: [0.2, 0.42, 0.3], badlands: [0.08, 0.45, 0.42], volcanic: [0.07, 0.12, 0.3] }[REGION.id];
+    tufts.forEach((o, i) => mesh.setColorAt(i, col.setHSL(tint[0] + o.shade * 0.05, tint[1], tint[2] + o.shade * 0.12)));
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   }
 
   // Fruit bushes: food for plant eaters. Fruit regrows.
   const bushes = [];
-  for (let i = 0; i < Math.round(95 * scaleQ); i++) {
+  for (let i = 0; i < Math.round(REGION.bushes * scaleQ); i++) {
     const b = spot(10, ISLAND.beach + 12, 2.5, [{ ...start, r: 6 }]);
     if (b) bushes.push(b);
   }
@@ -431,7 +564,7 @@ export function createIsland(scene, quality = "medium") {
         z = n.z + Math.sin(a) * (8 + rng() * 6);
       if (isOpen(x, z, 1.5, ISLAND.beach + 12)) bushes.push({ x, z });
     }
-  instanced(new THREE.IcosahedronGeometry(1.2, 1), new THREE.MeshStandardMaterial({ color: 0x3f8f52, flatShading: true }), bushes, (o) => {
+  instanced(new THREE.IcosahedronGeometry(1.2, 1), new THREE.MeshStandardMaterial({ color: look.bush, flatShading: true }), bushes, (o) => {
     p.set(o.x, heightAt(o.x, o.z) + 0.6, o.z);
     q.identity();
     s.set(1.2, 0.9, 1.2);
@@ -447,18 +580,56 @@ export function createIsland(scene, quality = "medium") {
   });
   // Fruit up in two trees of every three, as in Spore: knock it down (charge, bite or strike the
   // trunk) or be tall enough to reach it.
-  const fruitTrees = trees.filter((_, i) => i % 3 !== 2);
+  const fruitTrees = trees.filter((t, i) => i % 3 !== 2 && (t.kind === "broadleaf" || t.kind === "mangrove"));
   fruitTrees.forEach((t) => {
     const ground = heightAt(t.x, t.z);
     for (let f = 0; f < 3; f++) {
       const a = t.r + (f / 3) * TAU;
-      const x = t.x + Math.cos(a) * 2.5 * t.s,
-        z = t.z + Math.sin(a) * 2.5 * t.s;
-      const hangY = ground + 4.6 * t.s;
+      const reachOut = t.kind === "mangrove" ? 3.2 : 2.5;
+      const x = t.x + Math.cos(a) * reachOut * t.s,
+        z = t.z + Math.sin(a) * reachOut * t.s;
+      const hangY = ground + (t.kind === "mangrove" ? 3.6 : 4.6) * t.s;
       fruits.push({ x, z, y: hangY, alive: true, regrow: 0, tree: t, hangY, groundY: heightAt(x, z) + 0.32, hanging: true, vy: 0, rot: 0 });
     }
   });
-  const fruitMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.32, 10, 8), new THREE.MeshStandardMaterial({ color: 0xff5a7a, roughness: 0.35, emissive: 0x401020 }), fruits.length);
+  /* Water and lava. Swamp pools are murky; lava glows and pulses (and is a wall). */
+  const pulsing = [];
+  for (const pl of POOLS) {
+    const lava = pl.kind === "lava";
+    const disc = new THREE.Mesh(
+      new THREE.CircleGeometry(pl.r * (lava ? 0.86 : 0.98), 28).rotateX(-Math.PI / 2),
+      lava ? new THREE.MeshBasicMaterial({ color: 0xff6a1a, fog: true }) : new THREE.MeshStandardMaterial({ color: 0x4f6142, transparent: true, opacity: 0.86, roughness: 0.2 }),
+    );
+    disc.position.set(pl.x, lava ? 0.45 : 0.26, pl.z);
+    group.add(disc);
+    if (lava) pulsing.push(disc);
+  }
+  for (const pk of PEAKS)
+    if (pk.profile === "volcano") {
+      // The crater glows.
+      const glow = new THREE.Mesh(new THREE.CircleGeometry(pk.r * 0.16, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff7a24 }));
+      glow.position.set(pk.x, heightAt(pk.x, pk.z) + 0.3, pk.z);
+      group.add(glow);
+      pulsing.push(glow);
+    }
+  // Reeds round the swamp's pools and along its shore.
+  if (REGION.reeds) {
+    const reeds = [];
+    const rr = makeRng(REGION.seed + 11);
+    for (const pl of POOLS)
+      for (let k = 0; k < Math.round(pl.r * 2.2 * scaleQ); k++) {
+        const a = rr() * TAU,
+          d = pl.r * (0.75 + rr() * 0.4);
+        reeds.push({ x: pl.x + Math.cos(a) * d, z: pl.z + Math.sin(a) * d, s: 0.8 + rr() * 0.7, r: rr() * TAU });
+      }
+    const reed = mergeGeometries([0, 1, 2, 3].map((k) => new THREE.CylinderGeometry(0.03, 0.05, 2.2, 4).translate(0, 1.1, 0).rotateZ((k - 1.5) * 0.12).translate((k - 1.5) * 0.15, 0, 0)));
+    instanced(reed, new THREE.MeshStandardMaterial({ color: 0x8a9a4a }), reeds, (o) => {
+      p.set(o.x, Math.max(0.2, heightAt(o.x, o.z)) - 0.1, o.z);
+      q.setFromAxisAngle(yAxis, o.r);
+      s.setScalar(o.s);
+    });
+  }
+  const fruitMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.32, 10, 8), new THREE.MeshStandardMaterial({ color: look.fruit, roughness: 0.35, emissive: new THREE.Color(look.fruit).multiplyScalar(0.22) }), fruits.length);
   group.add(fruitMesh);
   const syncFruit = () => {
     fruits.forEach((f, i) => {
@@ -578,12 +749,12 @@ export function createIsland(scene, quality = "medium") {
     sunDay = new THREE.Color(0xfff1d6),
     sunNight = new THREE.Color(0x9fb4ff);
   scene.add(hemi, sun);
-  const skyDay = new THREE.Color(0x9fd6ee),
-    skyDusk = new THREE.Color(0xf0a274),
-    skyNight = new THREE.Color(0x10203a);
+  const skyDay = new THREE.Color(REGION.sky.day),
+    skyDusk = new THREE.Color(REGION.sky.dusk),
+    skyNight = new THREE.Color(REGION.sky.night);
   scene.background = skyDay.clone();
-  // The plains are open: see far enough to spot the mountains and the next nest.
-  scene.fog = new THREE.Fog(skyDay.clone(), 90, 240);
+  // Open regions see far (spot the mountains and the next nest); the forest and swamp close in.
+  scene.fog = new THREE.Fog(skyDay.clone(), REGION.fog[0], REGION.fog[1]);
   const DAY_LENGTH = 300; // seconds for a full day
   let clock = DAY_LENGTH * 0.3;
 
@@ -592,7 +763,20 @@ export function createIsland(scene, quality = "medium") {
     return resolveMountains(a.x, a.z, r);
   };
 
+  // Where you arrive (the south shore) and where a migration leaves for the next region (the far north).
+  const exitSpot = (() => {
+    let best = null;
+    for (let rad = 0; rad < 60 && !best; rad += 3)
+      for (let k = 0; k < 16 && !best; k++) {
+        const x = Math.cos((k / 16) * TAU) * rad,
+          z = -ISLAND.beach + 14 + Math.sin((k / 16) * TAU) * rad;
+        if (isOpen(x, z, 6, ISLAND.beach + 4)) best = { x, z };
+      }
+    return best || { x: 0, z: -ISLAND.beach + 14 };
+  })();
   return {
+    region: REGION,
+    exitSpot,
     group,
     fruits,
     nestSites,
@@ -627,6 +811,10 @@ export function createIsland(scene, quality = "medium") {
     /** 0..1 through the day; night when > 0.62. */
     get timeOfDay() {
       return (clock % DAY_LENGTH) / DAY_LENGTH;
+    },
+    /** Jump the clock to a point in the day (0..1), e.g. after sleeping through the night. */
+    setTimeOfDay(t) {
+      clock = Math.floor(clock / DAY_LENGTH) * DAY_LENGTH + ((t % 1) + 1) % 1 * DAY_LENGTH;
     },
     get isNight() {
       const t = (clock % DAY_LENGTH) / DAY_LENGTH;
@@ -677,6 +865,7 @@ export function createIsland(scene, quality = "medium") {
         }
       });
       if (moved) syncFruit();
+      pulsing.forEach((m, i) => m.material.color.setHSL(0.05 + 0.015 * Math.sin(clock * 1.7 + i), 1, 0.5 + 0.06 * Math.sin(clock * 2.3 + i * 1.3)));
       bonePiles.forEach((b) => {
         if (b.taken) return;
         b.glint.rotation.y += dt * 1.6;

@@ -4,6 +4,7 @@ import { createBackground, createWaterFx } from "./gfx/background.js";
 import { createFoodBatch, createFoodModel } from "./gfx/food.js";
 import { createDebris, createPlantColony } from "./gfx/flora.js";
 import { createFxPool } from "./gfx/fx.js";
+import { ZONES, plantShareIn, zoneAt } from "./cell/zones.js";
 import { GROWTH_STAGES, LAST_TIER, meteorPool, preyFor, stageFor, stageScale, unlockHint } from "./stages.js";
 import { dietPath } from "./traits.js";
 import { createTipEngine } from "./tutorials.js";
@@ -11,13 +12,32 @@ import { hideTip, openHistoryScreen, pathScreenOpen, popCard, showTip, updateDie
 import { createAudio } from "./audio.js";
 import { loadSettings, openSettings, saveSettings } from "./settings.js";
 import { createTribeStage, loadTribeSave } from "./tribe/stage.js";
-import { markSaved, switchSlot } from "./slots.js";
+import { createCivStage } from "./civ/stage.js";
+import { CIV_CARDS, CIV_SAVE_KEY, readCivSave } from "./civ/rules.js";
+import { markSaved } from "./slots.js";
 import { capsuleGap, leadTarget, pointCapsuleGap, resolveCollisions, steerHeading, strokePulse } from "./cell-physics.js";
 import { createCreatureStage } from "./creature/stage.js";
 import { openCreatureEditor } from "./creature/editor.js";
 import { buildCreatureBody } from "./creature/body3d.js";
-import { CREATURE_SAVE_KEY, creatureFromCell, creaturePartIds } from "./creature/format.js";
-import { CREATURE_CARDS } from "./traits.js";
+import { CREATURE_SAVE_KEY, creatureFromCell, creaturePartIds, partsLimit } from "./creature/format.js";
+import { CREATURE_CARDS, DIET_CARDS } from "./traits.js";
+import { CHRONICLE_KEY, addEvent, creatureCardFor, eventsFromSaves, readChronicle, trackSummary, tribeLegacy } from "./lineage.js";
+import { regionById } from "./creature/regions.js";
+import { openStore } from "./universe/store.js";
+import { bootUniverses, createUniverse, currentKeys, parkActive } from "./universe/manager.js";
+import { newSeed, summarize, uniqueName } from "./universe/model.js";
+import { pedia as pediaStore } from "./universe/pedia-store.js";
+import { emptyPedia } from "./pedia/model.js";
+import { createSession } from "./universe/session.js";
+import { openUniverses } from "./universe/ui.js";
+import { openGalaxy } from "./galaxy/ui.js";
+import { createGalaxyStart } from "./galaxy/start.js";
+import { openPedia } from "./pedia/ui.js";
+import { asPedia, listGlobal, putGlobal, updateGlobal } from "./universe/global.js";
+import { readCreation } from "./creations/format.js";
+import { openModularEditor } from "./creations/editor.js";
+import { STARTER_DESIGNS } from "./creations/modular.js";
+import { CREATURE_PARTS } from "./creature/parts.js";
 import { timeUniform } from "./gfx/materials.js";
 import { renderCellSnapshot, renderPartThumbnails } from "./gfx/thumbs.js";
 import { SPECIES, chooseSpecies, speciesRecord } from "./species.js";
@@ -460,7 +480,8 @@ function openGameSettings() {
   settingsOpen = true;
   // Everything holds still while the panel is open.
   const wasPaused = state.paused;
-  if (tribeStage) tribeStage.setPaused(true);
+  if (civStage) civStage.setPaused(true);
+  else if (tribeStage) tribeStage.setPaused(true);
   else if (creatureStage && !creatureEditor) creatureStage.setPaused(true);
   else state.paused = true;
   openSettings({
@@ -476,22 +497,11 @@ function openGameSettings() {
       applyQuality(q);
       refreshQualityButton();
     },
-    onSwitchSlot: (n) => {
-      // Save the game in play first, then park it and load the other slot.
-      if (tribeStage) tribeStage.save();
-      else if (creatureStage) creatureStage.save();
-      else saveGame(true);
-      try {
-        switchSlot(localStorage, n);
-      } catch (e) {
-        toast("Couldn't switch save slots: storage is unavailable.");
-        return;
-      }
-      location.reload();
-    },
+    onOpen: (screen) => (screen === "title" ? backToTitle() : openUniverseScreen(screen)),
     onClose: () => {
       settingsOpen = false;
-      if (tribeStage) tribeStage.setPaused(false);
+      if (civStage) civStage.setPaused(false);
+      else if (tribeStage) tribeStage.setPaused(false);
       else if (creatureStage && !creatureEditor) creatureStage.setPaused(false);
       else state.paused = wasPaused;
     },
@@ -1439,7 +1449,7 @@ function setEditor(on) {
     toast("Find a mate to evolve: the editor opens when your next generation is born.");
     return;
   }
-  if (!on && state.editor && !hasMouth()) {
+  if (!on && state.editor && !hasMouth() && !cellSandboxClosing) {
     toast("Your cell needs a mouth first: drag on the Filter (plants) or the Jaw (meat).");
     if (isTouchUI()) document.body.classList.add("show-parts");
     return;
@@ -1501,7 +1511,8 @@ function setEditor(on) {
   if (on) {
     progress.editorOpenedAt = gameTime;
     progress.unlockedSinceEditor = 0;
-  } else if (wasEditing) {
+  } else if (wasEditing && !cellSandboxClosing) {
+    // A sandbox edit (from the Sporepedia) is not a new generation.
     progress.editorPass = false;
     recordGeneration();
     if (state.runStarted) saveGame(true);
@@ -1783,8 +1794,14 @@ function eat(f) {
   state.foodSinceMate++;
   if (type === "plant") state.plants++;
   else state.meat++;
-  // DNA trickles in: about one strand per three bites of plant, a little faster for meat chunks.
-  state.dnaProgress = (state.dnaProgress || 0) + (f.userData.kind === "chunk" ? 0.6 : 0.34);
+  // DNA trickles in: about one strand per three bites of plant, a little faster for meat chunks,
+  // and faster in the deeper zones.
+  state.dnaProgress = (state.dnaProgress || 0) + (f.userData.kind === "chunk" ? 0.6 : 0.34) * ZONES[cellZone].dna;
+  // Scavenging: eating the remains of dead cells.
+  if (f.userData.kind === "chunk" && f.userData.temporary) {
+    progress.scavenged = (progress.scavenged || 0) + 1;
+    if (progress.scavenged === 1) toast("Scavenged the remains of a dead cell. Remains rot away, so be quick.");
+  }
   if (state.dnaProgress >= 1) {
     state.dna += Math.floor(state.dnaProgress);
     state.dnaProgress %= 1;
@@ -1958,6 +1975,7 @@ function completeCellStage() {
   const card = progress.dietCard || dietPath(state.plants, state.meat);
   progress.dietCard = card;
   progress.cellStageComplete = true;
+  recordChronicle({ key: "cell:complete", stage: "cell", icon: DIET_CARDS[card].icon, text: "Left the water as a " + DIET_CARDS[card].title.toLowerCase() + ", earning " + DIET_CARDS[card].ability + "." });
   storeCellRecord(localStorage, record);
   writeHandoff(localStorage, record, {
     plants: state.plants,
@@ -2016,6 +2034,43 @@ const creatureMoveInput = () => {
     keyX = (input.ArrowRight || input.d ? 1 : 0) - (input.ArrowLeft || input.a ? 1 : 0);
   return { x: THREE.MathUtils.clamp(keyX + state.joystick.x, -1, 1), y: THREE.MathUtils.clamp(keyY + state.joystick.y, -1, 1) };
 };
+/* ---- the species chronicle: one story across every stage (kept per save slot) ---------------- */
+function loadChronicle() {
+  try {
+    return readChronicle(localStorage.getItem(CHRONICLE_KEY));
+  } catch (e) {
+    return readChronicle(null);
+  }
+}
+function recordChronicle(ev) {
+  const ch = loadChronicle();
+  if (!addEvent(ch, ev)) return;
+  try {
+    localStorage.setItem(CHRONICLE_KEY, JSON.stringify(ch));
+  } catch (e) {
+    /* storage full or unavailable: the moment is only lost from the history screen */
+  }
+}
+/** Saves from before the chronicle existed: fill it once from what they prove. */
+function seedChronicle() {
+  try {
+    if (localStorage.getItem(CHRONICLE_KEY)) return;
+  } catch (e) {
+    return;
+  }
+  const ch = loadChronicle();
+  eventsFromSaves({
+    cell: { cellStageComplete: progress.cellStageComplete, dietCard: progress.dietCard },
+    creature: loadCreatureSave(),
+    tribe: loadTribeSave(),
+    regionName: (id) => regionById(id).name,
+  }).forEach((ev, i) => addEvent(ch, ev, i));
+  try {
+    localStorage.setItem(CHRONICLE_KEY, JSON.stringify(ch));
+  } catch (e) {
+    /* nothing to do */
+  }
+}
 function loadCreatureSave() {
   try {
     const raw = localStorage.getItem(CREATURE_SAVE_KEY);
@@ -2062,9 +2117,11 @@ function startCreatureStage(resume = false, intro = false) {
     isTouch: isTouchUI,
     onMate: (d) => openCreatureEditorFor({ ...d, mated: true }, false),
     onGeneration: endCreatureGeneration,
+    onChronicle: recordChronicle,
     onCard: (id) => {
       const card = CREATURE_CARDS[id];
       progress.creatureCard = id;
+      recordChronicle({ key: "creature:card", stage: "creature", icon: card.icon, text: "Earned the " + card.title + " trait: " + card.ability + "." });
       popCard({ kind: "Creature card · " + card.trait + " consequence trait", title: card.title + ": " + card.ability, text: card.text, icon: card.icon, color: card.color });
       saveGame(true);
     },
@@ -2076,6 +2133,12 @@ function startCreatureStage(resume = false, intro = false) {
     portrait: (rec) => creatureSnapshot(rec, { width: 120, height: 90 }),
     reducedMotion: () => settings.reducedMotion,
     onExit: () => stopCreatureStage(),
+    // Moving to another region: rebuild the stage there from the save it just wrote.
+    onChangeRegion: () => {
+      if (!creatureStage) return;
+      stopCreatureStage(false);
+      startCreatureStage(true, false);
+    },
     intro: fresh && intro,
     onIntroDone: () => {
       document.body.classList.remove("cinematic");
@@ -2100,6 +2163,8 @@ function openCreatureEditorFor(d, arrival) {
     record: d.record,
     unlocked: d.unlocked,
     dna: d.dna,
+    // The part budget grows with the brain (never below what the creature already has).
+    maxParts: partsLimit(creatureStage?.debug?.P?.brain || 1),
     quality: getQuality(),
     sfx: playSfx,
     onDone: (record, dnaLeft) => {
@@ -2150,9 +2215,11 @@ function beginCreatureGeneration() {
     extinctions: 0,
     deaths: 0,
     thumb: creatureSnapshot(P.record),
+    record: JSON.parse(JSON.stringify(P.record)),
     ended: false,
   });
   storeHistory();
+  syncPedia();
 }
 function stopCreatureStage(toSoup = true) {
   if (!creatureStage) return;
@@ -2169,15 +2236,49 @@ function stopCreatureStage(toSoup = true) {
   updateCamera();
   toast("Back in the primordial soup. Your land creature is saved.");
 }
-/* ---- Tribe Stage (early prototype) ----------------------------------------------------
+/* ---- Tribal Stage -------------------------------------------------------------------
    Your creature's species, settled in a village. Reached from the Creature Stage's menu; it keeps
    its own save, and leaving it drops you back into the Creature Stage where you left off. */
 let tribeStage = null;
+/** The building, vehicle or spaceship editor, when open. It takes over the frame while it is. */
+let modularEditor = null;
+/**
+ * Open the modular editor for a design. Stages pause underneath (the frame loop only drives the editor).
+ * @param {"building"|"vehicle"|"ship"} kind
+ * @param {object} [design]  defaults to a starter design of the first allowed role
+ * @param {{ roles?:string[], onDone?:(design:object, stats:object)=>void, onCancel?:()=>void }} [opts]
+ */
+function openDesignEditor(kind, design, opts = {}) {
+  if (modularEditor || creatureEditor) return null;
+  const starters = STARTER_DESIGNS[kind] || {};
+  const base = design || starters[opts.roles?.[0]] || Object.values(starters)[0];
+  document.body.classList.add("designing");
+  const finish = () => {
+    modularEditor = null;
+    document.body.classList.remove("designing");
+  };
+  modularEditor = openModularEditor({
+    renderer,
+    kind,
+    design: JSON.parse(JSON.stringify(base)),
+    roles: opts.roles,
+    sfx: (k) => playSfx(k),
+    onDone: (d, st) => {
+      finish();
+      opts.onDone?.(d, st);
+    },
+    onCancel: () => {
+      finish();
+      opts.onCancel?.();
+    },
+  });
+  return modularEditor;
+}
 function startTribeStage(fallbackRecord = null) {
   if (tribeStage) return;
   const record = creatureStage ? creatureStage.record : loadCreatureSave()?.record || fallbackRecord;
   if (!record) {
-    toast("Reach land first: the Tribe Stage starts from your creature.");
+    toast("Reach land first: the Tribal Stage starts from your creature.");
     return;
   }
   if (creatureStage) {
@@ -2189,20 +2290,101 @@ function startTribeStage(fallbackRecord = null) {
   state.paused = true;
   document.body.classList.add("creatureMode", "tribeMode");
   audio.setAmbient("land");
+  // The tribe settles in the species' home region, with what its earlier stages earned.
+  const creatureSave = loadCreatureSave();
   tribeStage = createTribeStage({
     renderer,
     record,
     save: loadTribeSave(),
+    regionId: creatureSave?.homeRegion || "coast",
+    legacy: tribeLegacy(progress.dietCard || dietPath(state.plants, state.meat), creatureCardFor(creatureSave)),
+    onChronicle: recordChronicle,
+    onHistory: openPath,
     quality: getQuality(),
     sfx: playSfx,
     onSettings: openGameSettings,
     onSaved: () => markSaved(localStorage),
     portrait: (rec) => creatureSnapshot(rec, { width: 96, height: 96 }),
+    onCivilization: () => {
+      stopTribeStage();
+      startCivStage();
+    },
     onExit: () => {
       stopTribeStage();
       startCreatureStage(true);
     },
   });
+}
+let civStage = null;
+function loadCivSave() {
+  try {
+    return readCivSave(localStorage.getItem(CIV_SAVE_KEY));
+  } catch (e) {
+    return null;
+  }
+}
+/** The Civilization Stage, on the tribe's island, with what every earlier stage earned. */
+function startCivStage() {
+  if (civStage) return;
+  const ts = loadTribeSave();
+  const cs = loadCreatureSave();
+  if (creatureStage) {
+    creatureStage.save();
+    stopCreatureStage(false);
+  }
+  if (tribeStage) stopTribeStage();
+  stickEnd();
+  hideTip();
+  state.paused = true;
+  document.body.classList.add("inGameMode", "creatureMode", "tribeMode", "civMode");
+  $("#intro").style.display = "none";
+  state.runStarted = true;
+  audio.setAmbient("land");
+  const creatureCard = creatureCardFor(cs);
+  civStage = createCivStage({
+    renderer,
+    save: loadCivSave(),
+    regionId: ts?.region || cs?.homeRegion || "coast",
+    quality: getQuality(),
+    name: ts?.look?.name || cs?.record?.name || state.cellName || "Your nation",
+    color: ts?.look?.color ?? 0x3fa9d6,
+    legacy: {
+      cellDiet: progress.dietCard || dietPath(state.plants, state.meat),
+      creatureCard: creatureCard ? CREATURE_CARDS[creatureCard]?.title : null,
+      tribeTrait: ts?.path ? { peace: "Diplomatic", balance: "Industrious", conquest: "Warlike" }[ts.path] : null,
+    },
+    sfx: playSfx,
+    openEditor: (kind, design, opts) => openDesignEditor(kind, design, opts),
+    onCreation: (kind, design) => {
+      if (!universe) return;
+      universe.session.record({ id: "design:" + kind + ":" + design.role + ":" + Date.now().toString(36), kind, owned: true, name: design.name, sub: (kind === "building" ? "Building" : "Vehicle") + " · " + design.role, stage: "Civilization", design, place: "Home" });
+    },
+    onChronicle: recordChronicle,
+    onHistory: openPath,
+    onSettings: openGameSettings,
+    onSaved: () => markSaved(localStorage),
+    onWon: () => syncPedia(),
+    onRestart: () => {
+      try {
+        localStorage.removeItem(CIV_SAVE_KEY);
+      } catch (e) {
+        /* storage blocked: the stage restarts from memory */
+      }
+      stopCivStage();
+      startCivStage();
+    },
+    onExit: () => {
+      stopCivStage();
+      startTribeStage();
+    },
+  });
+}
+function stopCivStage() {
+  if (!civStage) return;
+  civStage.save();
+  civStage.dispose();
+  civStage = null;
+  document.body.classList.remove("civMode");
 }
 function stopTribeStage() {
   if (!tribeStage) return;
@@ -2573,7 +2755,7 @@ function onPointerDown(e) {
   if ($("#intro").style.display !== "none" || $("#hatchCinematic").style.display === "flex" || $("#dialogOverlay").style.display === "flex")
     return;
   // On land, the left half of the screen is the joystick and the right half turns the camera.
-  if (tribeStage || creatureEditor || (creatureStage && (e.pointerType === "mouse" || e.clientX > innerWidth * 0.5))) return;
+  if (tribeStage || civStage || creatureEditor || modularEditor || (creatureStage && (e.pointerType === "mouse" || e.clientX > innerWidth * 0.5))) return;
   canvas.setPointerCapture(e.pointerId);
   if (!state.editor && e.pointerType !== "mouse") {
     if (touchStick.pointer === null) stickStart(e, e.clientX, e.clientY, true);
@@ -3562,7 +3744,10 @@ function spawnRegionNPC(spot, pack = null) {
     prey = preyFor(state.tier),
     giants = stageFor(state.tier).giants;
   let species;
-  if (roll < 0.22 && prey.length) species = prey[Math.floor(Math.random() * prey.length)];
+  // Deeper zones hold more hunters.
+  const huntersHere = !pack && Math.random() < ZONES[cellZone].hunters ? regionSpecies(spot.x, spot.y).filter((sp) => SPECIES[sp]?.diet === "meat") : [];
+  if (huntersHere.length) species = huntersHere[Math.floor(Math.random() * huntersHere.length)];
+  else if (roll < 0.22 && prey.length) species = prey[Math.floor(Math.random() * prey.length)];
   else if (roll < 0.3 && giants.length && !enemies.some((e) => e.userData.alive && e.userData.giant)) species = giants[Math.floor(Math.random() * giants.length)];
   else if (pack) species = pack;
   else {
@@ -3607,10 +3792,59 @@ function refreshKin() {
     });
 }
 
+/* ---- zones of the microscopic ocean: shallows → kelp / vents → twilight → trench ------------- */
+let cellZone = "shallows";
+const zonesSeen = new Set(["shallows"]);
+/** Check which zone the cell is in; on a change, the soup around it changes too. */
+function updateZone() {
+  const z = zoneAt(player.position.x, player.position.y);
+  if (z === cellZone) return;
+  cellZone = z;
+  const info = ZONES[z];
+  const label = document.getElementById("zoneLabel");
+  if (label) {
+    label.innerHTML = `<span aria-hidden="true">${info.icon}</span><b>${info.name}</b>`;
+    label.title = info.name + ": " + info.desc;
+  }
+  document.getElementById("depthShade").style.opacity = String(info.dark);
+  if (!zonesSeen.has(z)) {
+    zonesSeen.add(z);
+    toast(info.icon + " " + info.name + ": " + info.desc);
+    // The first visit to a new depth is worth a little DNA.
+    state.dna += 3 + info.depth * 2;
+    updateHUD();
+    if (z === "trench") recordChronicle({ key: "cell:trench", stage: "cell", icon: "🌑", text: "Dived into the Abyssal Trench." });
+  }
+  rezoneFood();
+}
+/**
+ * Off-screen food takes on the new zone's mix, and deep zones get drifting remains to scavenge
+ * ("marine snow"), so the soup visibly changes as you go deeper.
+ */
+function rezoneFood() {
+  const share = plantShareIn(cellZone, WORLD_TUNING.plantShare[stats().diet] ?? 0.55);
+  const far = viewRadius() * 1.1;
+  const swap = food.filter((f) => f.userData.alive && f.userData.kind === "particle" && !f.userData.colony && distance2D(f.position, player.position) > far);
+  for (const f of swap) {
+    const want = Math.random() < share ? "plant" : "meat";
+    if (want === f.userData.type) continue;
+    const { x, y } = f.position;
+    f.userData.alive = false;
+    f.userData.temporary = "gone";
+    addFood(want, x, y, "particle");
+  }
+  const extra = Math.round(tuned(WORLD_TUNING.meatChunks) * (ZONES[cellZone].chunks - 1));
+  for (let i = 0; i < extra; i++) {
+    const p = ringSpot();
+    const c = addFood("meat", p.x, p.y, "chunk");
+    c.userData.temporary = true;
+    c.userData.remains = true;
+  }
+}
 function spawnWorld() {
   clearWorldEntities();
   const diet = stats().diet,
-    plantShare = WORLD_TUNING.plantShare[diet] ?? 0.55;
+    plantShare = plantShareIn(cellZone, WORLD_TUNING.plantShare[diet] ?? 0.55);
   for (let n = 0; n < tuned(WORLD_TUNING.foodParticles); n++) {
     const p = discSpot(1);
     addFood(Math.random() < plantShare ? "plant" : "meat", p.x, p.y, "particle");
@@ -4170,6 +4404,7 @@ function updateGame(dt, time) {
       (e) => e.userData.alive && e.userData.diet === "meat" && !e.userData.kin && e.userData.size > state.scale * 0.7 && distance2D(e.position, player.position) < 5 + state.scale * 2,
     );
     document.body.classList.toggle("dangerNear", danger);
+    updateZone();
     maintainWorld();
     state.streamTimer = 0.3;
   }
@@ -4265,13 +4500,16 @@ function bindUI() {
     updateSporeEditorChrome();
   };
   const cancelCellEdit = () => {
+    if (endCellSandbox(false)) return;
     if (editorEntrySnapshot) restoreEditState(editorEntrySnapshot);
     setEditor(false);
     if (!state.editor) toast("Cell edits cancelled");
   };
   const acceptCellEdit = () => {
+    if (endCellSandbox(true)) return;
     state.cellName = ($("#cellName").value || "Karlets").trim().slice(0, 22);
     saveGame();
+    setTimeout(syncPedia, 50);
     setEditor(false);
     if (!state.editor) toast("Cell edits accepted");
   };
@@ -4422,7 +4660,7 @@ function bindUI() {
     if (!root) return;
     const toggle = $("#devStagesToggle"),
       menu = $("#devStagesMenu");
-    const currentStage = () => (tribeStage ? "tribe" : creatureStage ? "creature" : "cell");
+    const currentStage = () => (civStage ? "civ" : tribeStage ? "tribe" : creatureStage ? "creature" : "cell");
     const setOpen = (open) => {
       menu.hidden = !open;
       toggle.setAttribute("aria-expanded", String(open));
@@ -4470,9 +4708,11 @@ function bindUI() {
       setOpen(false);
       if (state.runStarted && stage === currentStage()) return;
       clearScreens();
+      if (civStage) stopCivStage();
       if (stage === "cell") {
-        if (tribeStage) {
-          stopTribeStage();
+        if (tribeStage || document.body.classList.contains("tribeMode")) {
+          if (tribeStage) stopTribeStage();
+          document.body.classList.remove("tribeMode");
           backToSoup();
         } else if (creatureStage) stopCreatureStage(true);
         else if (!state.runStarted && !hasCellSave()) return chooseEgg("plant");
@@ -4486,6 +4726,10 @@ function bindUI() {
       if (stage === "creature") {
         if (tribeStage) stopTribeStage();
         startCreatureStage(!!loadCreatureSave(), false);
+        return;
+      }
+      if (stage === "civ") {
+        startCivStage();
         return;
       }
       startTribeStage(creatureFromCell(currentRecord(), state.cellName));
@@ -4685,6 +4929,7 @@ function bindUI() {
   })();
   if (loadCreatureSave()) {
     const lb = document.createElement("button");
+    lb.id = "contLand";
     lb.textContent = "Continue on land";
     lb.className = "primary";
     lb.onclick = () => {
@@ -4695,8 +4940,20 @@ function bindUI() {
       playSfx("hatch");
     };
     $("#intro .options").prepend(lb);
+    if (loadCivSave()) {
+      const vb = document.createElement("button");
+      vb.id = "contCiv";
+      vb.textContent = "Continue your civilization";
+      vb.className = "primary";
+      vb.onclick = () => {
+        startCivStage();
+        playSfx("hatch");
+      };
+      $("#intro .options").prepend(vb);
+    }
     if (loadTribeSave()) {
       const tb = document.createElement("button");
+      tb.id = "contTribe";
       tb.textContent = "Continue your tribe";
       tb.className = "primary";
       tb.onclick = () => {
@@ -4711,6 +4968,7 @@ function bindUI() {
   }
   if (resumeExists) {
     const rb = document.createElement("button");
+    rb.id = "contCell";
     rb.textContent = "Continue saved cell";
     rb.className = "primary";
     rb.onclick = () => {
@@ -4738,10 +4996,10 @@ function bindUI() {
     if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable))
       return;
     if ($("#intro").style.display !== "none" || $("#hatchCinematic").style.display === "flex") return;
-    if (tribeStage) return; // the tribe stage reads its own keys
+    if (tribeStage || civStage) return; // these stages read their own keys
     if (creatureStage) {
       // The land stage and its editor handle their own keys; movement goes through `input`.
-      if (creatureEditor || pathScreenOpen()) {
+      if (creatureEditor || modularEditor || pathScreenOpen()) {
         if (pathScreenOpen() && k === "Escape") $("#pathClose")?.click();
         return;
       }
@@ -4879,6 +5137,8 @@ function saveGame(silent = false) {
       cellStageComplete: progress.cellStageComplete,
       landReady: progress.landReady,
       editorPass: progress.editorPass && state.runStarted && state.tier > 1,
+      zones: [...zonesSeen],
+      scavenged: progress.scavenged || 0,
     },
   };
   try {
@@ -4931,7 +5191,9 @@ function loadGame() {
       landReady: !!pr.landReady || !!pr.cellStageComplete,
       editorPass: !!pr.editorPass,
       pendingBanner: pr.editorPass ? state.tier : 0,
+      scavenged: pr.scavenged || 0,
     });
+    (Array.isArray(pr.zones) ? pr.zones : []).forEach((z) => ZONES[z] && zonesSeen.add(z));
     worldSize = Math.pow(1.4, state.tier - 1);
     cameraZoom = 9 * stageScale(state.tier);
     cameraZoomTarget = cameraZoom;
@@ -4974,6 +5236,7 @@ function boot() {
   })();
   if (saveExists) {
     loadGame();
+    seedChronicle();
   } else {
     parts = [
       { id: "filter", def: defs.find((d) => d.id === "filter"), x: 1.13, y: 0, rotation: 0, scale: 1, costPaid: 0, source: "starter" },
@@ -5032,10 +5295,26 @@ function frame(t) {
   const dt = Math.min(0.04, Math.max(0.001, (t - lastTime) / 1000));
   lastTime = t;
   gameTime += dt;
+  tickPlaytime(dt);
   timeUniform.value = gameTime;
+  if (galaxyStart) {
+    galaxyStart.update(dt);
+    galaxyStart.render();
+    return;
+  }
+  if (modularEditor) {
+    modularEditor.update(dt);
+    modularEditor.render();
+    return;
+  }
   if (creatureEditor) {
     creatureEditor.update(dt);
     creatureEditor.render();
+    return;
+  }
+  if (civStage) {
+    civStage.update(dt);
+    civStage.render();
     return;
   }
   if (tribeStage) {
@@ -5174,12 +5453,495 @@ function recordGeneration() {
     diet: stats().diet,
     parts: parts.length,
     thumb,
+    // The real design, so the Sporepedia keeps the cell itself, not just its picture.
+    record: currentRecord(),
     ended: false,
   });
   storeHistory();
+  syncPedia();
+}
+/* ---- universes, the galaxy and the Sporepedia ----------------------------------------------
+   The universe in play keeps its game in the usual localStorage keys; its galaxy, discoveries and
+   Sporepedia live in IndexedDB through the session. Everything here starts after the game has
+   loaded, so a slow or missing IndexedDB never delays playing. */
+let universe = null; // { store, meta, session }
+let universeOpen = false;
+let playClock = 0;
+async function initUniverse() {
+  try {
+    const store = await openStore();
+    const { meta } = await bootUniverses(store, localStorage, { name: "First universe" });
+    const session = await createSession({
+      store,
+      meta,
+      onOwned: (entry) => putGlobal(store, meta, entry).catch(() => {}),
+      onEvent: (ev) => {
+        toast(ev.icon + " " + ev.text);
+        playSfx("unlock", { gain: 0.5 });
+      },
+    });
+    universe = { store, meta, session };
+    // The home world and its star are known from the start: this is where the species began.
+    const home = session.home();
+    const planet = session.planet(home.planetId);
+    if (planet && !session.pedia.entries["planet:" + planet.id]) {
+      session.visitStar(session.galaxy().stars[home.starId]);
+      session.visitPlanet(planet);
+    }
+    syncPedia();
+    const label = document.getElementById("uvActiveName");
+    if (label) label.textContent = meta.name;
+  } catch (e) {
+    console.warn("Universes unavailable", e);
+  }
+}
+/* ---- the galaxy start screen ------------------------------------------------------------------ */
+let galaxyStart = null;
+const BEGIN_KEY = "spore-begin"; // sessionStorage: a homeworld was just chosen, play the arrival
+/** The game opens on its galaxy. Continue resumes the furthest stage; New Game picks a homeworld. */
+function openStartScreen() {
+  let arrival = null;
+  try {
+    arrival = JSON.parse(window.sessionStorage.getItem(BEGIN_KEY) || "null");
+    window.sessionStorage.removeItem(BEGIN_KEY);
+  } catch (e) {
+    arrival = null;
+  }
+  if (arrival) return arriveOnHomeworld(arrival);
+  if (!universe) {
+    // No IndexedDB (private mode on some browsers): fall back to the plain title screen.
+    document.body.classList.remove("galaxyStart");
+    return;
+  }
+  const S = universe.session;
+  const info = summarize(currentKeys(localStorage));
+  const home = S.home();
+  const homePlanet = S.planet(home.planetId);
+  try {
+    galaxyStart = createGalaxyStart({
+      renderer,
+      seed: universe.meta.seed,
+      quality: getQuality(),
+      save: info.stage !== "New" ? { species: info.species, stage: info.stage + " Stage · " + info.detail, home: homePlanet ? "born on " + S.nameFor("planet:" + homePlanet.id, homePlanet.name) : null } : null,
+      homeStarId: info.stage !== "New" ? home.starId : null,
+      newSeed: () => newSeed(),
+      sfx: playSfx,
+      onContinue: () => {
+        closeStartScreen();
+        continueGame();
+      },
+      onLoad: () => openUniverseScreen("universes"),
+      onSettings: openGameSettings,
+      onBegin: (choice) => beginHomeworld(choice).catch((e) => {
+        console.warn(e);
+        closeStartScreen();
+        toast("Your new universe couldn't be saved: " + (e.message || "storage error"));
+      }),
+    });
+    document.body.classList.add("gsReady");
+  } catch (e) {
+    console.warn("Galaxy start screen unavailable", e);
+    closeStartScreen();
+  }
+}
+function closeStartScreen() {
+  galaxyStart?.dispose();
+  galaxyStart = null;
+  document.body.classList.remove("galaxyStart", "gsReady");
+  updateCamera();
+}
+/** Save everything and return to the galaxy. A fresh page load keeps it clean: one renderer, one loop. */
+function backToTitle() {
+  if (galaxyStart) return;
+  saveRunningGame();
+  universe?.session.flush();
+  setTimeout(() => location.reload(), 150);
+}
+/** Resume the furthest stage saved in this universe. */
+function continueGame() {
+  for (const id of ["contCiv", "contTribe", "contLand", "contCell"]) {
+    const b = document.getElementById(id);
+    if (b) return b.click();
+  }
+}
+/**
+ * A homeworld was chosen: make it a universe of its own (or the empty one in play), remember the
+ * star, the planet and its seeds, and reload into the Cell Stage on that world.
+ */
+async function beginHomeworld(choice) {
+  const { store } = universe;
+  const keys = currentKeys(localStorage);
+  const fresh = summarize(keys).stage === "New";
+  let meta = universe.meta;
+  const metas = (await store.all("meta")).filter((m) => m && m.id !== meta.id).map((m) => m.name);
+  const name = uniqueName(choice.planet.name, metas);
+  if (fresh && meta.seed === choice.seed) {
+    // Nothing played yet in this universe: it simply becomes this one.
+    meta.name = uniqueName(name, metas);
+  } else if (fresh) {
+    meta.seed = choice.seed;
+    meta.name = name;
+  } else {
+    saveRunningGame();
+    universe.session.flush();
+    meta = await createUniverse(store, localStorage, universe.meta, { name, seed: choice.seed });
+  }
+  meta.home = { planet: choice.planet.name, star: choice.star.name, t: 3 };
+  meta.lastPlayed = Date.now();
+  await store.put("meta", meta.id, meta);
+  const pedia = emptyPedia(choice.seed);
+  pedia.home = { starId: choice.starId, planetId: choice.planetId, chosen: true, at: Date.now() };
+  await pediaStore.put(store, meta.id, pedia);
+  if (fresh) {
+    // Keys of an untouched universe (settings-like leftovers) are cleared so the new world starts clean.
+    for (const k of Object.keys(keys)) localStorage.removeItem(k);
+  }
+  window.sessionStorage.setItem(BEGIN_KEY, JSON.stringify({ planet: choice.planet.name, star: choice.star.name, type: choice.planet.type, color: document.querySelector("#gsFade")?.style.background || "#0b1f3a" }));
+  location.reload();
+}
+/** After the dive: the homeworld's name, then the Cell Stage begins in its oceans. */
+function arriveOnHomeworld(a) {
+  document.body.classList.remove("galaxyStart", "gsReady");
+  const cover = document.createElement("div");
+  cover.className = "homeArrive";
+  cover.style.background = typeof a.color === "string" && /^(#[0-9a-f]{3,8}|rgb[^;]*)$/i.test(a.color) ? a.color : "#0b1f3a";
+  const p = document.createElement("p");
+  const small = document.createElement("small");
+  small.textContent = "HOMEWORLD";
+  p.append(small, String(a.planet || "Home").slice(0, 40));
+  cover.appendChild(p);
+  document.body.appendChild(cover);
+  recordChronicle({ key: "home:begin", stage: "cell", icon: "🪐", text: "Life began in the oceans of " + String(a.planet).slice(0, 40) + ", a world of the " + String(a.star).slice(0, 40) + " system." });
+  syncPedia();
+  setTimeout(() => {
+    $("#begin").click();
+    cover.style.opacity = "0";
+    setTimeout(() => cover.remove(), 1800);
+  }, 1400);
+}
+/** Pause whatever is running while a universe screen is open; returns the resume function. */
+function holdGame() {
+  const wasPaused = state.paused;
+  if (civStage) civStage.setPaused(true);
+  else if (tribeStage) tribeStage.setPaused(true);
+  else if (creatureStage && !creatureEditor) creatureStage.setPaused(true);
+  else state.paused = true;
+  return () => {
+    if (civStage) civStage.setPaused(false);
+    else if (tribeStage) tribeStage.setPaused(false);
+    else if (creatureStage && !creatureEditor) creatureStage.setPaused(false);
+    else state.paused = wasPaused;
+  };
+}
+function saveRunningGame() {
+  if (civStage) civStage.save();
+  else if (tribeStage) tribeStage.save();
+  else if (creatureStage) creatureStage.save();
+  else if (state.runStarted) saveGame(true);
+}
+function openUniverseScreen(screen, arg) {
+  if (universeOpen || creatureEditor) return;
+  if (!universe) return toast("Your universe is still loading. Try again in a moment.");
+  universeOpen = true;
+  const resume = holdGame();
+  const done = () => {
+    universeOpen = false;
+    resume();
+  };
+  const { session } = universe;
+  if (screen === "universes") {
+    syncPedia();
+    openUniverses({
+      store: universe.store,
+      ls: localStorage,
+      current: universe.meta,
+      sfx: playSfx,
+      beforeLeave: async () => {
+        saveRunningGame();
+        syncPedia();
+        session.flush();
+        await parkActive(universe.store, localStorage, universe.meta);
+      },
+      reload: () => location.reload(),
+      onClose: () => {
+        const label = document.getElementById("uvActiveName");
+        if (label) label.textContent = universe.meta.name;
+        done();
+      },
+    });
+  } else if (screen === "galaxy") {
+    openGalaxy({
+      session,
+      sfx: playSfx,
+      portrait: (rec) => creatureSnapshot(rec, { width: 96, height: 96 }),
+      focus: arg,
+      openEntry: (id) => {
+        universeOpen = false;
+        openUniverseScreen("pedia", id);
+        universeOpen = true;
+      },
+      onClose: done,
+    });
+  } else if (screen === "pedia") {
+    syncPedia();
+    const ui = openPedia({
+      session,
+      sfx: playSfx,
+      open: arg,
+      reducedMotion: settings.reducedMotion,
+      portrait: (rec) => creatureSnapshot(rec, { width: 120, height: 120 }),
+      thumb: (kind, data) => (kind === "cell" ? cellThumb(data) : null),
+      global: {
+        load: async () => asPedia(await listGlobal(universe.store)),
+        save: async (p) => {
+          for (const g of Object.values(p.entries)) await updateGlobal(universe.store, g);
+        },
+      },
+      onImport: async (text) => {
+        const r = readCreation(text);
+        if (!r.ok) throw new Error(r.error);
+        const id = "import:" + Date.now().toString(36);
+        session.record({ id, kind: r.kind, owned: true, name: r.name, sub: "Imported", stage: "Imported", record: r.kind === "creature" || r.kind === "cell" ? r.data : undefined, design: r.kind !== "creature" && r.kind !== "cell" ? r.data : undefined, thumb: r.thumb || (r.kind === "creature" ? creatureSnapshot(r.data, { width: 120, height: 120 }) : r.kind === "cell" ? cellThumb(r.data) : null) });
+        return id;
+      },
+      onCopyHere: (g) => {
+        session.record({ id: "copy:" + Date.now().toString(36), kind: g.kind, owned: true, name: g.customName || g.name, sub: "From " + g.universe, stage: g.stage, diet: g.diet, record: g.record, design: g.design, thumb: g.thumb });
+      },
+      onEdit: (entry) => {
+        ui.close();
+        setTimeout(() => editCreation(entry), 220);
+      },
+      onShowInGalaxy: (focus) => {
+        ui.close();
+        setTimeout(() => openUniverseScreen("galaxy", focus), 220);
+      },
+      onClose: done,
+    });
+  }
+}
+/**
+ * Reopen one of your creations in the creature editor, as a sandbox: the result is saved to the
+ * Sporepedia as a new creation and never changes the game in play.
+ */
+function editCreation(entry) {
+  if (!universe || creatureEditor || !entry?.record) return;
+  if (entry.kind === "cell") return editCellCreation(entry);
+  const resume = holdGame();
+  document.body.classList.add("creatureEditing");
+  const saved = loadCreatureSave();
+  const unlocked = new Set([...(Array.isArray(saved?.unlocked) ? saved.unlocked : []), ...creaturePartIds(entry.record)].filter((id) => CREATURE_PARTS.some((p) => p.id === id)));
+  const finish = () => {
+    creatureEditor = null;
+    document.body.classList.remove("creatureEditing");
+    resume();
+  };
+  creatureEditor = openCreatureEditor({
+    renderer,
+    record: JSON.parse(JSON.stringify(entry.record)),
+    unlocked,
+    dna: 9999,
+    maxParts: partsLimit(saved?.brain || 5),
+    quality: getQuality(),
+    sfx: playSfx,
+    onDone: (record) => {
+      finish();
+      const id = "edit:" + Date.now().toString(36);
+      universe.session.record({ id, kind: "creature", owned: true, name: record.name || entry.name, sub: "Sandbox design", diet: entry.diet, stage: "Sandbox", record, thumb: creatureSnapshot(record, { width: 120, height: 120 }), place: entry.place });
+      toast("✦ Saved to your Sporepedia as a new creation.");
+      setTimeout(() => openUniverseScreen("pedia", id), 250);
+    },
+    onCancel: finish,
+  });
+}
+/** A cell design's portrait (for Sporepedia cards). */
+function cellThumb(record) {
+  try {
+    return renderCellSnapshot(renderer, record, (r) => buildCellBody(r, { role: "mate", shadow: false }));
+  } catch (e) {
+    return null;
+  }
+}
+/**
+ * Reopen a cell design in the cell editor, as a sandbox: your real cell is put aside, the design is
+ * loaded, and Accept saves the result to the Sporepedia as a new creation before your cell comes back
+ * exactly as it was. Cancel just puts it back. Only from the Cell Stage, where the cell editor lives.
+ */
+let cellSandbox = null;
+function editCellCreation(entry) {
+  if (creatureStage || tribeStage || civStage) return toast("Cell designs open in the cell editor from the Cell Stage. Start or load a Cell Stage game to edit this one.");
+  if (state.editor || cellSandbox) return;
+  const r = entry.record;
+  cellSandbox = { snapshot: captureEditState(), editorPass: progress.editorPass, dna: state.dna, entry, openedAt: progress.editorOpenedAt, unlocked: progress.unlockedSinceEditor };
+  restoreEditState(
+    JSON.stringify({
+      nodes: r.body.nodes,
+      paintStrokes: r.body.paintStrokes || [],
+      parts: r.parts.map((p) => ({ ...p, source: "sandbox", costPaid: 0 })),
+      dna: 9999,
+      baseColor: r.colors.base,
+      patternColor: r.colors.pattern,
+      accentColor: r.colors.accent,
+      pattern: r.body.pattern,
+      scale: r.scale,
+      cellName: r.name,
+      symmetry: state.symmetry,
+      stack: state.stack,
+    }),
+  );
+  state.dna = 9999;
+  progress.editorPass = true;
+  setEditor(true);
+  document.body.classList.add("cellSandbox");
+  toast("Sandbox: Accept saves this as a new creation. Your own cell is untouched.");
+}
+function endCellSandbox(keep) {
+  const sb = cellSandbox;
+  if (!sb) return false;
+  if (keep && universe) {
+    const record = currentRecord();
+    universe.session.record({ id: "edit:" + Date.now().toString(36), kind: "cell", owned: true, name: (document.getElementById("cellName")?.value || record.name).trim().slice(0, 22), sub: "Sandbox design", stage: "Sandbox", diet: record.diet === "meat" ? "Carnivore" : record.diet === "plant" ? "Herbivore" : "Omnivore", parts: record.parts.length, record, thumb: cellThumb(record) });
+  }
+  restoreEditState(sb.snapshot);
+  state.dna = sb.dna;
+  cellSandbox = null;
+  cellSandboxClosing = true;
+  setEditor(false);
+  cellSandboxClosing = false;
+  progress.editorPass = sb.editorPass;
+  progress.editorOpenedAt = sb.openedAt;
+  progress.unlockedSinceEditor = sb.unlocked;
+  document.body.classList.remove("cellSandbox");
+  toast(keep ? "Saved to your Sporepedia as a new cell creation." : "Sandbox closed. Your cell is as it was.");
+  return true;
+}
+let cellSandboxClosing = false;
+/** Keep the Sporepedia in step with the game: creations, the species, its history, the tribe. */
+function syncPedia() {
+  if (!universe) return;
+  const S = universe.session;
+  const home = S.home();
+  const homePlanet = S.planet(home.planetId);
+  const homeName = homePlanet ? S.nameFor("planet:" + homePlanet.id, homePlanet.name) : "Home";
+  const cs = loadCreatureSave(),
+    ts = loadTribeSave();
+  const speciesName = ts?.look?.name || cs?.record?.name || state.cellName || "Your species";
+  const dietW = (d) => (d === "meat" || d === "carnivore" ? "Carnivore" : d === "plant" || d === "herbivore" ? "Herbivore" : d ? "Omnivore" : undefined);
+  const gens = progress.history.map((g) => ({
+    id: "gen:" + g.gen,
+    label: "Gen " + g.gen + " · " + (g.stage === "creature" ? "Creature" : "Cell"),
+    thumb: g.thumb || null,
+  }));
+  progress.history.forEach((g) => {
+    const old = S.pedia.entries["gen:" + g.gen];
+    const kind = g.stage === "creature" ? "creature" : "cell";
+    if (old && old.kind === kind && old.thumb === g.thumb && (old.record || !g.record)) return;
+    S.record({
+      id: "gen:" + g.gen,
+      kind,
+      owned: true,
+      name: speciesName + " · Generation " + g.gen,
+      sub: kind === "creature" ? "Creature Stage" : "Cell Stage" + (g.stageName ? " · " + g.stageName : ""),
+      stage: kind === "creature" ? "Creature" : "Cell" + (g.tier ? " (tier " + g.tier + ")" : ""),
+      gen: g.gen,
+      diet: dietW(g.diet),
+      parts: g.parts,
+      thumb: g.thumb || null,
+      record: g.record || null,
+      place: homeName,
+      species: speciesName,
+    });
+  });
+  // The cell as it is now (in the Cell Stage): a creation of its own, redrawn only when it changes.
+  if (!creatureStage && !tribeStage && !civStage && state.runStarted && !cellSandbox && hasMouth()) {
+    const record = currentRecord();
+    const sig = JSON.stringify([record.body, record.parts, record.colors, record.name]);
+    const old = S.pedia.entries["cell:current"];
+    if (!old || old.sig !== sig)
+      S.record({ id: "cell:current", kind: "cell", owned: true, name: record.name, sub: "Your cell now", stage: "Cell (tier " + state.tier + ")", diet: dietW(record.diet), parts: record.parts.length, record, sig, thumb: cellThumb(record), place: homeName });
+  }
+  const chronicle = loadChronicle().events;
+  for (const ev of chronicle) if (!S.pedia.entries["hist:" + ev.key]) S.record({ id: "hist:" + ev.key, kind: "history", name: ev.text, icon: ev.icon, stage: ev.stage, at: ev.at || Date.now() });
+  const traits = [progress.cellStageComplete && progress.dietCard ? DIET_CARDS[progress.dietCard]?.title : null, cs?.card ? CREATURE_CARDS[cs.card]?.title : null, ts?.path ? { peace: "Diplomatic", balance: "Industrious", conquest: "Warlike" }[ts.path] : null].filter(Boolean);
+  const cv = loadCivSave();
+  if (cv?.won && CIV_CARDS[cv.card]) traits.push(CIV_CARDS[cv.card].name);
+  const stage = civStage || cv ? "Civilization" : tribeStage || ts ? "Tribal" : creatureStage || cs ? "Creature" : "Cell";
+  const lastThumb = [...progress.history].reverse().find((g) => g.thumb)?.thumb || null;
+  S.record({
+    id: "species:player",
+    kind: "species",
+    owned: true,
+    name: speciesName,
+    sub: "Your species",
+    diet: dietW(cs?.record ? dietPath(state.plants, state.meat) : progress.dietCard || dietPath(state.plants, state.meat)),
+    stage: stage + " Stage",
+    homeworld: homeName,
+    place: homeName,
+    planetId: home.planetId,
+    traits: traits.join(", ") || "None yet",
+    gen: progress.history.length,
+    thumb: lastThumb,
+    record: cs?.record || null,
+    rarity: "Unique",
+    timeline: chronicle.map((e) => ({ icon: e.icon, text: e.text })),
+    generations: gens,
+  });
+  if (ts) {
+    const tiers = ["", "stone", "bronze"];
+    S.record({
+      id: "tribal:village",
+      kind: "tribal",
+      owned: true,
+      name: (ts.look?.name || speciesName) + " village",
+      sub: "Your tribe",
+      color: "#" + Number(ts.look?.color ?? 0x3fa9d6).toString(16).padStart(6, "0"),
+      village: (ts.look?.style ? ts.look.style[0].toUpperCase() + ts.look.style.slice(1) + " hut" : "Hut") + " · level " + (ts.hutLevel || 1) + " · " + ts.units.length + " members",
+      equipment: Object.entries(ts.tools || {}).filter(([, t]) => t > 0).map(([id, t]) => id + " (" + tiers[t] + ")").join(", ") || "None",
+      outcome: ts.path ? { peace: "Diplomatic: every tribe allied", balance: "Industrious: allies and conquests", conquest: "Warlike: every tribe conquered" }[ts.path] : ts.tribes.filter((t) => t.status !== "neutral").length + " of " + ts.tribes.length + " tribes settled",
+      place: homeName,
+    });
+  }
+  // The universe card shows the latest design.
+  if (lastThumb && universe.meta.thumb !== lastThumb && lastThumb.length < 200000) {
+    universe.meta.thumb = lastThumb;
+    universe.store.put("meta", universe.meta.id, universe.meta).catch(() => {});
+  }
+}
+/** Play time, counted while the page is visible and something is being played. */
+function tickPlaytime(dt) {
+  if (!universe || document.hidden || !state.runStarted) return;
+  playClock += dt;
+  if (playClock < 30) return;
+  universe.meta.playtime += playClock;
+  universe.meta.lastPlayed = Date.now();
+  playClock = 0;
+  universe.store.put("meta", universe.meta.id, universe.meta).catch(() => {});
 }
 function openPath() {
   if (creatureEditor) return;
+  const chronicle = loadChronicle().events;
+  const cs = loadCreatureSave();
+  if (tribeStage || civStage) {
+    const stagePaused = tribeStage || civStage;
+    stagePaused.setPaused(true);
+    const ts = loadTribeSave();
+    const cv = loadCivSave();
+    openHistoryScreen({
+      name: tribeStage?.record?.name || cs?.record?.name || state.cellName || "Your species",
+      tier: state.tier,
+      plants: state.plants,
+      meat: state.meat,
+      card: progress.dietCard,
+      creature: cs ? { brain: cs.brain || 1, alliances: cs.alliances || 0, extinctions: cs.extinctions || 0, deaths: cs.deaths || 0, dna: cs.dna || 0, card: creatureCardFor(cs) } : null,
+      tribe: trackSummary({ tribe: ts }).tribe,
+      civ: cv ? { card: cv.won && CIV_CARDS[cv.card] ? CIV_CARDS[cv.card] : null, cities: cv.cities.filter((c) => c.owner === "you").length, total: cv.cities.length, captures: Object.values(cv.captures).reduce((a, b) => a + b, 0) } : null,
+      legacy: tribeLegacy(progress.dietCard || dietPath(state.plants, state.meat), creatureCardFor(cs)).lines,
+      chronicle,
+      history: progress.history,
+      stats: progressStats(),
+      onClose: () => stagePaused.setPaused(false),
+    });
+    return;
+  }
   if (creatureStage) {
     creatureStage.setPaused(true);
     const st = creatureStage.stats();
@@ -5191,6 +5953,8 @@ function openPath() {
       card: progress.dietCard,
       creature: { brain: st.brain, alliances: st.alliances, extinctions: st.extinctions, deaths: st.deaths, dna: st.dna, card: st.card },
       library: creatureStage.library(),
+      tribe: trackSummary({ tribe: loadTribeSave() }).tribe,
+      chronicle,
       history: progress.history,
       stats: progressStats(),
       onClose: () => creatureStage?.setPaused(false),
@@ -5208,6 +5972,8 @@ function openPath() {
     plants: state.plants,
     meat: state.meat,
     card: progress.cellStageComplete ? progress.dietCard : null,
+    tribe: trackSummary({ tribe: loadTribeSave() }).tribe,
+    chronicle,
     history: progress.history,
     stats: progressStats(),
     onClose: () => (state.paused = wasPaused),
@@ -5228,14 +5994,26 @@ function applyQuality(name) {
 window.addEventListener("resize", () => {
   creatureStage?.resize();
   tribeStage?.resize();
+  civStage?.resize();
+  galaxyStart?.resize();
   creatureEditor?.resize();
+  modularEditor?.resize();
   renderer.setSize(innerWidth, innerHeight);
   renderer.setPixelRatio(basePixelRatio() * perf.scale);
   if (state.editor) configureEditorViewport();
   else updateCamera();
 });
+// The universe system starts once the game is on screen.
+document.querySelectorAll("#uvLinks [data-open]").forEach((b) => (b.onclick = () => openUniverseScreen(b.dataset.open)));
+initUniverse().then(openStartScreen);
 if (new URLSearchParams(location.search).has("debug")) {
   window.__spore = {
+    get universe() {
+      return universe;
+    },
+    openUniverseScreen,
+    syncPedia,
+    editCreation,
     state,
     renderer,
     scene,
@@ -5298,6 +6076,14 @@ if (new URLSearchParams(location.search).has("debug")) {
     get tribeStage() {
       return tribeStage;
     },
+    get civStage() {
+      return civStage;
+    },
+    get galaxyStart() {
+      return galaxyStart;
+    },
+    closeStartScreen,
+    startCivStage,
     startGrowthPullback,
     get growth() {
       return growth;
@@ -5312,6 +6098,10 @@ if (new URLSearchParams(location.search).has("debug")) {
     get creatureEditor() {
       return creatureEditor;
     },
+    get modularEditor() {
+      return modularEditor;
+    },
+    openDesignEditor,
     get partOrbs() {
       return partOrbs;
     },

@@ -61,11 +61,15 @@ export function slotSummary(store, n) {
   const active = n === activeSlot(store);
   const get = (k) => store.getItem(active ? k : parked(n) + k);
   const has = active ? gameKeys(store).length > 0 : keysOf(store).some((k) => k.startsWith(parked(n)));
+  const civ = readJSON(get("johnny-spore-civ-stage"));
+  const tribe = readJSON(get("johnny-spore-tribe-stage"));
   const creature = readJSON(get("johnny-spore-creature-stage"));
   const cell = readJSON(get("johnny-spore-cell-stage"));
   const savedAt = Number(get(SAVED_AT_KEY)) || null;
   let label = "Empty";
-  if (creature) label = "Creature Stage · Brain " + (creature.brain || 1) + (creature.record?.name ? " · " + creature.record.name : "");
+  if (civ && Array.isArray(civ.cities)) label = "Civilization Stage · " + civ.cities.filter((c) => c?.owner === "you").length + " / " + civ.cities.length + " cities";
+  else if (tribe && Array.isArray(tribe.tribes)) label = "Tribal Stage" + (tribe.look?.name ? " · " + tribe.look.name : "");
+  else if (creature) label = "Creature Stage · Brain " + (creature.brain || 1) + (creature.record?.name ? " · " + creature.record.name : "");
   else if (cell) label = "Cell Stage · Tier " + (cell.tier || cell.state?.tier || 1) + (cell.cellName || cell.state?.cellName ? " · " + (cell.cellName || cell.state.cellName) : "");
   else if (has) label = "New game";
   return { slot: n, active, empty: !has, savedAt, label };

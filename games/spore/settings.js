@@ -2,7 +2,6 @@
  * Settings: sound volumes, reduced motion, graphics quality and save slots, in one panel that works
  * in both stages. Settings are shared by every save slot.
  */
-import { SLOT_COUNT, clearSlot, slotSummary } from "./slots.js";
 
 export const SETTINGS_KEY = "johnny-spore-settings";
 
@@ -42,8 +41,6 @@ export function timeAgo(when, now = Date.now()) {
   return d + (d === 1 ? " day ago" : " days ago");
 }
 
-const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-
 /**
  * Open the settings panel.
  * @param {object} o
@@ -53,7 +50,7 @@ const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
  * @param {string[]} o.qualities
  * @param {() => string} o.getQuality
  * @param {(q:string) => void} o.onQuality
- * @param {(slot:number) => void} o.onSwitchSlot  save the game in play, switch and reload
+ * @param {(screen:"universes"|"galaxy"|"pedia"|"title") => void} o.onOpen  open one of the universe screens, or the main menu
  * @param {() => void} [o.onClose]
  */
 export function openSettings(o) {
@@ -79,7 +76,12 @@ export function openSettings(o) {
           .map((q) => `<button role="radio" data-q="${q}" aria-checked="${q === o.getQuality()}">${q[0].toUpperCase() + q.slice(1)}</button>`)
           .join("")}</div></div>
       </section>
-      <section aria-labelledby="spSlots"><h3 id="spSlots">Save slots</h3><div class="spSlots" id="spSlotList"></div></section>
+      <section aria-labelledby="spSlots"><h3 id="spSlots">Universe</h3><div class="spOpen">
+        <button data-open="universes"><span aria-hidden="true">🪐</span>Universes<small>Saves: switch, create, copy, export, import</small></button>
+        <button data-open="galaxy"><span aria-hidden="true">🌌</span>Galaxy<small>Explore stars and planets</small></button>
+        <button data-open="pedia"><span aria-hidden="true">📖</span>Sporepedia<small>Everything you've made and found</small></button>
+        <button data-open="title"><span aria-hidden="true">✦</span>Main menu<small>Save and go back to the galaxy</small></button>
+      </div></section>
     </div>`;
   document.body.appendChild(el);
   const $ = (q) => el.querySelector(q);
@@ -105,44 +107,14 @@ export function openSettings(o) {
     };
   });
 
-  /* Slots: play another one (saves this one first), or delete one with a second tap to confirm. */
-  function renderSlots() {
-    const list = $("#spSlotList");
-    list.innerHTML = "";
-    for (let n = 1; n <= SLOT_COUNT; n++) {
-      const sum = slotSummary(o.store, n);
-      const row = document.createElement("div");
-      row.className = "spSlot" + (sum.active ? " active" : "") + (sum.empty ? " empty" : "");
-      row.innerHTML =
-        `<div class="spSlotInfo"><b>Slot ${n}</b><span>${esc(sum.label)}</span>${sum.savedAt ? `<small>Saved ${esc(timeAgo(sum.savedAt))}</small>` : ""}</div>` +
-        (sum.active ? `<em class="spPlaying">Playing</em>` : `<button class="spPlay" data-slot="${n}">${sum.empty ? "New game" : "Play"}</button>`) +
-        (sum.empty ? "" : `<button class="spDelete" data-slot="${n}" aria-label="Delete slot ${n}">Delete</button>`);
-      list.appendChild(row);
-    }
-    list.querySelectorAll(".spPlay").forEach((b) => (b.onclick = () => o.onSwitchSlot(Number(b.dataset.slot))));
-    list.querySelectorAll(".spDelete").forEach((b) => {
-      b.onclick = () => {
-        if (!b.classList.contains("confirm")) {
-          b.classList.add("confirm");
-          b.textContent = "Delete?";
-          setTimeout(() => {
-            if (b.isConnected) {
-              b.classList.remove("confirm");
-              b.textContent = "Delete";
-            }
-          }, 3000);
-          return;
-        }
-        const n = Number(b.dataset.slot);
-        const wasActive = slotSummary(o.store, n).active;
-        clearSlot(o.store, n);
-        // Deleting the game in play starts over.
-        if (wasActive) location.reload();
-        else renderSlots();
-      };
-    });
-  }
-  renderSlots();
+  /* Universes, the galaxy and the Sporepedia have their own screens: settings just opens them. */
+  el.querySelectorAll("[data-open]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        close();
+        setTimeout(() => o.onOpen?.(b.dataset.open), 240);
+      }),
+  );
 
   const close = () => {
     el.classList.remove("show");
