@@ -2780,7 +2780,6 @@ export function createCreatureStage(o) {
   window.addEventListener("keydown", onKey);
   window.addEventListener("keyup", onKeyUp);
   const nearNest = () => atHome && Math.hypot(P.pos.x - nestAt.x, P.pos.z - nestAt.z) < 14;
-  $h("#chMate").onclick = callMate;
   $h("#chTargetClose").onclick = () => {
     P.target = null;
     P.pending = null;
