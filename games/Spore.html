@@ -1455,6 +1455,37 @@ body.galaxyStart>:not(#scene):not(.gs):not(.uv):not(.settingsScreen):not(.homeAr
 .civHUD .cvCulture{margin:6px 0 0}
 @media (prefers-reduced-motion:reduce){.civHUD .cvSpice.free{animation:none}}
 @media (max-height:520px){.civHUD .cvCam{flex-direction:row;right:10px;bottom:calc(var(--cvB,84px) + 8px)}}
+
+/* ---- Civilization Stage: RTS command bar, selection, health bars, production line ---- */
+.civHUD{--cvC:0px}
+.civHUD .cvCam{bottom:calc(var(--cvB,150px) + var(--cvC,0px) + 10px)}
+.civHUD .cvMini{bottom:calc(var(--cvB,150px) + var(--cvC,0px) + 10px)}
+.civHUD .cvRegion{bottom:calc(var(--cvB,150px) + var(--cvC,0px) + 10px)}
+.civHUD .cvCam #cvBoxBtn.on{background:#1d5a3a;border-color:#8ff0a8}.civHUD .cvCam .dot{fill:currentColor;stroke:none}
+.civHUD .cvCmd{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(var(--cvB,150px) + 4px);width:min(560px,calc(100vw - 20px));z-index:2;pointer-events:auto;background:#0b1c28ee;border:1px solid #ffffff44;border-radius:14px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;box-shadow:0 4px 16px #0008}
+.civHUD .cvCmd[hidden]{display:none}
+.civHUD .cvSelHead{display:flex;align-items:center;gap:8px;font-size:12px}.civHUD .cvSelHead>div{flex:1;min-width:0}.civHUD .cvSelHead b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.civHUD .cvSelHead small{color:#b9ccd6;font-size:11px}.civHUD .cvSelHead em{font-style:normal;font-weight:800;font-size:12px}
+.civHUD .cvSelHead .noPic{font-size:22px}
+.civHUD .cvStats{display:block;color:#9fc0cf;font-size:10.5px;margin-top:2px}
+.civHUD .cvSelInfo .cvBar{display:block;margin-top:5px}
+.civHUD .cvCmdRow{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.civHUD .cvCmdRow::-webkit-scrollbar{display:none}
+.civHUD .cvCmdRow button{flex:1 0 54px;min-width:54px;min-height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:4px 2px;border-radius:11px;border:1px solid #ffffff33;background:#16384d;color:#eaf6ff}
+.civHUD .cvCmdRow button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.civHUD .cvCmdRow button small{font-size:10.5px;line-height:1}
+.civHUD .cvCmdRow button.on{background:#1d6a44;border-color:#8ff0a8;box-shadow:0 0 0 2px #8ff0a855}
+.civHUD .cvCmdRow button[aria-disabled=true]{opacity:.42}
+.civHUD .cvCmdRow button:focus-visible{outline:2px solid #8ff0a8;outline-offset:1px}
+.civHUD .cvBox{position:fixed;z-index:3;border:1.5px solid #8ff0a8;background:#8ff0a82a;pointer-events:none;border-radius:3px}
+.civHUD .cvBox[hidden]{display:none}
+.civHUD .cvHp{position:absolute;width:38px;height:6px;margin:-3px 0 0 -19px;background:#000a;border:1px solid #0009;border-radius:4px;overflow:hidden;pointer-events:none}
+.civHUD .cvHp[hidden]{display:none}
+.civHUD .cvHp b{display:block;height:100%;background:#3fc26e}.civHUD .cvHp.foe b{background:#ef7b48}.civHUD .cvHp.low b{background:#ef4b48}
+.civHUD .cvQueue{display:flex;flex-direction:column;gap:6px;margin:4px 0 8px}
+.civHUD .cvQItem{display:grid;grid-template-columns:auto 1fr auto auto;gap:8px;align-items:center;font-size:12px;background:#ffffff12;border-radius:10px;padding:5px 8px}
+.civHUD .cvQItem .noPic{font-size:20px}.civHUD .cvQItem b{display:block;font-size:12px;margin-bottom:3px}.civHUD .cvQItem small{color:#cfe3ea;min-width:42px;text-align:right}
+.civHUD .cvQItem button{width:32px;height:32px;min-width:32px;padding:0;border-radius:8px}
+@media (max-height:520px){.civHUD .cvCmd{width:min(420px,calc(100vw - 150px));padding:5px 8px}.civHUD .cvCmdRow button{min-height:42px}}
 </style>
 </head>
 <body class="galaxyStart">

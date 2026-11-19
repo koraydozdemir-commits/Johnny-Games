@@ -5,7 +5,7 @@
  *
  * Rates are per second of play. Money is "§" (Sporebucks).
  */
-import { designStats, vehicleMode } from "../creations/modular.js";
+import { designStats, partOf, vehicleMode } from "../creations/modular.js";
 
 export const CIV_SAVE_KEY = "johnny-spore-civ-stage";
 export const CIV_VERSION = 1;
@@ -130,6 +130,31 @@ export const AIR_AT = 3;
 export const COAST = 45;
 
 /**
+ * A military design's weapon: its parts' range, rate of fire and kind, averaged by how much attack each part
+ * adds, so a machine gun and a mortar on one chassis behave like a mix of both. Shots are projectiles.
+ * @returns {{range:number, rate:number, kind:"bullet"|"shell"|"missile"}}
+ */
+export function weaponOfDesign(design) {
+  let w = 0,
+    range = 0,
+    rate = 0,
+    shell = 0,
+    missile = 0;
+  for (const p of design.parts || []) {
+    const def = partOf("vehicle", p.id);
+    if (!def?.add.attack) continue;
+    const k = def.add.attack * (p.mirror ? 2 : 1);
+    w += k;
+    range += (def.add.rng || 14) * k;
+    rate += (def.add.rof || 1) * k;
+    if (p.id === "missiles") missile += k;
+    else if (p.id === "mortar" || p.id === "cannonV") shell += k;
+  }
+  if (!w) return { range: 14, rate: 1, kind: "shell" };
+  return { range: Math.round((range / w) * 10) / 10, rate: Math.round((rate / w) * 100) / 100, kind: missile > shell && missile > 0 ? "missile" : shell > 0 ? "shell" : "bullet" };
+}
+
+/**
  * Play values for a vehicle design.
  * @returns {{ ok:boolean, role:string, mode:string|null, speed:number, hp:number, dps:number, trade:number, preach:number, cost:number }}
  */
@@ -139,8 +164,10 @@ export function vehicleUnit(design, mods = {}) {
   const mode = vehicleMode(design);
   const pace = mode === "air" ? 1.25 : mode === "sea" ? 1.05 : 1;
   const power = s.stats.power;
+  const weapon = role === "military" ? weaponOfDesign(design) : null;
   return {
     ok: s.ok,
+    weapon,
     role,
     mode,
     speed: Math.round((4 + s.stats.speed * 1.3) * pace * 10) / 10,
@@ -324,6 +351,10 @@ export function readCivSave(raw) {
     trade: Object.fromEntries(Object.entries(c?.trade && typeof c.trade === "object" ? c.trade : {}).filter(([k]) => k === YOU || ids.includes(k)).map(([k, v]) => [k, num(v, 0, 100, 0)])),
     conv: Object.fromEntries(Object.entries(c?.conv && typeof c.conv === "object" ? c.conv : {}).filter(([k]) => k === YOU || ids.includes(k)).map(([k, v]) => [k, num(v, 0, 100, 0)])),
     unrest: num(c?.unrest, 0, 5, 0),
+    queue: (Array.isArray(c?.queue) ? c.queue : [])
+      .slice(0, 3)
+      .map((i) => ({ key: typeof i?.key === "string" && /^(military|economic|religious):(land|sea|air)$/.test(i.key) ? i.key : null, cost: num(i?.cost, 0, 5000, 100), total: num(i?.total, 1, 600, 20), t: num(i?.t, 0, 600, 0) }))
+      .filter((i) => i.key),
   }));
   if (!cities.some((c) => c.owner === YOU)) return null;
   const designs = d.designs && typeof d.designs === "object" ? d.designs : {};
