@@ -2656,7 +2656,9 @@ function updateMateCall(dt, time) {
     emitMateRing(m.position.x, m.position.y, 0xffc4ea);
   }
   $("#mateCueText").textContent = d < 5 ? "Swim to your mate" : "Your mate is answering… " + Math.ceil(state.mateTimer) + "s";
-  if (d < playerRadius() + (u.radius || 0.4) + 0.45) {
+  // Generous, scale-aware contact range: long cells should not need pixel-perfect positioning to mate.
+  const mateReach = playerRadius() + (u.radius || 0.4) + Math.max(1.25, playerRadius() * 0.7);
+  if (d < mateReach) {
     state.courtship = { t: 0, cx: (player.position.x + m.position.x) / 2, cy: (player.position.y + m.position.y) / 2, a: Math.atan2(-dy, -dx), zoom: cameraZoomTarget };
     velocity.set(0, 0);
     jetVel.set(0, 0);
