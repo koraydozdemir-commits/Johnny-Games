@@ -2043,10 +2043,16 @@ export function createCreatureStage(o) {
   const carriedFruitMat = new THREE.MeshStandardMaterial({ color: world.region.colors.fruit, roughness: 0.35, emissive: new THREE.Color(world.region.colors.fruit).multiplyScalar(0.2) });
   const carriedFruitGeo = new THREE.SphereGeometry(0.3, 10, 8);
   const canEat = (kind, diet) => diet === "omni" || (kind === "meat" ? diet === "meat" : diet === "plant");
+  // Scale interaction reach to the full creature rig. Tall legs raise the torso and mouth far
+  // above the ground-point used by fossil/carcase interactions, so the old small capped bonus
+  // could leave oversized creatures visibly on top of an object but unable to use it.
+  // Keep a generous but bounded radius for extreme custom body plans.
+  const anatomyReach = () => Math.min(6.5, Math.max(0.65, Math.max(P.body.length * 0.35, P.body.height * 0.45) * P.scale));
   /** Food within reach that you could pick up. */
   function foodNear() {
     const r = 2.2 + P.scale + snatchReach();
-    for (const c of carcasses) if (c.bites > 0 && !c.dragged && Math.hypot(c.x - P.pos.x, c.z - P.pos.z) < r) return { kind: "meat", c };
+    const carcassR = r + anatomyReach();
+    for (const c of carcasses) if (c.bites > 0 && !c.dragged && Math.hypot(c.x - P.pos.x, c.z - P.pos.z) < carcassR) return { kind: "meat", c };
     for (const f of world.fruits) if (f.alive && !f.hanging && !f.claimed && Math.abs(f.y - heightAt(f.x, f.z)) < 1.6 && Math.hypot(f.x - P.pos.x, f.z - P.pos.z) < r) return { kind: "fruit", f };
     return null;
   }
@@ -2682,7 +2688,7 @@ export function createCreatureStage(o) {
     if (P.diet !== "plant")
       for (let i = carcasses.length - 1; i >= 0; i--) {
         const c = carcasses[i];
-        if (!c.dragged && Math.hypot(c.x - mouth.x, c.z - mouth.z) < 2 + snatchReach()) {
+        if (!c.dragged && Math.hypot(c.x - mouth.x, c.z - mouth.z) < 2 + anatomyReach() + snatchReach()) {
           c.bites--;
           eat(28, 8, 5, "meat");
           tasted("meat", "meat");
@@ -2697,7 +2703,7 @@ export function createCreatureStage(o) {
     for (const b of world.bonePiles) {
       if (b.taken) continue;
       const d = Math.hypot(b.x - P.pos.x, b.z - P.pos.z);
-      if (d < 2.6 + P.scale && P.speed < 2.2 && !charging && !P.air) digging = b;
+      if (d < 2.6 + P.scale + anatomyReach() && P.speed < 2.2 && !charging && !P.air) digging = b;
       else b.dig = Math.max(0, b.dig - dt * 0.5);
       if (d < 22 && !b.seen) {
         b.seen = true;
@@ -2722,7 +2728,8 @@ export function createCreatureStage(o) {
     if (digging) {
       digRing.position.set(digging.x, heightAt(digging.x, digging.z) + 0.15, digging.z);
       digRing.geometry.dispose();
-      digRing.geometry = new THREE.RingGeometry(2.4, 2.65, 48, 1, Math.PI / 2, -TAU * Math.min(1, digging.dig)).rotateX(-Math.PI / 2);
+      const reach = 2.6 + P.scale + anatomyReach();
+      digRing.geometry = new THREE.RingGeometry(reach - 0.2, reach + 0.05, 48, 1, Math.PI / 2, -TAU * Math.min(1, digging.dig)).rotateX(-Math.PI / 2);
     }
 
     // Hunger, and the nest heals.
