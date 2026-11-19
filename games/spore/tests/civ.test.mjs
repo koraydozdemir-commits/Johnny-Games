@@ -26,7 +26,6 @@ import {
   damageCity,
   deliverTrade,
   dominantMethod,
-  nationPlan,
   preachRate,
   preachTo,
   readCivSave,
@@ -137,26 +136,6 @@ test("earlier stages shape the start", () => {
   assert.ok(l.mods.health > 0 && l.mods.social > 0 && l.mods.relation > 0);
   assert.equal(l.lines.length, 3);
   assert.equal(civLegacy({}).lines.length, 0);
-});
-
-test("rival nations act on their nature", () => {
-  const seq = (v) => () => v;
-  const base = { relation: 0, war: false, money: 500, vehicles: 0, cap: 3 };
-  assert.ok(nationPlan({ ...base, type: "military" }, { yourCities: 1, freeCities: 0, rand: seq(0) }).build);
-  assert.equal(nationPlan({ ...base, type: "military", money: 10 }, { yourCities: 1, freeCities: 0 }).build, false);
-  // Military nations attack you only at war; hostile ones may declare it.
-  assert.equal(nationPlan({ ...base, type: "military" }, { yourCities: 1, freeCities: 2, rand: seq(0.9) }).target, "free");
-  const angry = nationPlan({ ...base, type: "military", relation: -60 }, { yourCities: 1, freeCities: 2, rand: seq(0.1) });
-  assert.ok(angry.declareWar && angry.target === "you");
-  // Religious nations preach to people they don't like; friends are left alone.
-  assert.equal(nationPlan({ ...base, type: "religious", relation: 50 }, { yourCities: 2, freeCities: 0, rand: seq(0.1) }).target, null);
-  assert.equal(nationPlan({ ...base, type: "religious", relation: -10 }, { yourCities: 2, freeCities: 0, rand: seq(0.1) }).target, "you");
-  // Early on, nobody comes for your cities (traders still do).
-  const early = { yourCities: 2, freeCities: 1, grace: true, rand: seq(0.1) };
-  assert.equal(nationPlan({ ...base, type: "religious", relation: -10 }, early).target, "free");
-  assert.equal(nationPlan({ ...base, type: "military", relation: -90 }, early).declareWar, false);
-  assert.equal(nationPlan({ ...base, type: "economic" }, early).target, "you");
-  assert.equal(nationPlan({ ...base, type: "economic" }, { yourCities: 1, freeCities: 0, rand: seq(0.9) }).target, "you");
 });
 
 test("superweapons, victory and the stage card", () => {

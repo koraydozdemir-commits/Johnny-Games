@@ -1,0 +1,33 @@
+const { open } = require("./harness.cjs");
+const results = [];
+const check = (n, ok, x = "") => { results.push(ok); console.log((ok ? "PASS " : "FAIL ") + n + (x ? "  → " + x : "")); };
+(async () => {
+  const { browser, page, errors } = await open({ width: 1280, height: 800 });
+  await page.goto("http://spore.test/games/Spore.html?debug", { waitUntil: "load" });
+  await page.waitForFunction(() => window.__spore, null, { timeout: 20000 });
+  await page.waitForTimeout(800);
+  // A universe must exist for the Sporepedia; start one through the normal route.
+  await page.waitForFunction(() => window.__spore.universe, null, { timeout: 15000 }).catch(() => {});
+  const hasUniverse = await page.evaluate(() => !!window.__spore.universe);
+  console.log("   universe ready:", hasUniverse);
+  await page.evaluate(() => { window.__spore.closeStartScreen(); window.__spore.openUniverseScreen("pedia"); });
+  await page.waitForSelector(".pd .pdPanel", { timeout: 10000 });
+  check("the Sporepedia shows the library button", await page.isVisible("#pdLibrary"));
+  await page.click("#pdLibrary");
+  await page.waitForSelector(".ecl .eclTile", { timeout: 8000 });
+  const z = await page.evaluate(() => [getComputedStyle(document.querySelector(".pd")).zIndex, getComputedStyle(document.querySelector(".ecl")).zIndex]);
+  check("the library opens above the Sporepedia", +z[1] > +z[0], "z " + z.join(" < "));
+  const top = await page.evaluate(() => { const t = document.querySelector(".eclTile"); const r = t.getBoundingClientRect(); const e = document.elementFromPoint(r.x + 10, r.y + 10); return !!e.closest(".ecl"); });
+  check("it receives the clicks (nothing from the Sporepedia on top)", top);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(500);
+  check("closing the library leaves the Sporepedia open", (await page.$(".ecl")) === null && (await page.$(".pd .pdPanel")) !== null);
+  check("the existing Sporepedia still works (categories render)", (await page.$$eval("#pdTabs button", (b) => b.length)) >= 5);
+  await page.keyboard.press("Escape");
+  console.log("errors:", errors.slice(0, 3));
+  check("no page errors", errors.length === 0);
+  await browser.close();
+  const failed = results.filter((r) => !r).length;
+  console.log(`${results.length - failed}/${results.length} passed`);
+  process.exit(failed ? 1 : 0);
+})().catch((e) => { console.error("CRASH", e.message); process.exit(2); });

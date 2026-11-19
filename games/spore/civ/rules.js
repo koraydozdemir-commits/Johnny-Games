@@ -206,8 +206,6 @@ export const calmUnrest = (city, dt) => (city.unrest = Math.max(0, (city.unrest 
 export const VEHICLES_PER_CITY = 3;
 /** Air vehicles are allowed once a nation has this many cities. */
 export const AIR_AT = 3;
-/** Sea vehicles can only reach cities this close to the shore. */
-export const COAST = 45;
 
 /**
  * A military design's weapon: its parts' range, rate of fire and kind, averaged by how much attack each part
@@ -299,7 +297,6 @@ export function starterVehicle(role, mode, colors = { base: 0xd6a03f, accent: 0x
 
 /* ---- spice --------------------------------------------------------------------------------- */
 export const SPICE_INCOME = 1.1;
-export const DERRICK_HP = 40;
 
 /* ---- the player's earlier stages ------------------------------------------------------------- */
 /**
@@ -329,29 +326,6 @@ export const clampRel = (r) => Math.max(-100, Math.min(100, Math.round(r * 10) /
 /** How relations move. */
 export const DIPLO = { trade: 4, gift: 15, giftCost: 60, preach: -0.5, attack: -40, war: -30, peaceAt: -10, peaceCost: 120, allyAt: 60, drift: 0.05 };
 export const relationWord = (r, war) => (war ? "At war" : r >= DIPLO.allyAt ? "Allied" : r >= 20 ? "Friendly" : r > -20 ? "Neutral" : r > -50 ? "Wary" : "Hostile");
-
-/**
- * What a rival nation does next. Called now and then for each living nation.
- * @param {{ type:string, relation:number, war:boolean, money:number, vehicles:number, cap:number }} n
- * @param {{ yourCities:number, freeCities:number, grace?:boolean, rand?:()=>number }} ctx  grace: early on, nobody comes for your cities
- * @returns {{ build:boolean, declareWar:boolean, target:"you"|"free"|null }}
- */
-export function nationPlan(n, ctx) {
-  const rand = ctx.rand || Math.random;
-  const vehicleCost = 110;
-  const build = n.vehicles < n.cap && n.money >= vehicleCost;
-  let declareWar = false;
-  if (!n.war && n.type === "military" && n.relation < -45 && rand() < 0.35) declareWar = true;
-  if (ctx.grace) declareWar = false;
-  const war = n.war || declareWar;
-  const yours = ctx.grace ? 0 : ctx.yourCities;
-  let target = null;
-  if (n.type === "military") target = war && yours ? "you" : ctx.freeCities ? "free" : null;
-  // Trading is welcome even early on.
-  else if (n.type === "economic") target = ctx.yourCities && n.relation > -40 && rand() < 0.6 ? "you" : ctx.freeCities ? "free" : ctx.yourCities ? "you" : null;
-  else target = yours && n.relation < 0 && rand() < 0.6 ? "you" : ctx.freeCities ? "free" : yours && n.relation < 0 ? "you" : null;
-  return { build, declareWar, target };
-}
 
 /* ---- superweapons ----------------------------------------------------------------------------- */
 /** Original names: each takes one city at once, the way your civilization prefers to win. */

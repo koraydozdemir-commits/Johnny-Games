@@ -125,8 +125,6 @@ export const BIOME_LABEL = {
   ocean: "Ocean",
   shallows: "Shallow sea",
 };
-/** Biomes that count as forest, for the inspector and for the scenery density. */
-export const FOREST_BIOMES = new Set(["temperate_forest", "rainforest", "taiga", "alien_lush", "fungal"]);
 
 /** Latitude (radians) beyond which the ground is snow and ice, by temperature band 0 (frozen) .. 4 (scorching). */
 const ICE_LAT = [0.35, 0.78, 1.05, 1.23, 9];

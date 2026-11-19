@@ -50,4 +50,3 @@ export const withIcons = (html) =>
     .join("");
 /** Remove the emoji from plain text (toasts and labels). */
 export const stripIcons = (text) => String(text).replace(EMOJI, "").replace(/ {2,}/g, " ").replace(/^ | $/g, "");
-export const ICON_NAMES = Object.keys(P);
