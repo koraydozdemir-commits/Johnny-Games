@@ -1928,9 +1928,11 @@ export function createCreatureStage(o) {
   const carriedFruitMat = new THREE.MeshStandardMaterial({ color: world.region.colors.fruit, roughness: 0.35, emissive: new THREE.Color(world.region.colors.fruit).multiplyScalar(0.2) });
   const carriedFruitGeo = new THREE.SphereGeometry(0.3, 10, 8);
   const canEat = (kind, diet) => diet === "omni" || (kind === "meat" ? diet === "meat" : diet === "plant");
-  // Scale interaction reach with the creature's actual anatomy, not only its ground-point scale.
-  // Long/tall custom bodies can have their mouth well beyond the default interaction radius.
-  const anatomyReach = () => Math.min(3.5, Math.max(P.body.length, P.body.height * 1.5) * P.scale * 0.2);
+  // Scale interaction reach to the full creature rig. Tall legs raise the torso and mouth far
+  // above the ground-point used by fossil/carcase interactions, so the old small capped bonus
+  // could leave oversized creatures visibly on top of an object but unable to use it.
+  // Keep a generous but bounded radius for extreme custom body plans.
+  const anatomyReach = () => Math.min(6.5, Math.max(0.65, Math.max(P.body.length * 0.35, P.body.height * 0.45) * P.scale));
   /** Food within reach that you could pick up. */
   function foodNear() {
     const r = 2.2 + P.scale;
