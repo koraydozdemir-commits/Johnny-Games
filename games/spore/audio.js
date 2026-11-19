@@ -6,6 +6,20 @@
 
 const rand = (a, b) => a + Math.random() * (b - a);
 
+const MUSIC_BASE = "https://pub-c7061cceb949469685093ccc3a5dd0ba.r2.dev/";
+const MUSIC_FILES = {
+  menu: "Spore OST/Main Menu.mp3",
+  cell: "Spore OST/Cell Stage.mp3",
+  creature: "Spore OST/Creature Stage Roaming.mp3",
+  mating: "Spore OST/Creature Mating.mp3",
+  land: "Spore OST/Entering Land.mp3",
+  tribe: "Spore OST/Tribal Stage Relaxed.mp3",
+  nest: "Spore OST/At Your Nest.mp3",
+  civ: "Spore OST/Civilisation Stage Relaxed.mp3",
+  civWar: "Spore OST/Civilisation War.mp3",
+  pedia: "Spore OST/Sporepedia.mp3",
+};
+
 export function createAudio() {
   let ctx = null,
     master = null,
@@ -15,7 +29,11 @@ export function createAudio() {
     enabled = true,
     noiseBuf = null,
     ambient = null,
-    ambientKind = null;
+    ambientKind = null,
+    musicElement = null,
+    musicTrack = null,
+    musicVolume = 0.55,
+    musicUnlocked = false;
 
   function ensure() {
     if (!enabled) return null;
@@ -43,6 +61,46 @@ export function createAudio() {
     }
     if (ctx.state === "suspended") ctx.resume().catch(() => {});
     return ctx;
+  }
+
+  function ensureMusic() {
+    if (musicElement) return musicElement;
+    if (typeof Audio === "undefined") return null;
+    musicElement = new Audio();
+    musicElement.preload = "none";
+    musicElement.loop = true;
+    musicElement.volume = musicVolume;
+    musicElement.crossOrigin = "anonymous";
+    musicElement.addEventListener("error", () => {
+      // Music is optional: a missing or temporarily unavailable track must never stop the game.
+      console.warn("Spore soundtrack could not be loaded:", musicTrack);
+    });
+    return musicElement;
+  }
+  function startMusic() {
+    const el = ensureMusic();
+    if (!el || !musicUnlocked || !musicTrack) return;
+    if (el.src !== musicTrack) {
+      el.src = musicTrack;
+      el.load();
+    }
+    if (el.paused) el.play().catch(() => {
+      // iOS/Safari may still require a later direct user gesture.
+    });
+  }
+  function setMusic(kind) {
+    const file = MUSIC_FILES[kind];
+    const next = file ? MUSIC_BASE + file.split("/").map(encodeURIComponent).join("/") : "";
+    if (next === musicTrack) {
+      startMusic();
+      return;
+    }
+    musicTrack = next;
+    const el = ensureMusic();
+    if (!el) return;
+    el.pause();
+    el.removeAttribute("src");
+    if (next) startMusic();
   }
 
   /* ---- building blocks ---- */
@@ -356,10 +414,19 @@ export function createAudio() {
       if (!on) stopAmbient();
       else if (ambientKind) startAmbient(ambientKind);
     },
-    /** Call from a user gesture to unlock audio and start any pending ambience. */
+    /** Background soundtrack, hosted in R2 so the game bundle stays small. */
+    setMusic,
+    setMusicVolume(value) {
+      musicVolume = Math.max(0, Math.min(1, Number(value) || 0));
+      const el = ensureMusic();
+      if (el) el.volume = musicVolume;
+    },
+    /** Call from a user gesture to unlock audio and start pending ambience/music. */
     unlock() {
-      if (!ensure()) return;
-      if (ambientKind && !ambient) startAmbient(ambientKind);
+      ensure();
+      musicUnlocked = true;
+      if (ctx && ambientKind && !ambient) startAmbient(ambientKind);
+      startMusic();
     },
   };
 }
