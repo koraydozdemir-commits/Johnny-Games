@@ -413,7 +413,8 @@ export function createCreatureStage(o) {
   /** Mating, Spore-style: the nearest family member comes over, you court, and an egg is laid. */
   let courtship = null;
   function callMate() {
-    if (courtship || !nearNest() || P.migration || brainFx || cine) return;
+    if (courtship || P.migration || brainFx || cine) return;
+    if (!nearNest()) return toast("Return to your nest to call a mate.", 2.4);
     const partner = family.filter((n) => !n.dead && !n.following).sort((a, b) => distTo(a) - distTo(b))[0];
     if (!partner) return mate();
     courtship = { n: partner, t: 0 };
@@ -4577,8 +4578,9 @@ export function createCreatureStage(o) {
     }
     lean.classList.toggle("pulse", leanPulse > 0);
     const atNest = nearNest();
-    $h("#chMate").hidden = !atNest || !!courtship || !!P.migration || !!brainFx;
-    $h("#chMate").textContent = tribeReady ? "🔥 Mate · found a tribe" : "♡ Mate · new generation";
+    o.onNestProximity?.(atNest);
+    $h("#chMate").hidden = !!courtship || !!P.migration || !!brainFx || P.deadTimer > 0;
+    $h("#chMate").textContent = atNest ? (tribeReady ? "🔥 Mate · found a tribe" : "♡ Mate · new generation") : "♡ Call mate · return to nest";
     $h("#chMate").classList.toggle("final", tribeReady);
     $h("#chTribe").hidden = !o.tribeUnlocked?.();
     // Watching a nest from nearby is enough to learn who lives there; sight lets you do it from further.
