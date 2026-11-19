@@ -1,7 +1,7 @@
 /**
- * Procedural sound for both stages, in a playful Spore-like style: bubbly gulps and squelches in the
- * water, chirpy formant voices for creatures, stomps, swishes, sparkles, plus soft ambience.
- * Everything is synthesised with Web Audio (no audio files), so it costs nothing to download.
+ * Procedural effects and ambience for both stages, plus streamed stage music.
+ * Sound effects stay synthesised with Web Audio; the soundtrack streams from R2 so large MP3s
+ * are not bundled into the game or the GitHub repository.
  */
 
 const rand = (a, b) => a + Math.random() * (b - a);
