@@ -144,7 +144,33 @@ export function buildCreatureBody(record, opts = {}) {
       .replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\ntotalEmissiveRadiance += uBelly * vBelly * 0.3;");
   };
   skin.customProgramCacheKey = () => "creature-skin-belly2";
-  const limbMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(vivid(colors.base)).multiplyScalar(0.72), roughness: 0.6, emissive: 0x000000 });
+  // Limbs are close to the body's own colour so they read as part of it, a touch darker like shaded skin.
+  const limbMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(vivid(colors.base)).multiplyScalar(0.86), roughness: 0.58, emissive: 0x000000 });
+  /**
+   * A limb segment hanging down from y = 0: a smooth taper from r0 to r1 with a gentle muscle swell and
+   * rounded ends, so one segment melts into the next at a knee or elbow without a ball joint between.
+   */
+  const limbBone = (r0, r1, len, bulge = 0.14) => {
+    const pts = [];
+    const cap = Math.min(r1, len * 0.3);
+    pts.push(new THREE.Vector2(0.001, -len - cap * 0.95));
+    for (let i = 1; i <= 3; i++) {
+      const a = (i / 3) * (Math.PI / 2);
+      pts.push(new THREE.Vector2(r1 * Math.sin(a), -len - cap * 0.95 * Math.cos(a)));
+    }
+    const n = 8;
+    for (let i = n - 1; i >= 0; i--) {
+      const t = i / n; // 0 at the top
+      const r = (r0 + (r1 - r0) * t) * (1 + bulge * Math.sin(Math.PI * Math.min(1, t * 1.25)) * (1 - t * 0.4));
+      pts.push(new THREE.Vector2(r, -len * t));
+    }
+    const topCap = r0 * 0.9;
+    for (let i = 1; i <= 3; i++) {
+      const a = (i / 3) * (Math.PI / 2);
+      pts.push(new THREE.Vector2(r0 * Math.cos(a), topCap * Math.sin(a)));
+    }
+    return new THREE.LatheGeometry(pts, 12);
+  };
 
   const root = new THREE.Group(); // placed in the world
   const body = new THREE.Group(); // bobs, leans and plays abilities
@@ -180,32 +206,32 @@ export function buildCreatureBody(record, opts = {}) {
     ]) {
       const hipY = s.point.y + lift; // height of the hip above ground
       const seg = Math.max(0.12, (hipY - 0.04) / reachOf(rest));
-      const thick = 0.07 + h.l.length * 0.04;
-      const bone = (r0, r1, len) => {
-        const g = new THREE.CylinderGeometry(r1, r0, len, 10).translate(0, -len / 2, 0);
+      // Thickness follows the body it hangs from and the length of the limb: a bulky creature gets sturdy legs.
+      const thick = Math.min(0.2, Math.max(0.06, 0.04 + h.l.length * 0.025 + (s.r || 0.4) * 0.11));
+      const bone = (r0, r1, len, bulge) => {
+        const g = limbBone(r0, r1, len, bulge);
         disposables.push(g);
         return new THREE.Mesh(g, limbMat);
       };
-      const jointGeo = new THREE.SphereGeometry(thick * 1.12, 10, 8);
-      disposables.push(jointGeo);
       const hip = new THREE.Group();
       hip.position.set(s.point.x, s.point.y, s.point.z + side * 0.04);
-      hip.add(new THREE.Mesh(jointGeo, limbMat));
-      const upper = bone(thick, thick * 0.85, seg * 1.05);
+      // The haunch: a mass sunk into the flank so the leg grows out of the body instead of being stuck on.
+      const massGeo = new THREE.SphereGeometry(thick * 1.55, 12, 9);
+      disposables.push(massGeo);
+      const mass = new THREE.Mesh(massGeo, limbMat);
+      mass.scale.set(1, 1.2, 0.85);
+      mass.position.set(0, thick * 0.15, -side * thick * 0.55);
+      hip.add(mass);
+      const upper = bone(thick * 1.02, thick * 0.74, seg * 1.08, 0.2);
       const knee = new THREE.Group();
       knee.position.y = -seg * 1.05;
-      const kneeBall = new THREE.Mesh(jointGeo, limbMat);
-      kneeBall.scale.setScalar(0.85);
-      knee.add(kneeBall);
-      const lower = bone(thick * 0.85, thick * 0.65, seg);
+      const lower = bone(thick * 0.72, thick * 0.5, seg * 1.02, 0.1);
       const ankle = new THREE.Group();
       ankle.position.y = -seg;
-      const ankleBall = new THREE.Mesh(jointGeo, limbMat);
-      ankleBall.scale.setScalar(0.65);
-      ankle.add(ankleBall);
-      const shank = bone(thick * 0.65, thick * 0.55, seg * 0.55);
+      const shank = bone(thick * 0.5, thick * 0.42, seg * 0.55, 0.02);
       const foot = new THREE.Mesh(partGeometry(footId, colors.base), getPartMaterial());
       foot.position.y = -seg * 0.55;
+      foot.scale.setScalar(Math.min(1.5, Math.max(0.8, thick / 0.1))); // feet that suit the leg
       ankle.add(shank, foot);
       lower.add(ankle);
       knee.add(lower);
@@ -216,6 +242,9 @@ export function buildCreatureBody(record, opts = {}) {
       legs.push({ pair, side, hip, upper, knee, ankle, foot, seg, bend, phase: pair * Math.PI * 0.5 + (side > 0 ? 0 : Math.PI) });
     }
   });
+  // Long-legged bodies stride slower and swing less; short-legged ones patter quickly (so legs never over-reach).
+  const avgSeg = legs.length ? legs.reduce((sum, l) => sum + l.seg, 0) / legs.length : 0.6;
+  const strideK = Math.min(1.35, Math.max(0.6, Math.sqrt(0.6 / Math.max(0.15, avgSeg))));
   // How far the body drops in a full crouch, so the feet stay planted.
   const crouchDrop = legs.length ? legs.reduce((sum, l) => sum + l.seg * (reachOf(restPose(l.bend)) - reachOf(restPose(l.bend, 1))), 0) / legs.length : 0;
 
@@ -231,29 +260,26 @@ export function buildCreatureBody(record, opts = {}) {
     for (const side of [1, -1]) {
       const s = sweep.surface(a.t, side * a.angle);
       const len = a.length;
-      const thick = 0.055 + len * 0.03;
-      const bone = (r0, r1, l) => {
-        const g = new THREE.CylinderGeometry(r1, r0, l, 10).translate(0, -l / 2, 0);
+      const thick = Math.min(0.14, Math.max(0.045, 0.035 + len * 0.022 + (s.r || 0.4) * 0.07));
+      const bone = (r0, r1, l, bulge) => {
+        const g = limbBone(r0, r1, l, bulge);
         disposables.push(g);
         return new THREE.Mesh(g, limbMat);
       };
-      const jointGeo = new THREE.SphereGeometry(thick * 1.2, 10, 8);
-      disposables.push(jointGeo);
       const shoulder = new THREE.Group();
       shoulder.position.copy(s.point).addScaledVector(s.normal, -thick * 0.4);
-      shoulder.add(new THREE.Mesh(jointGeo, limbMat));
-      const upper = bone(thick, thick * 0.85, len * 0.5);
+      // A rounded shoulder that merges into the chest.
+      const shoulderGeo = new THREE.SphereGeometry(thick * 1.4, 12, 9);
+      disposables.push(shoulderGeo);
+      const shoulderMass = new THREE.Mesh(shoulderGeo, limbMat);
+      shoulderMass.scale.set(1, 1.1, 0.9);
+      shoulder.add(shoulderMass);
+      const upper = bone(thick * 1.02, thick * 0.78, len * 0.52, 0.18);
       const elbow = new THREE.Group();
       elbow.position.y = -len * 0.5;
-      const elbowBall = new THREE.Mesh(jointGeo, limbMat);
-      elbowBall.scale.setScalar(0.85);
-      elbow.add(elbowBall);
-      const fore = bone(thick * 0.85, thick * 0.7, len * 0.42);
+      const fore = bone(thick * 0.76, thick * 0.56, len * 0.44, 0.1);
       const wrist = new THREE.Group();
       wrist.position.y = -len * 0.42;
-      const wristBall = new THREE.Mesh(jointGeo, limbMat);
-      wristBall.scale.setScalar(0.7);
-      wrist.add(wristBall);
       let hand = null;
       if (a.hand) {
         const def = creaturePart(a.hand);
@@ -473,7 +499,7 @@ export function buildCreatureBody(record, opts = {}) {
   const gazeFrom = new THREE.Vector3(sweep.head.p.x, sweep.head.p.y, 0);
 
   /* Rig */
-  const anim = { phase: 0, ability: null, abilityT: 0, hit: 0, dead: -1, lod: 1, crouch: 0, crouchTarget: 0, air: null, airK: 0 };
+  const anim = { t: 0, turn: 0, phase: 0, ability: null, abilityT: 0, hit: 0, dead: -1, lod: 1, crouch: 0, crouchTarget: 0, air: null, airK: 0 };
   // Sneaking turns the creature see-through; parts get their own translucent copy of the shared material.
   let ghostParts = null;
   const flapAxis = new THREE.Vector3(0, 0, 1),
@@ -493,7 +519,10 @@ export function buildCreatureBody(record, opts = {}) {
     partMeshes,
     surface: sweep.surface,
     extent: { minX: sweep.minX, maxX: sweep.maxX, lift },
-    update(dt, speed = 0) {
+    /** @param {number} dt @param {number} [speed] metres/second @param {number} [turn] turn rate, rad/second (leans into turns) */
+    update(dt, speed = 0, turn = 0) {
+      anim.t += dt;
+      anim.turn += (Math.max(-3, Math.min(3, turn)) - anim.turn) * Math.min(1, dt * 6);
       if (anim.dead >= 0) {
         anim.dead = Math.min(1, anim.dead + dt * 1.4);
         root.rotation.z = anim.dead * 1.4;
@@ -507,7 +536,7 @@ export function buildCreatureBody(record, opts = {}) {
       const dancing = anim.ability === "dance" ? Math.sin(Math.min(1, anim.abilityT / ABILITY_TIME.dance) * Math.PI) : 0;
       const moving = inAir ? 0 : Math.max(Math.min(1, speed / 3), dancing);
       // Sneaking creatures take shorter, slower steps.
-      anim.phase += dt * ((2.5 + speed * 2.2) * (1 - anim.crouch * 0.35) + dancing * 9);
+      anim.phase += dt * (((2.5 + speed * 2.2) * (1 - anim.crouch * 0.35)) / strideK + dancing * 9);
       if (anim.lod > 0)
         legs.forEach((leg) => {
           const s = Math.sin(anim.phase + leg.phase);
@@ -515,9 +544,11 @@ export function buildCreatureBody(record, opts = {}) {
           const rest = restPose(leg.bend, anim.crouch);
           // In the air the legs tuck up (jump) or trail behind (glide).
           const tuck = anim.airK * (anim.air === "glide" ? -0.9 : 0.6);
-          leg.upper.rotation.z = s * 0.55 * moving + rest.u + tuck;
-          leg.knee.rotation.z = -lift * 0.9 * moving + rest.k - anim.airK * 0.5;
-          leg.ankle.rotation.z = lift * 0.5 * moving + rest.a;
+          const swing = 0.55 * strideK;
+          leg.upper.rotation.z = s * swing * moving + rest.u + tuck;
+          // The knee folds as the foot comes forward and the ankle follows through, so the foot lifts clear.
+          leg.knee.rotation.z = -lift * 0.9 * strideK * moving + rest.k - anim.airK * 0.5;
+          leg.ankle.rotation.z = lift * 0.5 * moving + rest.a - s * 0.12 * moving;
         });
       // Gliders spread and beat their wings.
       if (anim.lod > 0)
@@ -543,7 +574,8 @@ export function buildCreatureBody(record, opts = {}) {
           // Eases in, holds, eases out: for moves that strike a pose.
           hold = Math.min(1, k * 5, (1 - k) * 4),
           held = hold * hold * (3 - 2 * hold);
-        if (anim.ability === "bite" || anim.ability === "strike") lunge = swell * 0.45;
+        // Bites and strikes rear back first, then snap forward: a readable wind-up.
+        if (anim.ability === "bite" || anim.ability === "strike") (lunge = swell * 0.5 - 0.16 * Math.max(0, 1 - k * 4)), (lean = -0.12 * Math.max(0, 1 - k * 4) + swell * 0.1);
         else if (anim.ability === "charge") lunge = swell * 0.8;
         else if (anim.ability === "spit") (lean = swell * 0.25), (pulse = 1 + swell * 0.08);
         else if (anim.ability === "sing") {
@@ -583,6 +615,11 @@ export function buildCreatureBody(record, opts = {}) {
         updateEyes(dt);
       }
       if (anim.air === "glide") lean += -0.12 * anim.airK + Math.sin(anim.phase * 0.7) * 0.04;
+      // Standing still it breathes and shifts its weight; running it leans into turns.
+      const idle = 1 - moving;
+      pulse += Math.sin(anim.t * 1.8) * 0.012 * idle;
+      lean += Math.sin(anim.t * 0.6) * 0.012 * idle;
+      roll += -anim.turn * 0.045 * Math.min(1, 0.3 + speed / 5) * (1 - anim.airK);
       lean += anim.crouch * 0.06; // head low when stalking
       body.position.set(lunge, lift + bob, 0);
       body.rotation.set(roll, spin, lean);

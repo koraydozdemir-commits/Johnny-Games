@@ -13,6 +13,7 @@
 import { makeRng } from "../cell-format.js";
 import { atLevel, generateSpecies } from "./species.js";
 import { NPC_ATTACK, npcDamage } from "./balance.js";
+import { courageOf, retreatThreshold } from "./combat-ai.js";
 
 const TAU = Math.PI * 2;
 
@@ -250,6 +251,17 @@ export function createEcosystem(c) {
     v.body.hit();
     if (v.health <= 0) return die(v, false);
     if (v.wild) {
+      const A = v.wild.A;
+      // Fighters (hunters, ambushers, guardians, giants) hit back unless genuinely low on health; only
+      // prey and the badly hurt run (combat-ai.js).
+      const fighter = A.hunt || A.lurk || A.territory || A.defend;
+      if (fighter && v.health / v.maxHealth >= retreatThreshold(courageOf({ role: A.role }))) {
+        v.wb.mode = "hunt";
+        v.wb.target = by;
+        v.wb.t = 6;
+        v.wild.alarm = { x: by.pos.x, z: by.pos.z, t: 4 };
+        return;
+      }
       v.wb.mode = "flee";
       v.wb.from = by;
       v.wb.t = 3 + Math.random() * 2;

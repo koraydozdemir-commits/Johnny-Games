@@ -1407,6 +1407,34 @@ body.galaxyStart>:not(#scene):not(.gs):not(.uv):not(.settingsScreen):not(.homeAr
 .homeArrive{position:fixed;inset:0;z-index:80;pointer-events:none;display:grid;place-items:center;transition:opacity 1.6s}
 .homeArrive p{margin:0;text-align:center;font-size:30px;font-weight:900;letter-spacing:.12em;color:#fff;text-shadow:0 2px 20px #000a}.homeArrive small{display:block;font-size:11px;letter-spacing:.4em;color:#ffffffc0}
 @media (prefers-reduced-motion:reduce){.gs,.gsPanel{transition:none;animation:none}}
+/* ---- Creature Stage: Social / Combat mode switch and the compact target card ---- */
+.creatureHUD .chModes{pointer-events:auto;display:flex;align-items:center;border-radius:999px;border:2px solid #ffffff44;background:#0d2232e6;overflow:hidden;box-shadow:0 3px 10px #0007}
+.creatureHUD .chMode{min-height:44px;min-width:84px;padding:0 16px;border:0;background:transparent;color:#cfe3ea;font:800 13px/1 inherit;font-family:inherit;cursor:pointer;touch-action:manipulation;letter-spacing:.02em}
+.creatureHUD .chMode.social.on{background:linear-gradient(#58d88a,#2fae62);color:#07210f}
+.creatureHUD .chMode.combat.on{background:linear-gradient(#ff6a66,#d93a36);color:#fff}
+.creatureHUD .chMode:focus-visible{outline:3px solid #ffd98a;outline-offset:-3px}
+.creatureHUD .chModes kbd{font-size:9px;opacity:.55;padding:0 10px 0 4px;font-family:inherit}
+.creatureHUD .chAbilities .chRow.social .chAb,.creatureHUD .chAbilities .chRow.combat .chAb{width:64px;height:64px}
+.creatureHUD[data-mode=social] .chAbilities .chRow:not(.extra) .chAb{border-color:#3fc26ecc}
+.creatureHUD[data-mode=combat] .chAbilities .chRow:not(.extra) .chAb{border-color:#ef4b48cc}
+@media (max-width:600px){.creatureHUD .chMode{min-width:70px;padding:0 12px;min-height:44px}.creatureHUD .chAbilities .chRow.social .chAb,.creatureHUD .chAbilities .chRow.combat .chAb{width:52px;height:52px}}
+/* The target card: name, health, how it feels about you. Small, at the top, and fading away when nothing is selected. */
+.creatureHUD .chTarget{min-width:0;width:min(210px,56vw);max-width:none;margin-top:0;padding:6px 9px 7px;border-radius:12px;transition:opacity .22s,transform .22s;opacity:1}
+.creatureHUD .chTarget.fade{opacity:0;transform:translateX(-50%) translateY(-6px);pointer-events:none}
+.creatureHUD .chTarget .ctHead{gap:5px}
+.creatureHUD .chTarget .ctHead b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.creatureHUD .chTarget .ctDiet{font-size:13px}
+.creatureHUD .chTarget .ctClose{width:22px;height:22px;font-size:11px}
+.creatureHUD .chTarget .ctVital{display:flex;align-items:center;gap:6px;margin-top:3px}
+.creatureHUD .chTarget .ctFace{width:26px;height:26px;flex:none}
+.creatureHUD .chTarget .ctHpWrap{flex:1;min-width:0}.creatureHUD .chTarget .ctHp{margin-top:0;height:5px}
+.creatureHUD .chTarget .ctHpNum{font-size:9px;color:#bfd6de}
+.creatureHUD .chTarget .ctRel{flex:none;font-size:9px;font-weight:800;padding:2px 7px;border-radius:9px;color:#fff;background:#ffffff33}
+.creatureHUD .chTarget .ctInfo,.creatureHUD .chTarget .ctLikes,.creatureHUD .chTarget .ctHint{display:none}
+.creatureHUD[data-mode=social] .chTarget .ctLikes:not(:empty){display:block;margin-top:3px;font-size:10px}
+.creatureHUD .chTarget.social .ctHint{display:block;margin-top:3px;font-size:10px}
+.creatureHUD .chTarget.fade[hidden]{display:none}
+@media (prefers-reduced-motion:reduce){.creatureHUD .chTarget{transition:none}}
 </style>
 </head>
 <body class="galaxyStart">
