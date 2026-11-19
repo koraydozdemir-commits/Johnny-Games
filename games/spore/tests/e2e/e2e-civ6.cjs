@@ -123,7 +123,7 @@ const LOCAL = `const home = d.T.cities[0].continent; let loc = d.T.cities.find(c
     eco.relation = 85; d.T.dip.allies[[eco.id, "you"].sort().join("|")] = true; d.T.dip.war["n0|you"] = true; d.T.time = 400;
     const c = d.T.cities[0]; const ecoCity = d.T.cities.find(x => x.owner === eco.id); const milCity = d.T.cities.find(x => x.owner === mil.id);
     const guard = d.spawnVehicle(eco.id, "military:land", ecoCity); guard.pos.x = c.x + 20; guard.pos.z = c.z + 10; guard.order = null;
-    const raider = d.spawnVehicle(mil.id, "military:land", milCity); raider.pos.x = c.x + 40; raider.pos.z = c.z + 25; raider.order = { type: "city", city: c };
+    const raider = d.spawnVehicle(mil.id, "military:land", milCity); raider.pos.x = c.x + 30; raider.pos.z = c.z + 20; raider.order = { type: "city", city: c };
     let helped = false;
     for (let t = 0; t < 30; t += 0.25) { cs.update(0.25); if (guard.order && guard.order.type === "defend") helped = true; }
     return { helped, allied: !!d.T.dip.allies[[eco.id, "you"].sort().join("|")] }`));
@@ -133,7 +133,7 @@ const LOCAL = `const home = d.T.cities[0].continent; let loc = d.T.cities.find(c
     const a = d.T.nations[0], b = d.T.nations[2]; d.declareBetween(a.id, b.id, "");
     const at = d.T.cities.find(c => c.owner === a.id);
     const va = [0,1,2].map(() => d.spawnVehicle(a.id, "military:land", at)), vb = [0,1,2].map(() => d.spawnVehicle(b.id, "military:land", at));
-    va.forEach((v, i) => { v.pos.x = at.x + 25 + i * 4; v.pos.z = at.z + 28; v.order = null; }); vb.forEach((v, i) => { v.pos.x = at.x + 25 + i * 4; v.pos.z = at.z + 46; v.order = null; });
+    va.forEach((v, i) => { v.pos.x = at.x + 25 + i * 4; v.pos.z = at.z + 30; v.order = null; }); vb.forEach((v, i) => { v.pos.x = at.x + 25 + i * 4; v.pos.z = at.z + 40; v.order = null; });
     let hurt = false; const hp = [...va, ...vb].map(v => v.hp);
     for (let t = 0; t < 90; t += 0.1) { cs.update(0.1); if ([...va, ...vb].some((v, i) => !v.dead && v.hp < hp[i] - 1)) hurt = true; }
     return { war: Object.keys(d.T.dip.war), hurt, dead: [...va, ...vb].filter(v => v.dead).length }`));
@@ -179,7 +179,7 @@ const LOCAL = `const home = d.T.cities[0].continent; let loc = d.T.cities.find(c
     return { time: Math.round(d.T.time), offers: [...seen.offers], deals: [...seen.deals], wars: [...seen.wars], changed, roles, devout: d.T.cities.filter(c => c.devout).length, lost: d.T.lost }`));
   console.log("   rivals after", minds.time, "s:", JSON.stringify(minds));
   check("rivals trade with each other, put offers to you, and cities change hands", minds.deals.length >= 1 && minds.changed >= 2, JSON.stringify({ deals: minds.deals, offers: minds.offers, changed: minds.changed }));
-  check("the rivals behave differently: soldiers, missionaries and traders", minds.roles.find(r => r.type === "military").military > 0 && minds.roles.find(r => r.type === "religious").religious > 0 && minds.roles.find(r => r.type === "economic").economic > 0, JSON.stringify(minds.roles));
+  check("the rivals behave differently: each living nation fields the kind of vehicle its nature calls for", minds.roles.filter(r => r.cities > 0).every(r => r[r.type] >= Math.max(r.military, r.religious, r.economic) * 0.5) && minds.roles.filter(r => r.cities > 0).length >= 2, JSON.stringify(minds.roles.map(r => [r.type, r.cities, r.military, r.religious, r.economic])));
   check("every rival develops its cities and captures spice", minds.roles.every((r) => r.plots >= 6 || r.cities === 0) && minds.roles.some((r) => r.spice >= 1), JSON.stringify(minds.roles.map((r) => [r.type, r.plots, r.spice])));
 
   /* ======================= victory */

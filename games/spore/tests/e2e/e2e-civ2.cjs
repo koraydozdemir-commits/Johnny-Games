@@ -70,7 +70,7 @@ const hit = (a, b) => a && b && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y 
     const k = await page.evaluate(cs(`return d.sheet?.kind`));
     check(`${name}: tapping a city opens it`, k === "city", k + "");
     await page.evaluate(() => document.querySelector(".tsClose")?.click()); await page.waitForTimeout(200);
-    await page.evaluate(cs(`d.T.selected.clear()`));
+    await page.evaluate(cs(`d.T.selected.clear(); const v = d.T.vehicles.find(v=>v.owner==="you"); d.rig.flyTo(v.pos.x, v.pos.z, 70); d.rig.snap();`)); await page.waitForTimeout(800);
     const vs = await page.evaluate(cs(`const v = d.T.vehicles.find(v=>v.owner==="you"); return d.vehicleScreen(v)`));
     await page.touchscreen.tap(vs.x, vs.y); await page.waitForFunction(() => !document.querySelector('#cvCmd').hidden, null, { timeout: 15000 }).catch(() => {}); await page.waitForTimeout(300);
     const sel = await page.evaluate(cs(`return d.T.selected.size`));

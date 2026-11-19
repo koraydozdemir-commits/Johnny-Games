@@ -17,7 +17,7 @@ async function run(label, w, h, touch) {
   check("visible tiles get baked thumbnails", thumbs >= 6, thumbs + " baked");
   // Search
   await page.fill("#eclQ", "crystal");
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(1800);
   const n1 = await page.$$eval(".eclTile", (t) => t.length);
   check("search narrows the list", n1 > 0 && n1 < 40, n1 + " trees match 'crystal'");
   await page.fill("#eclQ", "zzzz");

@@ -2180,19 +2180,21 @@ export function createCivStage(o) {
       const fleet = vehiclesOf(n.id);
       world ||= aiWorld();
       const me = { id: n.id, type: n.type, money: n.money, vehicles: fleet.length + queuedFor(n.id), cap: vehicleCap(n.id), cities: world.cities.filter((c) => c.owner === n.id) };
+      // Spice first: one idle vehicle at a time is sent to the nearest free geyser it can reach (rivals' derricks too, for a
+      // militarist at war), before the rest are given targets; so claiming resources is never starved by the wars.
+      if (T.time > 60 && !fleet.some((v) => v.order?.type === "geyser")) {
+        const idle = fleet.filter((v) => !v.order && v.mode !== "sea");
+        const pick = idle.sort((a, b) => (b.role !== "military") - (a.role !== "military"))[0];
+        if (pick) {
+          const home = T.cities[pick.home] || mine[0];
+          const free = T.geysers
+            .filter((g) => (!g.owner || (g.owner !== n.id && hostile(n.id, g.owner) && pick.role === "military")) && canClaim(pick, g) && distXZ(g, home) < 330)
+            .sort((a, b) => distXZ(a, home) - distXZ(b, home))[0];
+          if (free) pick.order = { type: "geyser", geyser: free, x: free.x, z: free.z };
+        }
+      }
       const intents = planNation(me, world);
       for (const it of intents.slice(0, 9)) applyIntent(n, it, fleet, mine, world);
-      // Spice: idle vehicles go and claim free geysers they can reach, and raiders wreck their enemies' derricks.
-      if (T.time > 60)
-        for (const v of fleet) {
-          if (v.order || v.mode === "sea") continue;
-          const taken = new Set(fleet.filter((u) => u.order?.type === "geyser").map((u) => u.order.geyser));
-          const home = T.cities[v.home] || mine[0];
-          const free = T.geysers
-            .filter((g) => (!g.owner || (g.owner !== n.id && hostile(n.id, g.owner) && v.role === "military")) && !taken.has(g) && canClaim(v, g) && distXZ(g, home) < 330)
-            .sort((a, b) => distXZ(a, home) - distXZ(b, home))[0];
-          if (free && Math.random() < 0.5) v.order = { type: "geyser", geyser: free, x: free.x, z: free.z };
-        }
     }
   }
   /** Your own military vehicles defend your cities: idle ones within reach go after attackers. */
