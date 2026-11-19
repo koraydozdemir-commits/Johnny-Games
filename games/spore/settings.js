@@ -8,7 +8,7 @@ export const SETTINGS_KEY = "johnny-spore-settings";
 const prefersReducedMotion = () => typeof window !== "undefined" && !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 const clamp01 = (v, d) => (Number.isFinite(Number(v)) ? Math.min(1, Math.max(0, Number(v))) : d);
 
-/** @returns {{ sfx:number, ambience:number, reducedMotion:boolean }} */
+/** @returns {{ sfx:number, ambience:number, music:number, reducedMotion:boolean }} */
 export function loadSettings(store) {
   let raw = null;
   try {
@@ -19,12 +19,13 @@ export function loadSettings(store) {
   return {
     sfx: clamp01(raw?.sfx, 0.85),
     ambience: clamp01(raw?.ambience, 0.7),
+    music: clamp01(raw?.music, 0.55),
     reducedMotion: typeof raw?.reducedMotion === "boolean" ? raw.reducedMotion : prefersReducedMotion(),
   };
 }
 export function saveSettings(store, s) {
   try {
-    store.setItem(SETTINGS_KEY, JSON.stringify({ sfx: s.sfx, ambience: s.ambience, reducedMotion: s.reducedMotion }));
+    store.setItem(SETTINGS_KEY, JSON.stringify({ sfx: s.sfx, ambience: s.ambience, music: s.music, reducedMotion: s.reducedMotion }));
   } catch (e) {
     /* storage unavailable: settings last for this visit */
   }
@@ -71,6 +72,7 @@ export function openSettings(o) {
       <section aria-labelledby="spSound"><h3 id="spSound">Sound</h3>
         <label class="spRange"><span>Effects</span><input type="range" min="0" max="100" step="5" id="spSfx" value="${Math.round(s.sfx * 100)}"><output for="spSfx">${pct(s.sfx)}</output></label>
         <label class="spRange"><span>Ambience</span><input type="range" min="0" max="100" step="5" id="spAmb" value="${Math.round(s.ambience * 100)}"><output for="spAmb">${pct(s.ambience)}</output></label>
+        <label class="spRange"><span>Music</span><input type="range" min="0" max="100" step="5" id="spMusic" value="${Math.round(s.music * 100)}"><output for="spMusic">${pct(s.music)}</output></label>
       </section>
       <section aria-labelledby="spView"><h3 id="spView">Display</h3>
         <label class="spSwitch"><span>Reduced motion<small>Calmer camera, no screen shake, gentler effects</small></span><input type="checkbox" role="switch" id="spMotion" ${s.reducedMotion ? "checked" : ""}><i aria-hidden="true"></i></label>
@@ -100,6 +102,7 @@ export function openSettings(o) {
   };
   slider("#spSfx", "sfx");
   slider("#spAmb", "ambience");
+  slider("#spMusic", "music");
   $("#spMotion").onchange = (e) => {
     s.reducedMotion = e.target.checked;
     o.onChange(s);
