@@ -417,7 +417,8 @@ export function createCreatureStage(o) {
     if (!nearNest()) return toast("Return to your nest to call a mate.", 2.4);
     const partner = family.filter((n) => !n.dead && !n.following).sort((a, b) => distTo(a) - distTo(b))[0];
     if (!partner) return mate();
-    courtship = { n: partner, t: 0 };
+    courtship = { n: partner, t: 0, danceT: 0 };
+    o.onCourtship?.(true);
     partner.social = null;
     partner.wake = 60; // even at night
     P.pending = null;
@@ -442,9 +443,10 @@ export function createCreatureStage(o) {
       n.speed = 0;
       n.heading = Math.atan2(dz, -dx);
       P.heading = Math.atan2(-dz, dx);
+      c.danceT = (c.danceT || 0) + dt;
       if ((c.beat = (c.beat || 0) - dt) <= 0) {
-        c.beat = 1.6;
-        const move = ["dance", "charm"][Math.floor(c.t / 1.6) % 2];
+        c.beat = 1.35;
+        const move = ["dance", "charm"][Math.floor(c.danceT / 1.35) % 2];
         act(P, move);
         act(n, move);
         voice(P, move);
@@ -453,8 +455,10 @@ export function createCreatureStage(o) {
       }
     }
     n.pos.y = heightAt(n.pos.x, n.pos.z);
-    if (c.t > 3.2) {
+    // Give the pair time to approach, then let the courtship dance play for a full 8 seconds.
+    if ((c.danceT || 0) > 8) {
       courtship = null;
+      o.onCourtship?.(false);
       dust(P.pos.x, P.pos.z, 6, eggMat);
       mate();
     }
@@ -1199,7 +1203,6 @@ export function createCreatureStage(o) {
         <svg class="bfBrain" viewBox="-50 -44 100 88"><path class="bfLobe" d="M-38,6 C-47,-8 -38,-30 -20,-32 C-12,-43 6,-43 14,-34 C30,-39 47,-24 42,-6 C50,6 42,25 28,26 C22,38 4,39 -2,30 C-14,39 -33,33 -32,20 C-43,18 -45,12 -38,6 Z"></path><path class="bfFold" d="M-2,-35 C-7,-20 4,-10 -2,4 C-6,16 2,24 -2,30 M-31,-13 C-20,-19 -15,-6 -24,0 M21,-21 C10,-16 12,-4 23,-2 M-19,14 C-10,9 -6,20 -15,24 M14,9 C25,7 27,18 18,22 M-28,-24 C-22,-30 -12,-26 -10,-30 M30,-26 C24,-32 14,-28 12,-31"></path><ellipse class="bfShine" cx="-16" cy="-20" rx="9" ry="5"></ellipse></svg>
       </div>
     </div>
-    <button class="chMate" id="chMate" hidden>♡ Call a mate</button>
     <button class="chMate chEgg" id="chEgg" hidden>🥚 Eat an egg</button>
     <div class="chActRow" id="chActRow" hidden>
       <button class="chAct" id="chCarry"></button>
@@ -1355,10 +1358,11 @@ export function createCreatureStage(o) {
       moveBtn("sprint", "💨", "Sprint", "⇧", 1) +
       moveBtn("jump", P.abilities.glide ? "🕊" : "⤒", "Jump", "␣", P.abilities.jump) +
       `<button class="chAb card" data-ab="card" aria-label="${cardInfo.name}"><span class="cd"></span><span class="ic">${cardInfo.icon}</span><small>${cardInfo.name}</small><kbd>Q</kbd></button>` +
-      `<button class="chAb next" data-ab="next" aria-label="Select the next creature"><span class="ic">◎</span><small>Select</small><kbd>Tab</kbd></button></div>`;
+      `<button class="chAb next" data-ab="next" aria-label="Select the next creature"><span class="ic">◎</span><small>Select</small><kbd>Tab</kbd></button>` +
+      `<button class="chAb social mate" id="chMate" aria-label="Call a mate"><span class="ic">♡</span><small>Mate</small></button></div>`;
     $h("#chAbilities")
       .querySelectorAll("button")
-      .forEach((b) => (b.onclick = () => (b.dataset.mode ? setMode(b.dataset.mode, true) : useAbility(b.dataset.ab))));
+      .forEach((b) => (b.onclick = () => (b.dataset.mode ? setMode(b.dataset.mode, true) : b.dataset.ab === "mate" ? callMate() : useAbility(b.dataset.ab))));
   }
   /** Switch between the Social and Combat move sets. `manual` stops the game switching back for a few seconds. */
   function setMode(mode, manual = false) {
@@ -4582,10 +4586,10 @@ export function createCreatureStage(o) {
     const mateButton = $h("#chMate");
     const hideMateButton = !!courtship || !!P.migration || !!brainFx || P.deadTimer > 0;
     mateButton.hidden = hideMateButton;
-    // Some HUD styles assign display directly, which can override the browser hidden attribute.
     mateButton.style.display = hideMateButton ? "none" : "flex";
-    $h("#chMate").textContent = atNest ? (tribeReady ? "🔥 Mate · found a tribe" : "♡ Mate · new generation") : "♡ Call mate · return to nest";
-    $h("#chMate").classList.toggle("final", tribeReady);
+    mateButton.querySelector("small").textContent = atNest ? (tribeReady ? "Found tribe" : "Mate") : "Call mate";
+    mateButton.setAttribute("aria-label", atNest ? (tribeReady ? "Mate to found a tribe" : "Mate for a new generation") : "Call mate, return to your nest");
+    mateButton.classList.toggle("final", tribeReady);
     $h("#chTribe").hidden = !o.tribeUnlocked?.();
     // Watching a nest from nearby is enough to learn who lives there; sight lets you do it from further.
     const watch = 12 + P.abilities.sight * 6;
