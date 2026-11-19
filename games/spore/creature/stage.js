@@ -18,6 +18,10 @@ import { createMinimap, islandPicture, openIslandMap } from "./minimap.js";
 import { creatureCard } from "../traits.js";
 import { movementOf } from "./anatomy.js";
 import { REGIONS, regionById, regionIndex } from "./regions.js";
+import { getHomeworld } from "../ecolib/homeworld.js";
+import { faunaFor, regionSeed as planetRegionSeed } from "../ecolib/ecosystem.js";
+import { faunaSpecies } from "../ecolib/library.js";
+import { assetById } from "../ecolib/catalog.js";
 import { createEcosystem } from "./ecosystem.js";
 import { createWeather } from "./weather.js";
 import { ALPHA, ATTACKS, NPC_ATTACK, applyStagger, npcDamage, npcHealth, npcHit, playerDamage, playerHealth } from "./balance.js";
@@ -581,9 +585,19 @@ export function createCreatureStage(o) {
   }
 
   /* ---- the ecosystem: wildlife herds, packs, loners and the food chain (ecosystem.js) ---- */
+  // The homeworld decides which creatures live here (library fauna that suit its biomes and food chain).
+  const homeworld = getHomeworld();
+  const fauna = homeworld ? faunaFor(homeworld, planetRegionSeed(homeworld, regionId)).species.map((s) => assetById(s.id)) : [];
+  const libraryFauna = (arch, i) => {
+    const fit = fauna.filter((a) => a.params.archetype === arch);
+    if (!fit.length) return null;
+    const a = fit[i % fit.length];
+    return { ...faunaSpecies(a), diet: a.params.diet };
+  };
   const eco = createEcosystem({
     world,
     regionSeed,
+    libraryFauna,
     wildlife: REGION.wildlife,
     quality: o.quality,
     P,

@@ -60,7 +60,8 @@ export function createEcosystem(c) {
       if (!home) continue;
       const A = ARCHETYPES[arch];
       const seed = c.regionSeed + 7001 + groups.length * 1291;
-      const base = generateSpecies(seed, A.diet, 2);
+      // On a homeworld, the wildlife are that planet's library creatures; otherwise a generated species.
+      const base = c.libraryFauna?.(arch, groups.length) || generateSpecies(seed, A.diet, 2);
       base.role = A.role;
       base.sizeJitter = (base.sizeJitter || 1) * A.scale;
       base.temper = A.hunt || A.lurk ? "hostile" : A.territory || A.defend ? "wary" : "skittish";

@@ -68,7 +68,13 @@ export function readPedia(raw, seed = 0) {
   p.milestones = d.milestones && typeof d.milestones === "object" ? { ...d.milestones } : {};
   // The home world: chosen on the galaxy screen (or found for older universes).
   const h = d.home;
-  if (h && Number.isInteger(h.starId) && h.starId >= 0 && typeof h.planetId === "string" && /^\d+:\d+$/.test(h.planetId)) p.home = { starId: h.starId, planetId: h.planetId, chosen: !!h.chosen, at: Number(h.at) || 0 };
+  if (h && Number.isInteger(h.starId) && h.starId >= 0 && typeof h.planetId === "string" && /^\d+:\d+$/.test(h.planetId)) {
+    p.home = { starId: h.starId, planetId: h.planetId, chosen: !!h.chosen, at: Number(h.at) || 0 };
+    // The homeworld's environment profile is generated once and kept with the universe, so later changes
+    // to the generator never alter a world already played (see ecolib/planet-profile.js).
+    const pr = h.profile;
+    if (pr && typeof pr === "object" && Number.isInteger(pr.v) && pr.planetId === h.planetId && pr.terrain && pr.vegetation && pr.atmosphere && pr.water && Array.isArray(pr.biomes)) p.home.profile = pr;
+  }
   return p;
 }
 

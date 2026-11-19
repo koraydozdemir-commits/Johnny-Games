@@ -34,6 +34,7 @@ import { openGalaxy } from "./galaxy/ui.js";
 import { createGalaxyStart } from "./galaxy/start.js";
 import { openPedia } from "./pedia/ui.js";
 import { openEcoLibrary } from "./ecolib/ui.js";
+import { setHomeworld } from "./ecolib/homeworld.js";
 import { asPedia, listGlobal, putGlobal, updateGlobal } from "./universe/global.js";
 import { readCreation } from "./creations/format.js";
 import { openModularEditor } from "./creations/editor.js";
@@ -5485,6 +5486,10 @@ async function initUniverse() {
       },
     });
     universe = { store, meta, session };
+    // Every stage is built on the homeworld: hand its environment to all of them before any starts.
+    const profile = session.homeProfile();
+    setHomeworld(profile);
+    background.setPlanet(profile);
     // The home world and its star are known from the start: this is where the species began.
     const home = session.home();
     const planet = session.planet(home.planetId);
@@ -6019,6 +6024,7 @@ if (new URLSearchParams(location.search).has("debug")) {
     get universe() {
       return universe;
     },
+    background,
     openUniverseScreen,
     openEcoLibrary: (o2) => openEcoLibrary({ renderer, reducedMotion: settings.reducedMotion, sfx: playSfx, ...o2 }),
     syncPedia,

@@ -93,18 +93,52 @@ function proxyOf(reduced) {
   return g2;
 }
 
-/** Build one model (uncached). lod 0, 1 or 2. */
-export function buildModel(asset, variant = 0, lod = 0) {
+/** Categories whose green parts take a planet's foliage colour. */
+const FOLIAGE = new Set(["tree", "smallTree", "bush", "grass", "flower", "succulent", "alienPlant", "aquatic"]);
+export const takesPalette = (asset) => FOLIAGE.has(asset.category);
+/** A short key for a palette ({hue, sat, light}), quantised so near-identical palettes share models. */
+export const paletteKey = (p) => (p ? `h${Math.round((((p.hue % 360) + 360) % 360) / 12)}s${Math.round((p.sat ?? 1) * 5)}l${Math.round((p.light ?? 1) * 5)}` : "");
+
+/**
+ * Recolour foliage: vertices that are leaf-green (hue 55-175) move to the palette's hue, keeping their own
+ * variation, brightness and saturation. Browns, whites, flowers and everything else are left alone, so a
+ * violet forest still has brown trunks and bright flowers.
+ */
+function recolour(geo, palette) {
+  const col = geo.attributes.color;
+  const c = new THREE.Color(),
+    hsl = {};
+  const sat = palette.sat ?? 1,
+    light = palette.light ?? 1;
+  for (let i = 0; i < col.count; i++) {
+    c.setRGB(col.getX(i), col.getY(i), col.getZ(i), THREE.LinearSRGBColorSpace);
+    c.getHSL(hsl, THREE.SRGBColorSpace);
+    const h = hsl.h * 360;
+    if (hsl.s < 0.12 || h < 55 || h > 175) continue;
+    c.setHSL(((palette.hue + (h - 115) * 0.4) % 360 + 360) % 360 / 360, Math.min(1, hsl.s * sat), Math.max(0.03, Math.min(0.95, hsl.l * light)), THREE.SRGBColorSpace);
+    col.setXYZ(i, c.r, c.g, c.b);
+  }
+  col.needsUpdate = true;
+  return geo;
+}
+
+/** Build one model (uncached). lod 0, 1 or 2. `palette` recolours foliage ({hue, sat, light}). */
+export function buildModel(asset, variant = 0, lod = 0, palette = null) {
   if (isFauna(asset)) throw new Error(asset.id + " is a creature: use faunaRecord()");
+  const pal = palette && takesPalette(asset) ? palette : null;
   if (lod >= 2) {
-    const reduced = normalise(mergePieces(pieces(asset, variant, 1)), asset);
+    const raw = mergePieces(pieces(asset, variant, 1));
+    if (pal) recolour(raw, pal);
+    const reduced = normalise(raw, asset);
     const p = proxyOf(reduced);
     reduced.dispose();
     p.userData.mid = (asset.size.min + asset.size.max) / 2;
     p.userData.shared = true;
     return p;
   }
-  const g = normalise(mergePieces(pieces(asset, variant, lod)), asset);
+  const raw = mergePieces(pieces(asset, variant, lod));
+  if (pal) recolour(raw, pal);
+  const g = normalise(raw, asset);
   g.userData.shared = true;
   return g;
 }
@@ -127,7 +161,7 @@ export function createLibrary({ budget = DEFAULT_BUDGET } = {}) {
   const cache = new Map();
   let tick = 0,
     tris = 0;
-  const key = (id, v, l) => id + ":" + v + ":" + l;
+  const key = (id, v, l, pk = "") => id + ":" + v + ":" + l + (pk ? ":" + pk : "");
   const evict = () => {
     if (tris <= budget) return;
     const order = [...cache.entries()].filter(([, e]) => e.refs === 0).sort((a, b) => a[1].used - b[1].used);
@@ -140,13 +174,14 @@ export function createLibrary({ budget = DEFAULT_BUDGET } = {}) {
   };
   return {
     /** Geometry for an asset variant at a level of detail, built and cached on demand. */
-    get(id, variant = 0, lod = 0) {
+    get(id, variant = 0, lod = 0, palette = null) {
       const asset = assetById(id);
       if (!asset) throw new Error("unknown asset " + id);
-      const k = key(id, variant, lod);
+      const pk = palette && takesPalette(asset) ? paletteKey(palette) : "";
+      const k = key(id, variant, lod, pk);
       let e = cache.get(k);
       if (!e) {
-        const geometry = buildModel(asset, variant % asset.variants, lod);
+        const geometry = buildModel(asset, variant % asset.variants, lod, pk ? palette : null);
         e = { geometry, tris: triangleCount(geometry), used: 0, refs: 0 };
         cache.set(k, e);
         tris += e.tris;
@@ -155,15 +190,15 @@ export function createLibrary({ budget = DEFAULT_BUDGET } = {}) {
       e.used = ++tick;
       return e.geometry;
     },
-    retain(id, variant, lod) {
-      const e = cache.get(key(id, variant, lod));
+    retain(id, variant, lod, pk = "") {
+      const e = cache.get(key(id, variant, lod, pk));
       if (e) e.refs++;
     },
-    release(id, variant, lod) {
-      const e = cache.get(key(id, variant, lod));
+    release(id, variant, lod, pk = "") {
+      const e = cache.get(key(id, variant, lod, pk));
       if (e && e.refs > 0) e.refs--;
     },
-    has: (id, variant = 0, lod = 0) => cache.has(key(id, variant, lod)),
+    has: (id, variant = 0, lod = 0, pk = "") => cache.has(key(id, variant, lod, pk)),
     stats: () => ({ models: cache.size, triangles: tris, budget }),
     clear() {
       for (const e of cache.values()) e.geometry.dispose();

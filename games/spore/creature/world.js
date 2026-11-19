@@ -8,6 +8,11 @@
 import * as THREE from "three";
 import { makeRng } from "../cell-format.js";
 import { REGIONS, regionById } from "./regions.js";
+import { getHomeworld, themeRegion } from "../ecolib/homeworld.js";
+import { populate, regionSeed as planetRegionSeed } from "../ecolib/ecosystem.js";
+import { createLibrary } from "../ecolib/library.js";
+import { createEcoInstancer } from "../ecolib/instancer.js";
+import { mix as mixHex } from "../ecolib/color.js";
 
 export const ISLAND = { shore: 205, size: 480, nest: { x: 0, z: 178 }, beach: 178 };
 const TAU = Math.PI * 2;
@@ -26,6 +31,9 @@ const PROFILE = {
 };
 /** The active region's settings, peaks and pools (live bindings: they change with the region). */
 export let REGION = REGIONS[0];
+/** What the most recently built world was made from (for tests and debugging): region, planet and its flora. */
+let INFO = null;
+export const worldInfo = () => INFO;
 export let PEAKS = [];
 /** Swamp pools (water) and lava pools: depressions; lava ones are also walls. */
 export let POOLS = [];
@@ -33,7 +41,8 @@ let SOLIDS = [];
 
 /** Make a region the active one: terrain, peaks and pools. createIsland calls this. */
 export function setRegion(id) {
-  REGION = regionById(id);
+  // Every stage builds its land from here, so the homeworld's colours, sky, water and relief reach all of them.
+  REGION = themeRegion(regionById(id), getHomeworld());
   PEAKS = REGION.peaks.map((p) => {
     const f = PROFILE[p.profile || REGION.profile || "smooth"];
     // Solve f(k) = SOLID_RISE / h for the solid core's radius (f rises monotonically to its top).
@@ -133,8 +142,9 @@ export function areaAt(x, z) {
 const COL = {};
 export function groundColor(x, z, c) {
   const k = REGION.colors;
-  if (COL.region !== REGION.id) {
-    COL.region = REGION.id;
+  const themed = REGION.id + (REGION.themeKey || "");
+  if (COL.region !== themed) {
+    COL.region = themed;
     for (const name of ["sand", "grassLight", "grassDark", "dirt", "rock", "cliff", "snow", "seabed"]) COL[name] = new THREE.Color(k[name]);
     COL.mud = new THREE.Color(0x4a4230);
     COL.ash = new THREE.Color(0x2a2522);
@@ -297,7 +307,7 @@ export function createIsland(scene, quality = "medium", regionId = "coast") {
   scene.add(group);
   const terrain = terrainMesh(quality === "low" ? 110 : quality === "medium" ? 140 : 180);
   group.add(terrain);
-  const sea = new THREE.Mesh(new THREE.CircleGeometry(700, 48).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x2f8fc0, transparent: true, opacity: 0.85, roughness: 0.15, metalness: 0.1 }));
+  const sea = new THREE.Mesh(new THREE.CircleGeometry(700, 48).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: REGION.water ?? 0x2f8fc0, transparent: true, opacity: 0.85, roughness: 0.15, metalness: 0.1 }));
   sea.position.y = 0.2;
   group.add(sea);
 
@@ -400,7 +410,7 @@ export function createIsland(scene, quality = "medium", regionId = "coast") {
         new THREE.CylinderGeometry(0.24, 0.26, 1.3, 8).translate(-0.85, 2.9, 0),
         new THREE.CylinderGeometry(0.26, 0.26, 0.8, 8).rotateZ(Math.PI / 2).translate(-0.5, 2.5, 0),
       ]);
-      instanced(cactus, new THREE.MeshStandardMaterial({ color: 0x5b8a46, roughness: 0.8 }), cacti, (o) => {
+      instanced(cactus, new THREE.MeshStandardMaterial({ color: mixHex(0x5b8a46, look.leaf, 0.75), roughness: 0.8 }), cacti, (o) => {
         p.set(o.x, ground(o), o.z);
         q.setFromAxisAngle(yAxis, o.r);
         s.setScalar(o.s * 0.9);
@@ -511,12 +521,12 @@ export function createIsland(scene, quality = "medium", regionId = "coast") {
       z = Math.sin(a) * d;
     if (Math.hypot(x - start.x, z - start.z) > 14 && mountainClear(x, z) > 2) palms.push({ x, z, s: 0.8 + rng() * 0.5, r: rng() * TAU });
   }
-  instanced(new THREE.CylinderGeometry(0.22, 0.38, 6, 6).translate(0, 3, 0), new THREE.MeshStandardMaterial({ color: 0x9a7a52 }), palms, (o) => {
+  instanced(new THREE.CylinderGeometry(0.22, 0.38, 6, 6).translate(0, 3, 0), new THREE.MeshStandardMaterial({ color: mixHex(0x9a7a52, look.trunk, 0.6) }), palms, (o) => {
     p.set(o.x, heightAt(o.x, o.z) - 0.2, o.z);
     q.setFromEuler(new THREE.Euler(0.12, o.r, 0.1));
     s.setScalar(o.s);
   });
-  instanced(new THREE.ConeGeometry(2.6, 1.2, 7), new THREE.MeshStandardMaterial({ color: 0x4fa64a, flatShading: true }), palms, (o) => {
+  instanced(new THREE.ConeGeometry(2.6, 1.2, 7), new THREE.MeshStandardMaterial({ color: mixHex(0x4fa64a, look.leaf, 0.85), flatShading: true }), palms, (o) => {
     p.set(o.x + 0.4 * o.s, heightAt(o.x, o.z) + 6.1 * o.s, o.z);
     q.setFromAxisAngle(yAxis, o.r);
     s.set(o.s, o.s, o.s);
@@ -545,6 +555,13 @@ export function createIsland(scene, quality = "medium", regionId = "coast") {
     const col = new THREE.Color();
     // Each region's grass: lush green, olive marsh grass, dry red-brown scrub, grey ash.
     const tint = { coast: [0.26, 0.5, 0.36], forest: [0.3, 0.5, 0.3], swamp: [0.2, 0.42, 0.3], badlands: [0.08, 0.45, 0.42], volcanic: [0.07, 0.12, 0.3] }[REGION.id];
+    // On a homeworld the grass takes the planet's foliage colour (keeping the region's small differences).
+    const pv = REGION.homeworld?.vegetation;
+    if (pv) {
+      tint[0] = (((pv.hue + (tint[0] - 0.3) * 120) % 360) + 360) % 360 / 360;
+      tint[1] = Math.min(0.85, tint[1] * (pv.sat / 0.45));
+      tint[2] = Math.min(0.6, Math.max(0.08, tint[2] * (pv.light / 0.38)));
+    }
     tufts.forEach((o, i) => mesh.setColorAt(i, col.setHSL(tint[0] + o.shade * 0.05, tint[1], tint[2] + o.shade * 0.12)));
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   }
@@ -598,7 +615,7 @@ export function createIsland(scene, quality = "medium", regionId = "coast") {
     const lava = pl.kind === "lava";
     const disc = new THREE.Mesh(
       new THREE.CircleGeometry(pl.r * (lava ? 0.86 : 0.98), 28).rotateX(-Math.PI / 2),
-      lava ? new THREE.MeshBasicMaterial({ color: 0xff6a1a, fog: true }) : new THREE.MeshStandardMaterial({ color: 0x4f6142, transparent: true, opacity: 0.86, roughness: 0.2 }),
+      lava ? new THREE.MeshBasicMaterial({ color: 0xff6a1a, fog: true }) : new THREE.MeshStandardMaterial({ color: mixHex(0x4f6142, REGION.water ?? 0x4f6142, 0.5), transparent: true, opacity: 0.86, roughness: 0.2 }),
     );
     disc.position.set(pl.x, lava ? 0.45 : 0.26, pl.z);
     group.add(disc);
@@ -623,7 +640,7 @@ export function createIsland(scene, quality = "medium", regionId = "coast") {
         reeds.push({ x: pl.x + Math.cos(a) * d, z: pl.z + Math.sin(a) * d, s: 0.8 + rr() * 0.7, r: rr() * TAU });
       }
     const reed = mergeGeometries([0, 1, 2, 3].map((k) => new THREE.CylinderGeometry(0.03, 0.05, 2.2, 4).translate(0, 1.1, 0).rotateZ((k - 1.5) * 0.12).translate((k - 1.5) * 0.15, 0, 0)));
-    instanced(reed, new THREE.MeshStandardMaterial({ color: 0x8a9a4a }), reeds, (o) => {
+    instanced(reed, new THREE.MeshStandardMaterial({ color: mixHex(0x8a9a4a, look.leaf, 0.6) }), reeds, (o) => {
       p.set(o.x, Math.max(0.2, heightAt(o.x, o.z)) - 0.1, o.z);
       q.setFromAxisAngle(yAxis, o.r);
       s.setScalar(o.s);
@@ -741,12 +758,53 @@ export function createIsland(scene, quality = "medium", regionId = "coast") {
     b.hole.visible = true;
   };
 
+  /* The homeworld's own flora and rocks, from the shared library (see ecolib/): varied species laid out by
+     biome, tinted to the planet's foliage and stone, instanced and level-of-detail managed. */
+  let scenery = null,
+    sceneryLibrary = null,
+    sceneryFacts = null;
+  const hw = REGION.homeworld;
+  if (hw && hw.plantDensity > 0) {
+    sceneryLibrary = createLibrary();
+    // Draw distance follows the region's own fog, and detail steps down early: draw calls matter on tablets.
+    scenery = createEcoInstancer(group, sceneryLibrary, { lodNear: 30, lodFar: 75, cullDistance: Math.min(260, REGION.fog[1] + 10) });
+    const v = hw.vegetation;
+    const palette = { hue: v.hue, sat: Math.min(1.6, Math.max(0.3, v.sat / 0.45)), light: Math.min(1.5, Math.max(0.4, v.light / 0.38)) };
+    const stone = mixHex(0xffffff, hw.terrain.mineralColor, 0.5);
+    const wanted = quality === "low" ? 450 : quality === "medium" ? 800 : 1300;
+    const grown = populate(hw, planetRegionSeed(hw, REGION.id), {
+      radius: ISLAND.beach - 6,
+      count: wanted,
+      speciesCap: quality === "low" ? 26 : quality === "medium" ? 38 : 50,
+      maxVariants: 2,
+      isOpen: (x, z) => isOpen(x, z, 1.2),
+      avoid: keepClear.map((k) => ({ ...k, r: k.r + 2 })),
+    });
+    const list = [];
+    for (const p of grown.placements) {
+      const isRock = ["rocks", "decor"].includes(p.layer);
+      const y = heightAt(p.x, p.z) - (p.layer === "rocks" ? p.size * 0.06 : 0);
+      list.push({ ...p, y, palette, tint: isRock ? stone : undefined });
+      // Trunks and big stones are solid: the creatures steer around them.
+      if (p.layer === "trees" || p.layer === "smallTrees") grid.add({ x: p.x, z: p.z, r: Math.min(1.6, Math.max(0.35, p.size * 0.03)) });
+      else if (p.layer === "rocks" && p.size > 2.2) grid.add({ x: p.x, z: p.z, r: p.size * 0.3 });
+    }
+    scenery.set(list);
+    scenery.updateFocus(start.x, start.z, { force: true });
+    let h = 2166136261;
+    for (const p of list) h = Math.imul(h ^ (Math.round(p.x * 10) + Math.round(p.z * 10) * 7 + p.id.length * 131), 16777619);
+    sceneryFacts = { placements: list.length, species: new Set(list.map((p) => p.id)).size, hash: h >>> 0 };
+  }
+  INFO = { regionId: REGION.id, planetId: hw?.planetId ?? null, themeKey: REGION.themeKey ?? null, leaf: REGION.colors.leaf, grass: REGION.colors.grassLight, skyDay: REGION.sky.day, water: REGION.water ?? null, scenery: sceneryFacts };
+
   /* Lighting and day/night. */
-  const hemi = new THREE.HemisphereLight(0xdff4ff, 0x6b5a3a, 1.05);
-  const sun = new THREE.DirectionalLight(0xfff1d6, 1.6);
-  const hemiDay = new THREE.Color(0xdff4ff),
+  const lit = REGION.light; // the homeworld's star and sky, when there is one
+  const hemi = new THREE.HemisphereLight(lit?.hemi ?? 0xdff4ff, lit?.ground ?? 0x6b5a3a, 1.05);
+  const sun = new THREE.DirectionalLight(lit?.sun ?? 0xfff1d6, 1.6);
+  const sunK = lit?.sunIntensity ?? 1;
+  const hemiDay = new THREE.Color(lit?.hemi ?? 0xdff4ff),
     hemiNight = new THREE.Color(0x6f86c8),
-    sunDay = new THREE.Color(0xfff1d6),
+    sunDay = new THREE.Color(lit?.sun ?? 0xfff1d6),
     sunNight = new THREE.Color(0x9fb4ff);
   scene.add(hemi, sun);
   const skyDay = new THREE.Color(REGION.sky.day),
@@ -755,7 +813,7 @@ export function createIsland(scene, quality = "medium", regionId = "coast") {
   scene.background = skyDay.clone();
   // Open regions see far (spot the mountains and the next nest); the forest and swamp close in.
   scene.fog = new THREE.Fog(skyDay.clone(), REGION.fog[0], REGION.fog[1]);
-  const DAY_LENGTH = 300; // seconds for a full day
+  const DAY_LENGTH = lit?.dayLength ?? 300; // seconds for a full day
   let clock = DAY_LENGTH * 0.3;
 
   const resolve = (x, z, r) => {
@@ -822,6 +880,7 @@ export function createIsland(scene, quality = "medium", regionId = "coast") {
     },
     update(dt, focus) {
       clock += dt;
+      scenery?.updateFocus(focus.x, focus.z);
       const t = (clock % DAY_LENGTH) / DAY_LENGTH; // 0 dawn, 0.25 noon, 0.62 dusk, 0.8 midnight
       const sunHeight = Math.sin(t * TAU * 0.8 + 0.1);
       const daylight = THREE.MathUtils.clamp(sunHeight * 1.6 + 0.2, 0.08, 1);
@@ -829,7 +888,7 @@ export function createIsland(scene, quality = "medium", regionId = "coast") {
       sun.target.position.set(focus.x, 0, focus.z);
       sun.target.updateMatrixWorld();
       // Night is properly dark and moonlit blue; day is warm.
-      sun.intensity = 0.1 + daylight * 1.55;
+      sun.intensity = (0.1 + daylight * 1.55) * sunK;
       hemi.intensity = 0.24 + daylight * 0.86;
       const moon = 1 - THREE.MathUtils.smoothstep(daylight, 0.15, 0.6);
       hemi.color.copy(hemiDay).lerp(hemiNight, moon);
@@ -874,6 +933,8 @@ export function createIsland(scene, quality = "medium", regionId = "coast") {
       });
     },
     dispose() {
+      scenery?.dispose();
+      sceneryLibrary?.clear();
       scene.remove(group, hemi, sun);
       group.traverse((o) => {
         if (o.geometry) o.geometry.dispose();

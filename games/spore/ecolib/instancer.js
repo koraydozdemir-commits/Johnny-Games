@@ -10,7 +10,7 @@
  */
 import * as THREE from "three";
 import { assetById } from "./catalog.js";
-import { libraryMaterial } from "./library.js";
+import { libraryMaterial, paletteKey, takesPalette } from "./library.js";
 
 const dummy = new THREE.Object3D();
 const tintTmp = new THREE.Color();
@@ -36,24 +36,88 @@ export function createEcoInstancer(parent, library, opts = {}) {
   let dirty = true;
   const stats = { placements: 0, drawn: 0, culled: 0, drawCalls: 0, byLod: [0, 0, 0] };
 
-  const batchFor = (id, variant, lod, need) => {
-    const k = id + ":" + variant + ":" + lod;
+  const batchFor = (id, variant, lod, need, pk, palette) => {
+    const k = id + ":" + variant + ":" + lod + ":" + pk;
     let b = batches.get(k);
     if (!b || b.capacity < need) {
       if (b) {
         group.remove(b.mesh);
         b.mesh.dispose();
-      } else library.retain(id, variant, lod);
+      }
       const capacity = Math.max(8, need * 2);
-      const mesh = new THREE.InstancedMesh(library.get(id, variant, lod), material, capacity);
+      const mesh = new THREE.InstancedMesh(library.get(id, variant, lod, palette), material, capacity);
+      if (!b) library.retain(id, variant, lod, pk);
       mesh.frustumCulled = false; // we cull per instance
       mesh.userData.assetId = id;
       group.add(mesh);
-      b = { mesh, capacity, id, variant, lod };
+      b = { mesh, capacity, id, variant, lod, pk };
       batches.set(k, b);
     }
     return b;
   };
+
+  /** Bucket placements by (asset, variant, palette, level of detail) and write the instance matrices. */
+  function regroup(cx, cz, view) {
+    dirty = false;
+    const buckets = new Map();
+    stats.culled = 0;
+    stats.byLod = [0, 0, 0];
+    for (const p of placements) {
+      const dist = Math.hypot(p.x - cx, p.z - cz);
+      if (dist > cullDistance) {
+        stats.culled++;
+        continue;
+      }
+      if (view) {
+        sphere.center.set(p.x, p.y + p.radius * 0.5, p.z);
+        sphere.radius = p.radius;
+        if (!view.intersectsSphere(sphere)) {
+          stats.culled++;
+          continue;
+        }
+      }
+      const lod = dist < lodNear ? 0 : dist < lodFar ? 1 : 2;
+      // Far away every variant looks the same, so they share one proxy (fewer draw calls).
+      const k = p.id + ":" + (lod === 2 ? 0 : p.variant) + ":" + lod + ":" + p.pk;
+      let list = buckets.get(k);
+      if (!list) buckets.set(k, (list = []));
+      list.push(p);
+      stats.byLod[lod]++;
+    }
+    let drawn = 0;
+    for (const b of batches.values()) b.mesh.count = 0;
+    for (const [, list] of buckets) {
+      const f = list[0];
+      const lod = f.lod ?? (Math.hypot(f.x - cx, f.z - cz) < lodNear ? 0 : Math.hypot(f.x - cx, f.z - cz) < lodFar ? 1 : 2);
+      const b = batchFor(f.id, lod === 2 ? 0 : f.variant, lod, list.length, f.pk, f.palette);
+      for (let i = 0; i < list.length; i++) {
+        const p = list[i];
+        dummy.position.set(p.x, p.y, p.z);
+        dummy.rotation.set(0, p.yaw || 0, 0);
+        dummy.scale.setScalar(p.scale);
+        dummy.updateMatrix();
+        b.mesh.setMatrixAt(i, dummy.matrix);
+        if (p.tint !== undefined) {
+          tintTmp.set(p.tint);
+          if (p.shade) tintTmp.multiplyScalar(p.shade);
+        } else tintTmp.setRGB(p.shade || 1, p.shade || 1, p.shade || 1);
+        b.mesh.setColorAt(i, tintTmp);
+      }
+      b.mesh.count = list.length;
+      b.mesh.instanceMatrix.needsUpdate = true;
+      if (b.mesh.instanceColor) b.mesh.instanceColor.needsUpdate = true;
+      drawn += list.length;
+    }
+    let calls = 0;
+    for (const b of batches.values()) {
+      b.mesh.visible = b.mesh.count > 0;
+      if (b.mesh.visible) calls++;
+    }
+    stats.placements = placements.length;
+    stats.drawn = drawn;
+    stats.drawCalls = calls;
+    return stats;
+  }
 
   return {
     /** Replace every placement. */
@@ -63,7 +127,9 @@ export function createEcoInstancer(parent, library, opts = {}) {
           const asset = assetById(p.id);
           if (!asset) return null;
           const mid = (asset.size.min + asset.size.max) / 2;
-          return { ...p, variant: (p.variant || 0) % asset.variants, scale: (p.size || mid) / mid, radius: ((p.size || mid) * 0.75) };
+          // A palette only matters to foliage; everything else shares one model whatever the planet.
+          const palette = p.palette && takesPalette(asset) ? p.palette : null;
+          return { ...p, variant: (p.variant || 0) % asset.variants, scale: (p.size || mid) / mid, radius: ((p.size || mid) * 0.75), palette, pk: paletteKey(palette) };
         })
         .filter(Boolean);
       dirty = true;
@@ -74,73 +140,30 @@ export function createEcoInstancer(parent, library, opts = {}) {
     get count() {
       return placements.length;
     },
-    /** Regroup by distance if the camera has moved. Call every frame; it does work only when needed. */
+    /** Regroup by distance and view if the camera has moved. Call every frame; it does work only when needed. */
     update(camera, { force = false } = {}) {
       if (!force && !dirty && lastCam.distanceTo(camera.position) < moveThreshold) return stats;
       lastCam.copy(camera.position);
-      dirty = false;
       camera.updateMatrixWorld();
       projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
       frustum.setFromProjectionMatrix(projView);
-      const buckets = new Map();
-      stats.culled = 0;
-      stats.byLod = [0, 0, 0];
-      for (const p of placements) {
-        const dx = p.x - camera.position.x,
-          dz = p.z - camera.position.z,
-          dist = Math.hypot(dx, dz);
-        if (dist > cullDistance) {
-          stats.culled++;
-          continue;
-        }
-        sphere.center.set(p.x, p.y + p.radius * 0.5, p.z);
-        sphere.radius = p.radius;
-        if (!frustum.intersectsSphere(sphere)) {
-          stats.culled++;
-          continue;
-        }
-        const lod = dist < lodNear ? 0 : dist < lodFar ? 1 : 2;
-        const k = p.id + ":" + p.variant + ":" + lod;
-        let list = buckets.get(k);
-        if (!list) buckets.set(k, (list = []));
-        list.push(p);
-        stats.byLod[lod]++;
-      }
-      let drawn = 0;
-      for (const b of batches.values()) b.mesh.count = 0;
-      for (const [k, list] of buckets) {
-        const [id, variant, lod] = k.split(":");
-        const b = batchFor(id, +variant, +lod, list.length);
-        for (let i = 0; i < list.length; i++) {
-          const p = list[i];
-          dummy.position.set(p.x, p.y, p.z);
-          dummy.rotation.set(0, p.yaw || 0, 0);
-          dummy.scale.setScalar(p.scale);
-          dummy.updateMatrix();
-          b.mesh.setMatrixAt(i, dummy.matrix);
-          b.mesh.setColorAt(i, p.tint !== undefined ? tintTmp.set(p.tint) : tintTmp.setRGB(1, 1, 1));
-        }
-        b.mesh.count = list.length;
-        b.mesh.instanceMatrix.needsUpdate = true;
-        if (b.mesh.instanceColor) b.mesh.instanceColor.needsUpdate = true;
-        drawn += list.length;
-      }
-      let calls = 0;
-      for (const b of batches.values()) {
-        b.mesh.visible = b.mesh.count > 0;
-        if (b.mesh.visible) calls++;
-      }
-      stats.placements = placements.length;
-      stats.drawn = drawn;
-      stats.drawCalls = calls;
-      return stats;
+      return regroup(camera.position.x, camera.position.z, frustum);
+    },
+    /**
+     * Like update() for views that are not a perspective camera (the top-down Tribal and Civilization
+     * stages): level of detail and culling by distance from a point only.
+     */
+    updateFocus(x, z, { force = false } = {}) {
+      if (!force && !dirty && Math.hypot(lastCam.x - x, lastCam.z - z) < moveThreshold) return stats;
+      lastCam.set(x, 0, z);
+      return regroup(x, z, null);
     },
     stats: () => stats,
     dispose() {
       for (const b of batches.values()) {
         group.remove(b.mesh);
         b.mesh.dispose();
-        library.release(b.id, b.variant, b.lod);
+        library.release(b.id, b.variant, b.lod, b.pk);
       }
       batches.clear();
       parent.remove(group);

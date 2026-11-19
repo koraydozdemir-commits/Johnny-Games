@@ -59,6 +59,8 @@ const FLOOR_FRAG = /* glsl */ `
   uniform float uTime;
   uniform float uDetail;
   uniform sampler2D uBed;
+  uniform vec3 uWater;
+  uniform vec3 uTint;
   varying vec2 vUv;
   ${NOISE}
   void main() {
@@ -69,7 +71,7 @@ const FLOOR_FRAG = /* glsl */ `
     // Caustics, brightest on the shallow sandy patches.
     float sandy = smoothstep(0.08, 0.17, col.g);
     float c = caustics(wp * 0.55 + vec2(uTime * 0.02, -uTime * 0.015), uTime, uDetail);
-    col += vec3(0.3, 0.62, 0.72) * c * (0.06 + 0.08 * sandy);
+    col += uWater * c * (0.06 + 0.08 * sandy);
     // Sun shafts: soft diagonal bands from the top of the screen that sway slowly.
     float shafts = 0.0;
     for (int i = 0; i < 3; i++) {
@@ -77,8 +79,9 @@ const FLOOR_FRAG = /* glsl */ `
       float band = vUv.x + (1.0 - vUv.y) * 0.38 + sin(uTime * 0.13 + fi * 2.1) * 0.06;
       shafts += smoothstep(0.07, 0.0, abs(fract(band * 1.6 + fi * 0.37) - 0.5) - 0.02) * (0.5 + 0.5 * sin(uTime * 0.21 + fi));
     }
-    col += vec3(0.25, 0.5, 0.62) * shafts * 0.035 * smoothstep(0.0, 1.0, vUv.y);
+    col += uWater * 0.85 * shafts * 0.035 * smoothstep(0.0, 1.0, vUv.y);
     vec2 q = vUv - 0.5;
+    col *= uTint;
     col *= 1.0 - dot(q, q) * 0.55;
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
@@ -212,7 +215,7 @@ export function createBackground(scene, quality = "high") {
 
   const shared = { uCam: { value: new THREE.Vector2() }, uHalf: { value: new THREE.Vector2(10, 6) }, uTime: { value: 0 } };
   const floorMat = new THREE.ShaderMaterial({
-    uniforms: { ...shared, uDetail: { value: 1 }, uBed: { value: bakeBed(512) } },
+    uniforms: { ...shared, uDetail: { value: 1 }, uBed: { value: bakeBed(512) }, uWater: { value: new THREE.Vector3(0.3, 0.62, 0.72) }, uTint: { value: new THREE.Vector3(1, 1, 1) } },
     vertexShader: PLANE_VERT,
     fragmentShader: FLOOR_FRAG,
     depthWrite: false,
@@ -271,6 +274,26 @@ export function createBackground(scene, quality = "high") {
   return {
     glowTexture,
     setQuality: populate,
+    /**
+     * Make the soup the homeworld's own water: its colour lights the caustics and sun shafts and tints the
+     * sea bed; the deep colour behind everything follows it. Passing null restores the default.
+     */
+    setPlanet(profile) {
+      const w = profile ? new THREE.Color(profile.water.color) : null;
+      const ref = [0.3, 0.62, 0.72];
+      if (!w) {
+        floorMat.uniforms.uWater.value.set(...ref);
+        floorMat.uniforms.uTint.value.set(1, 1, 1);
+        scene.background = new THREE.Color("#12396a");
+        return;
+      }
+      const m = Math.max(w.r, w.g, w.b, 0.01);
+      const lit = [w.r / m, w.g / m, w.b / m].map((v) => 0.12 + v * 0.62);
+      floorMat.uniforms.uWater.value.set(...lit);
+      // Tint the bed gently towards the water: half way between untinted and the water's own ratio to the default.
+      floorMat.uniforms.uTint.value.set(...lit.map((v, i) => 0.5 + 0.5 * Math.min(1.6, Math.max(0.55, v / ref[i]))));
+      scene.background = new THREE.Color("#12396a").lerp(w.clone().multiplyScalar(0.35), 0.75);
+    },
     update(time, dt, camera) {
       const cx = camera.position.x,
         cy = camera.position.y;
