@@ -471,6 +471,7 @@ audio.setAmbient("cell"); // starts on the first tap or key press
 const settings = loadSettings(localStorage);
 function applySettings() {
   audio.setVolume({ sfx: settings.sfx, ambience: settings.ambience });
+  audio.setMusicVolume(settings.music);
   document.body.classList.toggle("reduceMotion", settings.reducedMotion);
 }
 applySettings();
@@ -2195,6 +2196,7 @@ function startCreatureStage(resume = false, intro = false) {
   state.paused = true;
   document.body.classList.add("creatureMode");
   audio.setAmbient("land");
+  audio.setMusic(fresh && intro ? "land" : "creature");
   const cellCard = progress.dietCard || dietPath(state.plants, state.meat);
   const fresh = !save;
   const record = save?.record || creatureFromCell(currentRecord(), state.cellName);
@@ -2249,6 +2251,7 @@ function startCreatureStage(resume = false, intro = false) {
     intro: fresh && intro,
     deferIntro: fresh && intro,
     onIntroDone: () => {
+      audio.setMusic("creature");
       document.body.classList.remove("cinematic");
     },
   });
@@ -2260,6 +2263,7 @@ function startCreatureStage(resume = false, intro = false) {
 }
 function openCreatureEditorFor(d, arrival) {
   if (!creatureStage || creatureEditor) return;
+  if (d.mated) audio.setMusic("mating");
   creatureStage.setPaused(true);
   document.body.classList.add("creatureEditing");
   stickEnd();
@@ -2287,6 +2291,7 @@ function openCreatureEditorFor(d, arrival) {
 }
 function closeCreatureEditor() {
   creatureEditor = null;
+  audio.setMusic(introAfterEditor ? "land" : "creature");
   document.body.classList.remove("creatureEditing");
   creatureStage?.setPaused(false);
   if (introAfterEditor && creatureStage) {
@@ -2352,6 +2357,7 @@ function beginCreatureGeneration() {
   });
   storeHistory();
   syncPedia();
+  audio.setMusic("creature");
 }
 function stopCreatureStage(toSoup = true) {
   if (!creatureStage) return;
@@ -2364,6 +2370,7 @@ function stopCreatureStage(toSoup = true) {
   if (toSoup !== true) return; // handing over to another land stage
   document.body.classList.remove("creatureMode");
   audio.setAmbient("cell");
+  audio.setMusic("cell");
   state.paused = false;
   updateCamera();
   toast("Back in the primordial soup. Your land creature is saved.");
@@ -2426,6 +2433,7 @@ function startTribeStage(fallbackRecord = null, opts = {}) {
   state.paused = true;
   document.body.classList.add("creatureMode", "tribeMode");
   audio.setAmbient("land");
+  audio.setMusic("tribe");
   // The tribe settles in the species' home region, with what its earlier stages earned.
   const creatureSave = loadCreatureSave();
   tribeStage = createTribeStage({
@@ -2483,6 +2491,7 @@ function startCivStage(opts = {}) {
   $("#intro").style.display = "none";
   state.runStarted = true;
   audio.setAmbient("land");
+  audio.setMusic("civ");
   const creatureCard = creatureCardFor(cs);
   civStage = createCivStage({
     renderer,
@@ -2502,7 +2511,11 @@ function startCivStage(opts = {}) {
       if (!universe) return;
       universe.session.record({ id: "design:" + kind + ":" + design.role + ":" + Date.now().toString(36), kind, owned: true, name: design.name, sub: (kind === "building" ? "Building" : "Vehicle") + " · " + design.role, stage: "Civilization", design, place: "Home" });
     },
-    onChronicle: recordChronicle,
+    onChronicle: (ev) => {
+      recordChronicle(ev);
+      if (/^civ:(war|attacked)/.test(ev?.key || "")) audio.setMusic("civWar");
+      else if (/^civ:peace/.test(ev?.key || "")) audio.setMusic("civ");
+    },
     onHistory: openPath,
     onSettings: openGameSettings,
     onSaved: () => markSaved(localStorage),
@@ -4961,6 +4974,7 @@ function bindUI() {
     const backToSoup = () => {
       document.body.classList.remove("creatureMode", "tribeMode");
       audio.setAmbient("cell");
+      audio.setMusic("cell");
       state.paused = false;
       updateCamera();
       updateHUD();
@@ -4998,6 +5012,7 @@ function bindUI() {
   }
   $("#begin").onclick = () => {
     audio.setAmbient("cell");
+    audio.setMusic("cell");
     startHatch("plant");
   };
   $("#pauseBtn").onclick = pauseGame;
@@ -5758,6 +5773,7 @@ let galaxyStart = null;
 const BEGIN_KEY = "spore-begin"; // sessionStorage: a homeworld was just chosen, play the arrival
 /** The game opens on its galaxy. Continue resumes the furthest stage; New Game picks a homeworld. */
 function openStartScreen() {
+  audio.setMusic("menu");
   let arrival = null;
   try {
     arrival = JSON.parse(window.sessionStorage.getItem(BEGIN_KEY) || "null");
@@ -5902,8 +5918,10 @@ function openUniverseScreen(screen, arg) {
   if (!universe) return toast("Your universe is still loading. Try again in a moment.");
   universeOpen = true;
   const resume = holdGame();
+  audio.setMusic(screen === "pedia" ? "pedia" : "menu");
   const done = () => {
     universeOpen = false;
+    audio.setMusic(civStage ? "civ" : tribeStage ? "tribe" : creatureStage ? "creature" : state.runStarted ? "cell" : "menu");
     resume();
   };
   const { session } = universe;
