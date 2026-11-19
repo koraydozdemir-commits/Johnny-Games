@@ -1151,6 +1151,90 @@ body.cellEditorMode #partsPanel .catalog{overflow-y:auto;overflow-x:hidden;min-h
 
 .ceBudget{font-size:10px;font-weight:700;opacity:.75;margin-left:3px}.ceBudget.full{color:#ffb35c;opacity:1}
 .ceStat em{font-style:normal;font-weight:700;font-size:11px;color:#ffe2a8}
+/* ---- Creature editor catalogue (scoped to .ceCat so the modular editor keeps its own look) ---- */
+.crEditor.ceCat{--ce-sheet:min(52vh,440px);--ce-top:62px;--ce-side:clamp(300px,34vw,400px);--ce-line:#ffffff24;--ce-gold:#f5c75a;--ce-dim:#a9c0c9;--ce-plant:#3a9a5c;--ce-meat:#c0483f;--ce-omni:#c8962f;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.ceCat svg{width:1em;height:1em;flex:none;vertical-align:-.12em}
+.ceCat .cePanel{height:var(--ce-sheet);background:linear-gradient(#12303fee,#0b1d2bf5);box-shadow:0 -10px 30px #0006}
+.ceCat .ceTopBtns button{display:inline-flex;align-items:center;gap:6px;min-height:40px}.ceCat .ceTopBtns button svg{width:18px;height:18px}
+.ceCat .ceDna{display:inline-flex;align-items:center;gap:5px}.ceCat .ceDna svg{width:18px;height:18px;color:#8ff0a8}
+/* category rail */
+.ceCat .ceRail{display:flex;gap:6px;padding:8px 10px;overflow-x:auto;scrollbar-width:none;flex:none;border-bottom:1px solid var(--ce-line)}.ceCat .ceRail::-webkit-scrollbar{display:none}
+.ceCat .ceRail button{flex:none;width:46px;height:46px;border-radius:14px;border:1px solid var(--ce-line);background:linear-gradient(#ffffff1c,#ffffff08);color:#cfe3ea;display:grid;place-items:center;padding:0}
+.ceCat .ceRail button svg{width:24px;height:24px}
+.ceCat .ceRail button[aria-selected=true]{background:linear-gradient(#ffe08a,#f2b93b);color:#132532;border-color:#ffe9a8;box-shadow:0 0 0 2px #f5c75a55,0 4px 14px #f5c75a40}
+/* catalogue */
+.ceCat .ceTab[data-pane=parts]{display:flex;flex-direction:column;padding:0;overflow:hidden}
+.ceCat .ceCatTitle{margin:8px 12px 4px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#9fd8e2;display:flex;align-items:baseline;gap:10px;flex:none}.ceCat .ceCatTitle small{letter-spacing:0;text-transform:none;color:#7f9aa5;font-size:11px;margin:0}
+.ceCat .ceCatTitle .ceBudget{margin-left:auto}
+.ceCat .ceSelected{margin:8px 10px 0;flex:none}
+.ceCat .ceGrid{display:grid;grid-auto-flow:column;grid-template-rows:repeat(2,72px);grid-auto-columns:72px;gap:8px;padding:4px 12px 10px;overflow-x:auto;overflow-y:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-width:thin;flex:none;touch-action:pan-x}
+.ceCat .ceDietHead{display:none}
+.ceCat .cePart{position:relative;display:block;width:auto;height:72px;flex:none;padding:0;border-radius:14px;border:1px solid var(--ce-line);background:radial-gradient(circle at 50% 38%,#2c5a70 0%,#173448 62%,#10283a 100%);color:#fff;touch-action:pan-x;box-shadow:inset 0 1px 0 #ffffff26}
+.ceCat .cePart .thumb{position:absolute;inset:4px;width:auto;height:auto;display:block}.ceCat .cePart .thumb img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 3px 3px #0008)}
+.ceCat .cePart.locked{opacity:1;background:radial-gradient(circle at 50% 38%,#3c505c,#222f38)}
+.ceCat .cePart.locked .thumb img{filter:brightness(0) opacity(.5);drop-shadow:none}
+.ceCat .cePart.focused{border-color:var(--ce-gold);box-shadow:0 0 0 2px var(--ce-gold),0 6px 18px #f5c75a38}
+.ceCat .cePart.inUse{border-color:#3fc26e}.ceCat .cePart.inUse.focused{border-color:var(--ce-gold)}
+.ceCat .cePart .badge{position:absolute;display:grid;place-items:center;width:20px;height:20px;border-radius:50%}
+.ceCat .cePart .badge svg{width:13px;height:13px}
+.ceCat .cePart .badge.on{top:4px;right:4px;background:#3fc26e;color:#06210f}
+.ceCat .cePart .badge.lk{right:4px;bottom:4px;background:#0b1820d9;color:#cfe3ea;border:1px solid var(--ce-line)}
+.ceCat .cePart .tier{position:absolute;left:6px;bottom:5px;display:flex;gap:2px}.ceCat .cePart .tier i{width:5px;height:5px;border-radius:50%;background:var(--ce-gold)}
+.ceCat .cePart.locked .tier i{background:#6c818b}
+.ceCat .cePart[data-diet=plant]{box-shadow:inset 0 -3px var(--ce-plant)}.ceCat .cePart[data-diet=meat]{box-shadow:inset 0 -3px var(--ce-meat)}.ceCat .cePart[data-diet=omni]{box-shadow:inset 0 -3px var(--ce-omni)}
+.ceCat .cePart.focused[data-diet]{box-shadow:0 0 0 2px var(--ce-gold),inset 0 -3px var(--ce-gold)}
+.ceCat .cePart.dragging{opacity:.4}
+/* detail card */
+.ceCat .ceInfo{flex:1 1 auto;min-height:0;overflow:auto;margin:0 10px 10px;padding:10px 12px;border-radius:14px;background:linear-gradient(#ffffff14,#ffffff07);border:1px solid var(--ce-line);overscroll-behavior:contain;-webkit-overflow-scrolling:touch;font-size:12px}
+.ceCat .ceInfoHead{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.ceCat .ceInfoHead b{font-size:15px;margin-right:2px}
+.ceCat .ceTag{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:800;letter-spacing:.04em;padding:3px 8px;border-radius:999px;background:#ffffff1c;color:#dbeaf0}
+.ceCat .ceTag.diet-plant{background:var(--ce-plant);color:#fff}.ceCat .ceTag.diet-meat{background:var(--ce-meat);color:#fff}.ceCat .ceTag.diet-omni{background:var(--ce-omni);color:#201604}
+.ceCat .ceTag.on{background:#3fc26e;color:#06210f}.ceCat .ceTag.lock{background:#39454d;color:#dbeaf0}.ceCat .ceTag.prev{background:#4aa3ff;color:#06182e}
+.ceCat .ceDesc{margin:6px 0;color:#d6e6ec;line-height:1.35}
+.ceCat .ceMouthRows{margin:6px 0}
+.ceCat .ceMRow{display:grid;grid-template-columns:86px minmax(40px,1fr) 56px 40px;gap:8px;align-items:center;margin:4px 0;font-size:11.5px}
+.ceCat .ceMRow>span{color:var(--ce-dim)}.ceCat .ceMRow em{font-style:normal;font-weight:800;text-align:right;color:#fff;white-space:nowrap}
+.ceCat .ceMRow u{text-decoration:none;font-weight:800;font-size:10.5px;white-space:nowrap}.ceCat .ceMRow u.up{color:#7ff0a0}.ceCat .ceMRow u.down{color:#ff8a7e}
+.ceCat .ceBar{position:relative;display:block;height:7px;border-radius:4px;background:#ffffff1c}
+.ceCat .ceBar b{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#d9a52c,#ffe39a)}
+.ceCat .ceBar .tick{position:absolute;top:-3px;width:2px;height:13px;margin-left:-1px;border-radius:1px;background:#fff;opacity:.9}
+.ceCat .pips{display:flex;gap:3px}.ceCat .pips b{width:12px;height:8px;border-radius:2px;background:#ffffff1c}.ceCat .pips b.on{background:var(--ce-gold)}
+.ceCat .ceSpecial{margin:6px 0 0;padding:6px 9px;border-radius:10px;background:#f5c75a1f;border:1px solid #f5c75a55;color:#ffe8b0;line-height:1.3}.ceCat .ceSpecial b{color:#fff;margin-right:4px}
+.ceCat .ceReq{list-style:none;margin:8px 0 0;padding:0}.ceCat .ceReq.plain{color:var(--ce-dim)}
+.ceCat .ceReq li{display:flex;align-items:center;gap:8px;margin:4px 0;color:#e9f4f7}.ceCat .ceReq li small{color:var(--ce-dim)}
+.ceCat .ceReq .mark{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;border:1.5px solid #7f9aa5;flex:none}.ceCat .ceReq .mark svg{width:11px;height:11px}
+.ceCat .ceReq li.done{color:#9ff3b8}.ceCat .ceReq li.done .mark{background:#3fc26e;border-color:#3fc26e;color:#06210f}
+.ceCat .ceInfoFoot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;position:sticky;bottom:-10px;padding:8px 0 2px;background:linear-gradient(#0000,#10283aee 30%)}
+.ceCat .ceCost{display:inline-flex;align-items:center;gap:5px;font-weight:800;color:#8ff0a8}.ceCat .ceCost.free{color:var(--ce-dim);font-weight:600}.ceCat .ceCost svg{width:16px;height:16px}
+.ceCat .ceAct{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;min-width:120px;padding:0 18px;border-radius:12px;border:1px solid var(--ce-line);background:#ffffff14;color:#fff;font-weight:800;font-size:13px}
+.ceCat .ceAct.primary{background:linear-gradient(#ffe08a,#f2b93b);color:#132532;border-color:#ffe9a8}.ceCat .ceAct:disabled{opacity:.55;cursor:default}
+/* stats panel: mouth block */
+.ceCat .ceMouthName{display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:3px}.ceCat .ceMouthName small{color:var(--ce-dim)}
+.ceCat .ceStats .ceMRow{grid-template-columns:62px minmax(20px,1fr) 38px 30px;gap:5px;font-size:10px;margin:3px 0}
+.ceCat .ceStats .ceSpecial{font-size:10px;padding:4px 7px}.ceCat .cePrevNote{margin:0 0 4px;color:#ffd98a;font-size:10px;font-weight:700}
+.ceCat .ceStats{top:calc(var(--ce-top) + 8px);max-height:calc(100dvh - var(--ce-top) - var(--ce-sheet) - 20px)}
+.ceCat .ceTestBar button{font-size:12px;padding:8px 12px;min-width:64px}.ceCat .ceTestBar button b{font-size:12px}
+/* wide screens: the catalogue is a panel on the left, the creature stays large on the right */
+.ceCat.side .cePanel{top:var(--ce-top);bottom:0;left:0;right:auto;width:var(--ce-side);height:auto;border-radius:0 20px 0 0;border-top:0;border-right:1px solid var(--ce-line);box-shadow:10px 0 30px #0005;padding-bottom:0}
+.ceCat.side .ceRail{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;overflow:visible}.ceCat.side .ceRail button{width:auto;height:42px}
+.ceCat.side .ceGrid{display:grid;grid-auto-flow:row;grid-template-rows:none;grid-auto-rows:auto;grid-template-columns:repeat(4,1fr);grid-auto-columns:auto;overflow-x:hidden;overflow-y:auto;flex:1 1 0;min-height:120px;touch-action:pan-y;align-content:start}
+.ceCat.side .ceDietHead{display:block;grid-column:1/-1;margin:6px 0 0;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#cfe3ea;border-bottom:2px solid var(--ce-line);padding-bottom:3px}
+.ceCat.side .ceDietHead.diet-plant{border-color:var(--ce-plant)}.ceCat.side .ceDietHead.diet-meat{border-color:var(--ce-meat)}.ceCat.side .ceDietHead.diet-omni{border-color:var(--ce-omni)}
+.ceCat.side .cePart{touch-action:pan-y;height:var(--tile,86px)}
+.ceCat.side .ceInfo{flex:0 1 auto;max-height:42%}
+.ceCat.side .ceStats{max-height:calc(100dvh - var(--ce-top) - 20px)}
+.ceCat.side .ceHint{left:calc(var(--ce-side) + 14px);transform:none;text-align:left;width:calc(100% - var(--ce-side) - 214px)}
+.ceCat.side.testing .ceHint{left:50%;transform:translateX(-50%);text-align:center;width:min(92vw,560px)}
+@media (max-width:760px){
+  .ceCat .ceStats{top:auto;bottom:calc(var(--ce-sheet) + 8px);max-height:none;overflow:visible;padding:6px 10px}
+  .ceCat .ceStats .ceMouthRows,.ceCat .ceStats .ceSpecial,.ceCat .ceStats .cePrevNote,.ceCat .ceStats h4{display:none}
+  .ceCat .ceStats .ceMouthName{margin:0}
+  .ceCat .ceTopBtns button span{display:none}
+  .ceCat .ceMRow{grid-template-columns:74px minmax(30px,1fr) 52px 36px;gap:6px}
+}
+@media (max-width:520px){.ceCat .ceGrid{grid-template-rows:repeat(2,64px);grid-auto-columns:64px}.ceCat .cePart{height:64px}.ceCat .ceRail button{width:42px;height:42px}}
+@media (max-height:520px){.crEditor.ceCat{--ce-sheet:min(60vh,300px)}}
+@media (prefers-reduced-motion:reduce){.ceCat *{transition:none!important;animation:none!important}}
 /* Creature stage: carrying food and family orders */
 .creatureHUD .chActRow{pointer-events:auto;position:absolute;left:50%;bottom:calc(206px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:8px}
 .creatureHUD .chAct{min-height:44px;border:0;border-radius:22px;padding:10px 18px;font:inherit;font-weight:800;background:#ffd98a;color:#3b2a06;box-shadow:0 6px 18px #0006;cursor:pointer;white-space:nowrap}

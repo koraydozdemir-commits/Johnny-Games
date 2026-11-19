@@ -8,7 +8,8 @@ import * as THREE from "three";
 import { timeUniform } from "../gfx/materials.js";
 import { buildCreatureBody } from "./body3d.js";
 import { CREATURE_SAVE_KEY, armPairsOf, creaturePartIds, partsLimit, validateCreature } from "./format.js";
-import { ABILITY_INFO, COMBAT, CREATURE_PARTS, SOCIAL, abilitiesOf, creaturePart, dietOfParts } from "./parts.js";
+import { ABILITY_INFO, COMBAT, CREATURE_PARTS, SOCIAL, abilitiesOf, creaturePart } from "./parts.js";
+import { MOUTH_STATS, STARTER_MOUTHS, biteCooldown, earnedMouths, feedsOn, isMouth, mouthDiet, mouthStats, progressOf, requirementsOf } from "./mouths.js";
 import { createEmotes } from "./emotes.js";
 import { RELATION_INFO, relationDelta, relationOf } from "./relations.js";
 import { PERSONALITIES, atLevel, evolveSpecies, generateEpic, generateRogue, generateSpecies, socialNeed } from "./species.js";
@@ -171,10 +172,31 @@ export function createCreatureStage(o) {
     rec[key]++;
   };
   const lookTmp = new THREE.Vector3();
+  /** What mouths ask for, from what you have done so far. */
+  const mouthProgress = () => progressOf({ brain: P.brain, alliances: P.alliances, treated: P.treated, foods: P.foods });
+  /**
+   * Mouths are earned, not found: reaching a brain level, making allies, winning fights or trying
+   * foods opens the next ones. New ones are kept in P.unlocked (so they survive) and announced.
+   * `quiet` grants silently: used on load, for saves that already qualify.
+   */
+  function checkMouthUnlocks(quiet = false) {
+    const progress = mouthProgress();
+    for (const id of earnedMouths(progress)) {
+      if (P.unlocked.has(id)) continue;
+      P.unlocked.add(id);
+      if (!quiet && !STARTER_MOUTHS.includes(id)) {
+        const part = creaturePart(id);
+        o.sfx("unlock");
+        o.onUnlock?.(part, "Evolved: " + (requirementsOf(id, progress).map((r) => r.text).join(", ") || "new mouth").toLowerCase());
+      }
+    }
+  }
   const unlockedParts = () => {
     const base = new Set(P.unlocked);
     creaturePartIds(P.record).forEach((id) => base.add(id));
     base.add("paw"); // simple hands come with every arm
+    STARTER_MOUTHS.forEach((id) => base.add(id)); // one basic mouth per diet, from the start
+    earnedMouths(mouthProgress()).forEach((id) => base.add(id));
     // Older saves unlocked the single-piece "arm"; it is now a pair of arms with paws.
     base.delete("arm");
     return base;
@@ -189,7 +211,10 @@ export function createCreatureStage(o) {
     P.body = buildCreatureBody(P.record, { quality: o.quality });
     scene.add(P.body.root);
     P.abilities = abilitiesOf(creaturePartIds(P.record), P.record.legs.length, armPairsOf(P.record));
-    P.diet = dietOfParts(P.record.parts.map((p) => p.id));
+    // The equipped mouth is the single source of diet and of every mouth stat used below.
+    P.mouthId = P.record.parts.map((p) => p.id).find((id) => creaturePart(id)?.slot === "mouth") || "snout";
+    P.mouth = mouthStats(P.mouthId) || MOUTH_STATS.snout;
+    P.diet = mouthDiet(P.mouthId);
     P.maxHealth = playerHealth(P.brain, P.abilities.health);
     P.move = movementOf(P.record, P.abilities); // body plan, bulk, legs, tail, fins → how you move
     if (P.health > P.maxHealth || P.health <= 1) P.health = P.maxHealth;
@@ -197,6 +222,8 @@ export function createCreatureStage(o) {
     P.body.root.scale.setScalar(P.scale);
   }
   rebuildPlayer();
+  creaturePartIds(P.record).forEach((id) => P.unlocked.add(id)); // an existing creature keeps every part it already wears
+  checkMouthUnlocks(true); // saves that already qualify get their mouths quietly
   if (save.health) P.health = Math.min(P.maxHealth, save.health);
   {
     // Never start inside a rock or a mountain.
@@ -713,7 +740,7 @@ export function createCreatureStage(o) {
     o.sfx("unlock");
     pop(P, "☄", "good");
     const owned = unlockedParts();
-    const pool = CREATURE_PARTS.filter((p) => p.cost > 0 && !owned.has(p.id)).sort((a, z) => z.cost - a.cost);
+    const pool = CREATURE_PARTS.filter((p) => p.cost > 0 && !owned.has(p.id) && !isMouth(p.id)).sort((a, z) => z.cost - a.cost);
     const pick = pool.length ? pool[Math.floor(Math.random() * Math.min(4, pool.length))] : null;
     gainXp(30);
     P.dna += 20;
@@ -825,6 +852,8 @@ export function createCreatureStage(o) {
 
   /* ---- abilities ------------------------------------------------------------ */
   // Combat recoveries come from the balance model; social moves have their own rhythm.
+  /** Seconds until a move can be used again: the bite follows the equipped mouth's speed. */
+  const cooldownOf = (kind) => (kind === "bite" ? biteCooldown(P.mouthId, COOLDOWN.bite) : COOLDOWN[kind]);
   const COOLDOWN = { bite: ATTACKS.bite.cooldown, strike: ATTACKS.strike.cooldown, charge: ATTACKS.charge.cooldown, spit: ATTACKS.spit.cooldown, sing: 1.5, dance: 1.6, charm: 1.5, pose: 1.4 };
   /* A creature performs a move: the body animates, and social moves send up notes, hearts or sparkles. */
   const emotes = createEmotes(scene);
@@ -869,12 +898,16 @@ export function createCreatureStage(o) {
     }
     return best;
   }
+  /** The mouth's extra reach, for bites only. */
+  const biteReach = (kind) => (kind === "bite" ? P.mouth.reach : 0);
+  /** Extra food-grabbing distance for mouths that snatch. */
+  const snatchReach = () => (P.mouth.special === "snatch" ? 1.6 : 0);
   const reach = (n) => 2.2 * P.scale + (n ? n.body.radius * n.scale * 0.45 : 0);
 
   const usable = (n) => n && !n.dead && !n.following;
   const canSocialise = (t) => t.nest && t.nest.status === "neutral" && !t.member?.friend && !t.epic;
   /** How close you must be to use a move on a target. */
-  const rangeFor = (kind, t) => (kind === "spit" ? 14 : kind === "charge" ? 12 : ABILITY_INFO[kind].kind === "social" ? 7 : reach(t) + 1);
+  const rangeFor = (kind, t) => (kind === "spit" ? 14 : kind === "charge" ? 12 : ABILITY_INFO[kind].kind === "social" ? 7 : reach(t) + 1 + biteReach(kind));
 
   /** Select a creature: Spore reveals the species' name the first time you meet it. */
   function select(n) {
@@ -888,6 +921,7 @@ export function createCreatureStage(o) {
     if (P.foods.has(kind)) return;
     P.foods.add(kind);
     P.dna += 5;
+    checkMouthUnlocks();
     toast("New food: " + label + " · +5 DNA", 2.4);
   }
   /** Learn a species' name: by selecting one, or by watching its nest (sharp eyes do it from further away). */
@@ -944,7 +978,7 @@ export function createCreatureStage(o) {
         P.pending = { kind, t };
         return;
       }
-      P.cooldowns[kind] = COOLDOWN[kind];
+      P.cooldowns[kind] = cooldownOf(kind);
       act(P, kind);
       act(t, kind);
       if (brainReady && nearNest()) return callMate();
@@ -981,7 +1015,7 @@ export function createCreatureStage(o) {
 
   /** A social move performed for no one. */
   function showOff(kind) {
-    P.cooldowns[kind] = COOLDOWN[kind];
+    P.cooldowns[kind] = cooldownOf(kind);
     if (P.sneaking) setSneak(false);
     act(P, kind);
     voice(P, kind);
@@ -990,7 +1024,7 @@ export function createCreatureStage(o) {
     const info = ABILITY_INFO[kind],
       lvl = P.abilities[kind];
     if (!lvl || (P.cooldowns[kind] || 0) > 0) return;
-    P.cooldowns[kind] = COOLDOWN[kind];
+    P.cooldowns[kind] = cooldownOf(kind);
     if (t) P.heading = Math.atan2(-(t.pos.z - P.pos.z), t.pos.x - P.pos.x);
     act(P, kind);
     voice(P, kind);
@@ -1016,9 +1050,9 @@ export function createCreatureStage(o) {
         P.chargeHit = new Set();
         return;
       }
-      if (t && distTo(t) < reach(t) + ATTACKS[kind].range) {
+      if (t && distTo(t) < reach(t) + ATTACKS[kind].range + biteReach(kind)) {
         if (ambush > 1) ambushHit(t);
-        damageNPC(t, playerDamage(kind, lvl, P.brain, ambush), ambush > 1 ? 0.6 : ATTACKS[kind].stagger);
+        damageNPC(t, playerDamage(kind, lvl, P.brain, ambush) * (kind === "bite" ? P.mouth.bite : 1), ambush > 1 ? 0.6 : ATTACKS[kind].stagger + (kind === "bite" && P.mouth.special === "stagger" ? 0.3 : 0));
       }
       return;
     }
@@ -1040,7 +1074,7 @@ export function createCreatureStage(o) {
       // How warmly it starts: their personality, your charm, a gift, your size, and what you've done to their kind.
       const pers = PERSONALITIES[t.species.personality] || PERSONALITIES.proud;
       const past = P.treated[t.species.id];
-      let start = 0.2 + pers.start + P.abilities.charm * 0.02 + (t.nest.gifted ? 0.25 : 0) - (past?.kills ? 0.12 : 0);
+      let start = 0.2 + pers.start + P.abilities.charm * 0.02 + (P.mouth.social - 1) * 0.1 + (P.mouth.special === "lure" ? 0.08 : 0) + (t.nest.gifted ? 0.25 : 0) - (past?.kills ? 0.12 : 0);
       if (pers.fearsBig && P.scale > t.scale * 1.4) {
         start -= 0.08;
         pop(t, "😟");
@@ -1072,7 +1106,7 @@ export function createCreatureStage(o) {
     const need = socialNeed(t.species, t.social.request);
     if (kind === t.social.request) {
       const allies = packMembers().length;
-      const gain = lvl >= need ? 0.25 + 0.06 * (lvl - need) + allies * 0.04 : 0.08;
+      const gain = (lvl >= need ? 0.25 + 0.06 * (lvl - need) + allies * 0.04 : 0.08) * P.mouth.social; // the mouth shapes small talk
       t.social.progress = Math.min(1, t.social.progress + gain);
       bumpArc(lvl >= need ? "good" : "weak");
       // A strong move gets a big golden pop; a weak one only a faint one, and barely moves the meter.
@@ -1348,7 +1382,7 @@ export function createCreatureStage(o) {
   const packMembers = () => [...npcs].filter((n) => n.following && !n.temporary && !n.dead);
   function unlockFromSpecies(species, source) {
     const owned = unlockedParts();
-    const ids = creaturePartIds(species.record).filter((id) => !owned.has(id));
+    const ids = creaturePartIds(species.record).filter((id) => !owned.has(id) && !isMouth(id));
     if (!ids.length) {
       P.dna += 10;
       return;
@@ -1375,6 +1409,7 @@ export function createCreatureStage(o) {
     brainReady = false;
     P.xp = 0;
     P.brain = Math.min(5, P.brain + 1);
+    checkMouthUnlocks();
     o.onChronicle?.({ key: "brain:" + P.brain, stage: "creature", icon: "🧠", text: "Reached brain level " + P.brain + "." });
     P.health = P.maxHealth;
     P.hunger = 100;
@@ -1385,7 +1420,7 @@ export function createCreatureStage(o) {
     // A new generation moves on: once you are back from the editor, your species migrates.
     P.migrateDue = true; // one migration per level: coast → forest → swamp → badlands → volcano
     // Grow, then design the next generation.
-    o.onMate({ record: P.record, unlocked: unlockedParts(), dna: P.dna, brain: P.brain });
+    o.onMate(editorState());
     // A milestone: say what this brain level brings.
     const next = nextRegion();
     setTimeout(
@@ -1604,6 +1639,19 @@ export function createCreatureStage(o) {
   }
 
   /* ---- saving ---------------------------------------------------------- */
+  /** Parts you have seen on a creature you have discovered: locked ones show their name in the editor only if seen. */
+  function seenParts() {
+    const out = new Set(creaturePartIds(P.record));
+    const seen = (sp) => sp && P.discovered.has(sp.id) && creaturePartIds(sp.record).forEach((id) => out.add(id));
+    nests.forEach((n) => seen(n.species));
+    rogues.forEach((r) => seen(r.species));
+    epics.forEach((e) => seen(e.species));
+    return out;
+  }
+  /** Everything the creature editor needs: the design, what you may use, what you have achieved, and your DNA. */
+  function editorState() {
+    return { record: P.record, unlocked: unlockedParts(), seen: seenParts(), progress: mouthProgress(), dna: P.dna, brain: P.brain };
+  }
   function snapshot() {
     regionSaves[regionId] = {
       bonesTaken: [...P.bonesTaken],
@@ -1647,6 +1695,7 @@ export function createCreatureStage(o) {
   }
   function saveState() {
     if (leaving) return; // the save for the next region is already written
+    checkMouthUnlocks(); // alliances and wins land here: new mouths are announced as they are earned
     try {
       localStorage.setItem(CREATURE_SAVE_KEY, JSON.stringify(snapshot()));
       o.onSaved?.();
@@ -1930,7 +1979,7 @@ export function createCreatureStage(o) {
   const canEat = (kind, diet) => diet === "omni" || (kind === "meat" ? diet === "meat" : diet === "plant");
   /** Food within reach that you could pick up. */
   function foodNear() {
-    const r = 2.2 + P.scale;
+    const r = 2.2 + P.scale + snatchReach();
     for (const c of carcasses) if (c.bites > 0 && !c.dragged && Math.hypot(c.x - P.pos.x, c.z - P.pos.z) < r) return { kind: "meat", c };
     for (const f of world.fruits) if (f.alive && !f.hanging && !f.claimed && Math.abs(f.y - heightAt(f.x, f.z)) < 1.6 && Math.hypot(f.x - P.pos.x, f.z - P.pos.z) < r) return { kind: "fruit", f };
     return null;
@@ -2018,7 +2067,7 @@ export function createCreatureStage(o) {
     }
     if (a.id === "give") return giveFood(a.t);
     if (a.id === "eat") {
-      eat(kind === "meat" ? 22 : 18, 6, 2);
+      eat(kind === "meat" ? 22 : 18, 6, 2, kind === "meat" ? "meat" : "plant");
       clearCarry();
       return;
     }
@@ -2550,21 +2599,21 @@ export function createCreatureStage(o) {
     const mouth = tmp.copy(P.body.mouthLocal).multiplyScalar(P.scale).applyAxisAngle(new THREE.Vector3(0, 1, 0), P.heading).add(P.pos);
     if (P.diet !== "meat")
       for (const f of world.fruits)
-        if (f.alive && Math.abs(f.x - mouth.x) < 1.6 && Math.abs(f.z - mouth.z) < 1.6 && (!f.hanging || mouth.y > f.y - 1.4) && !(f.vy && f.y > f.groundY + 1.2)) {
+        if (f.alive && Math.abs(f.x - mouth.x) < 1.6 + snatchReach() && Math.abs(f.z - mouth.z) < 1.6 + snatchReach() && (!f.hanging || mouth.y > f.y - 1.4) && !(f.vy && f.y > f.groundY + 1.2)) {
           // Fruit up in a tree is only in reach of a tall creature; the rest has to be knocked down.
           f.alive = false;
           f.regrow = 40;
           world.syncFruit();
-          eat(16, 4, 3);
+          eat(16, 4, 3, "plant");
           if (f.tree) tasted("treeFruit", "tree fruit");
           else tasted("fruit", "fruit");
         }
     if (P.diet !== "plant")
       for (let i = carcasses.length - 1; i >= 0; i--) {
         const c = carcasses[i];
-        if (!c.dragged && Math.hypot(c.x - mouth.x, c.z - mouth.z) < 2) {
+        if (!c.dragged && Math.hypot(c.x - mouth.x, c.z - mouth.z) < 2 + snatchReach()) {
           c.bites--;
-          eat(28, 8, 5);
+          eat(28, 8, 5, "meat");
           tasted("meat", "meat");
           c.mesh.scale.multiplyScalar(0.8);
           if (c.bites <= 0) removeCarcass(i);
@@ -2697,7 +2746,7 @@ export function createCreatureStage(o) {
     o.sfx("unlock");
     pop(P, "🦴", "good");
     const owned = unlockedParts();
-    const pool = CREATURE_PARTS.filter((p) => p.cost > 0 && !owned.has(p.id)).sort((a, z) => a.cost - z.cost);
+    const pool = CREATURE_PARTS.filter((p) => p.cost > 0 && !owned.has(p.id) && !isMouth(p.id)).sort((a, z) => a.cost - z.cost);
     // The bigger your brain, the better the parts the fossils give up.
     const lo = Math.min(pool.length - 1, Math.floor(((P.brain - 1) / 5) * pool.length));
     const pick = pool.length ? pool[Math.min(pool.length - 1, lo + Math.floor(Math.random() * 6))] : null;
@@ -2823,10 +2872,13 @@ export function createCreatureStage(o) {
       monster = null;
     }
   }
-  function eat(hunger, health, xp) {
-    P.hunger = Math.min(100, P.hunger + hunger);
-    P.health = Math.min(P.maxHealth, P.health + health);
-    P.dna += 1;
+  /** A meal. `kind` ("plant" | "meat") scales it by how well the equipped mouth feeds on it; stored food passes none. */
+  function eat(hunger, health, xp, kind) {
+    const eff = kind ? feedsOn(P.mouthId, kind) || 1 : 1;
+    const gulp = P.mouth.special === "gulp" ? 1.75 : 1;
+    P.hunger = Math.min(100, P.hunger + hunger * eff);
+    P.health = Math.min(P.maxHealth, P.health + health * eff * gulp);
+    P.dna += 1 + (P.mouth.special === "forage" ? 2 : 0);
     gainXp(xp);
     act(P, "bite");
     o.sfx("eat");
@@ -3303,7 +3355,7 @@ export function createCreatureStage(o) {
     // Cooldown rings.
     hud.querySelectorAll(".chAb").forEach((b) => {
       const k = b.dataset.ab,
-        cd = k === "card" ? P.cardCooldown / 30 : k === "next" ? 0 : (P.cooldowns[k] || 0) / COOLDOWN[k];
+        cd = k === "card" ? P.cardCooldown / 30 : k === "next" ? 0 : (P.cooldowns[k] || 0) / cooldownOf(k);
       b.classList.toggle("pending", P.pending?.kind === k);
       const ring = b.querySelector(".cd");
       if (ring) ring.style.setProperty("--p", Math.max(0, cd) * 100 + "%");
@@ -3694,7 +3746,10 @@ export function createCreatureStage(o) {
       return P.record;
     },
     /** The editor finished: the new design replaces the old one. */
+    editorState,
     applyDesign(record, dnaLeft) {
+      // Whatever you have been wearing stays yours, even if it was never earned the usual way.
+      creaturePartIds(P.record).forEach((id) => P.unlocked.add(id));
       P.record = validateCreature(record);
       P.dna = dnaLeft;
       rebuildPlayer();
