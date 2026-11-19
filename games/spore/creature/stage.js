@@ -4579,7 +4579,11 @@ export function createCreatureStage(o) {
     lean.classList.toggle("pulse", leanPulse > 0);
     const atNest = nearNest();
     o.onNestProximity?.(atNest);
-    $h("#chMate").hidden = !!courtship || !!P.migration || !!brainFx || P.deadTimer > 0;
+    const mateButton = $h("#chMate");
+    const hideMateButton = !!courtship || !!P.migration || !!brainFx || P.deadTimer > 0;
+    mateButton.hidden = hideMateButton;
+    // Some HUD styles assign display directly, which can override the browser hidden attribute.
+    mateButton.style.display = hideMateButton ? "none" : "flex";
     $h("#chMate").textContent = atNest ? (tribeReady ? "🔥 Mate · found a tribe" : "♡ Mate · new generation") : "♡ Call mate · return to nest";
     $h("#chMate").classList.toggle("final", tribeReady);
     $h("#chTribe").hidden = !o.tribeUnlocked?.();
