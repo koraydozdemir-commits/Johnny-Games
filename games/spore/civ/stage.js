@@ -1356,7 +1356,9 @@ export function createCivStage(o) {
   const orderText = (v) => {
     const od = v.order;
     if (!od) return "Idle";
-    return { move: "Moving", city: v.role === "military" ? `Attacking ${od.city.name}` : v.role === "economic" ? `Trading with ${od.city.name}` : `Preaching in ${od.city.name}`, geyser: "Capturing spice", vehicle: "Attacking a vehicle", defend: od.city ? `Defending ${od.city.name}` : "Defending a position", follow: "Following" }[od.type] || "Busy";
+    if (od.type === "city") return v.role === "military" ? `Attacking ${od.city.name}` : v.role === "economic" ? `Trading with ${od.city.name}` : `Preaching in ${od.city.name}`;
+    if (od.type === "defend") return od.city ? `Defending ${od.city.name}` : "Defending a position";
+    return { move: "Moving", geyser: "Capturing spice", vehicle: "Attacking a vehicle", follow: "Following" }[od.type] || "Busy";
   };
   const statLine = (u) => `Speed ${u.speed}` + (u.weapon ? ` · Damage ${u.dps}/s · Range ${u.weapon.range} m` : u.trade ? ` · Trade ${u.trade}` : u.preach ? ` · Preaching ${u.preach}` : "");
   let cmdHtml = "";
