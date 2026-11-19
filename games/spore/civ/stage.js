@@ -108,8 +108,8 @@ const SPOTS = {
   plotAngle: (k) => (k / PLOTS) * TAU + TAU / 12,
   turretAngle: (k) => (k / MAX_TURRETS) * TAU - Math.PI / 2,
 };
-/** For the first few minutes nobody comes for your cities: time to build up. */
-const GRACE = 240;
+/** For the first eight minutes nobody comes for your cities: time to build up (rivals only trade, claim spice and take independent cities). */
+const GRACE = 480;
 /** How much of its income a rival nation makes use of. */
 const AI_EFFICIENCY = 0.75;
 

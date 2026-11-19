@@ -137,8 +137,9 @@ export function planNation(me, world) {
     const pool = (freeCities.length ? freeCities : notMine).filter((c) => !c.devout || c.owner !== me.id);
     const lean = (c) => (leader && c.owner === leader.id ? -3 : 0);
     const best = [...pool].sort((a, b) => a.faith + (a.owner ? 2 : 0) + lean(a) - (b.faith + (b.owner ? 2 : 0) + lean(b)))[0];
+    // In the early grace period missionaries only work on independent cities.
     if (best && !world.grace) out.push({ k: "target", kind: "convert", city: best.id });
-    else if (best) out.push({ k: "target", kind: "convert", city: (freeCities[0] || best).id });
+    else if (freeCities[0]) out.push({ k: "target", kind: "convert", city: [...freeCities].sort((a, b) => a.faith - b.faith)[0].id });
   } else {
     // Trade partners: any city of a nation we are not fighting, richest connection first; buy what is ready.
     const pool = notMine.filter((c) => !c.owner || !atWar(world.dip, me.id, c.owner));

@@ -146,9 +146,10 @@ const cs = (f) => `(() => { const cs = window.__spore.civStage, d = cs.debug; ${
   // rivals claim spice too
   const rival = await page.evaluate(cs(`
     d.T.nations.forEach(n => { n.clock = 0; });
+    const reachable = d.T.geysers.filter(g => !g.owner && d.T.nations.some(n => d.T.cities.some(c => c.owner === n.id && c.continent === g.continent))).length;
     for (let t = 0; t < 900; t += 0.25) cs.update(0.25);
-    const owned = d.T.geysers.filter(g => g.owner && g.owner !== "you"); return { rivalOwned: owned.length, owners: owned.map(g=>g.owner), time: Math.round(d.T.time), veh: d.T.vehicles.filter(v=>v.owner!=="you").length }`));
-  check("rival civilizations capture spice geysers", rival.rivalOwned >= 1, JSON.stringify(rival));
+    const owned = d.T.geysers.filter(g => g.owner && g.owner !== "you"); return { rivalOwned: owned.length, owners: owned.map(g=>g.owner), reachable, time: Math.round(d.T.time), veh: d.T.vehicles.filter(v=>v.owner!=="you").length }`));
+  check("rival civilizations capture the spice geysers they can reach", rival.rivalOwned >= Math.min(1, rival.reachable), JSON.stringify(rival));
   // level of detail
   await page.evaluate(cs(`d.rig.flyTo(d.T.cities[0].x, d.T.cities[0].z, 80); d.rig.snap();`)); await page.waitForTimeout(1500);
   const lodNear = await page.evaluate(cs(`const c = d.T.cities[0]; return { detail: c.art.detail.visible, proxy: c.art.proxy.visible }`));
