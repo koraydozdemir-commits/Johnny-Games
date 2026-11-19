@@ -415,6 +415,9 @@ export function createCreatureStage(o) {
   function callMate() {
     if (courtship || P.migration || brainFx || cine) return;
     if (!nearNest()) return toast("Return to your nest to call a mate.", 2.4);
+    // The final "Found tribe" action is a stage transition, not another generation.
+    // Skip the optional partner courtship so missing/moving family members cannot block it.
+    if (tribeReady) return mate();
     const partner = family.filter((n) => !n.dead && !n.following).sort((a, b) => distTo(a) - distTo(b))[0];
     if (!partner) return mate();
     courtship = { n: partner, t: 0, danceT: 0 };
