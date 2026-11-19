@@ -1358,8 +1358,7 @@ export function createCreatureStage(o) {
       moveBtn("sprint", "💨", "Sprint", "⇧", 1) +
       moveBtn("jump", P.abilities.glide ? "🕊" : "⤒", "Jump", "␣", P.abilities.jump) +
       `<button class="chAb card" data-ab="card" aria-label="${cardInfo.name}"><span class="cd"></span><span class="ic">${cardInfo.icon}</span><small>${cardInfo.name}</small><kbd>Q</kbd></button>` +
-      `<button class="chAb next" data-ab="next" aria-label="Select the next creature"><span class="ic">◎</span><small>Select</small><kbd>Tab</kbd></button>` +
-      `<button class="chAb social mate" id="chMate" aria-label="Call a mate"><span class="ic">♡</span><small>Mate</small></button></div>`;
+      `<button class="chAb social mate" id="chMate" data-ab="mate" aria-label="Call a mate"><span class="ic">♡</span><small>Mate</small></button></div>`;
     $h("#chAbilities")
       .querySelectorAll("button")
       .forEach((b) => (b.onclick = () => (b.dataset.mode ? setMode(b.dataset.mode, true) : b.dataset.ab === "mate" ? callMate() : useAbility(b.dataset.ab))));
