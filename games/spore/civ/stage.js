@@ -8,9 +8,16 @@
  * are unit tested; this file is the scene, the controls and the HUD.
  */
 import * as THREE from "three";
-import { ISLAND, createIsland, heightAt } from "../creature/world.js";
-import { steerAround } from "../creature/world.js";
 import { generateSpecies } from "../creature/species.js";
+import { getHomeworld } from "../ecolib/homeworld.js";
+import { planetProfile } from "../ecolib/planet-profile.js";
+import { clampToMap, createPlanetMap, mapToLonLat, unitVector } from "./planet-map.js";
+import { createPlanetView, placeOnPlanet, worldAt } from "./planet-render.js";
+import { createPlanetCamera, ZOOM } from "./planet-camera.js";
+import { createPlanetFlora } from "./planet-flora.js";
+import { createCityArt, createSpiceArt } from "./city-view.js";
+import { CITY, STYLE_IDS, chooseStyles, describeCulture, makeCulture, roadLinks, traitsOf } from "./culture.js";
+import { createMinimap } from "./minimap.js";
 import { buildDesignMesh, designMaterials } from "../creations/mesh.js";
 import { validateModular } from "../creations/format.js";
 import { ROLES, STARTER_DESIGNS, designStats, vehicleMode } from "../creations/modular.js";
@@ -73,7 +80,19 @@ const NATION_START = { military: -20, economic: 10, religious: 0 };
 const INDEPENDENT_COLOR = 0x9aa3ab;
 const RANGE = { land: 12, air: 11, sea: 6 };
 const SCALE = { building: 1.35, hall: 1.7, vehicle: 1.35 };
-const SEA_RING = ISLAND.shore + 14;
+/** Where the stage stands in for a planet when the game has no universe (an old save, a test): a plain world per region. */
+const REGION_WORLD = { coast: ["terrestrial", 18, 0.7], forest: ["jungle", 24, 0.6], swamp: ["swamp", 26, 0.75], badlands: ["desert", 40, 0.2], volcanic: ["volcanic", 55, 0.3] };
+function fallbackProfile(regionId = "coast") {
+  const [type, temp, water] = REGION_WORLD[regionId] || REGION_WORLD.coast;
+  return planetProfile({ id: "home:" + regionId, type, temp, water, atmosphere: "Breathable", biodiversity: 0.7, gravity: 1, surfaceSeed: 4242 + regionId.length * 17 });
+}
+/** Local layout of a city's building plots and turret sites (metres from its centre). */
+const SPOTS = {
+  plots: PLOTS,
+  turretSlots: MAX_TURRETS,
+  plotAngle: (k) => (k / PLOTS) * TAU + TAU / 12,
+  turretAngle: (k) => (k / MAX_TURRETS) * TAU - Math.PI / 2,
+};
 /** For the first few minutes nobody comes for your cities: time to build up. */
 const GRACE = 240;
 
@@ -100,15 +119,20 @@ const GRACE = 240;
 export function createCivStage(o) {
   const canvas = o.renderer.domElement;
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 900);
+  const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 1, 3600);
   const save = o.save || null;
-  const world = createIsland(scene, o.quality, o.regionId || "coast");
-  scene.fog.near = 180;
-  scene.fog.far = 520;
+  // The planet is the homeworld the game started on (see ecolib/homeworld.js); a plain one stands in when there is none.
+  const profile = getHomeworld() || fallbackProfile(o.regionId);
+  const map = createPlanetMap(profile);
+  const planetView = createPlanetView(scene, map, { quality: o.quality });
   const legacy = civLegacy(o.legacy || {});
   const mods = legacy.mods;
   const chronicle = (ev) => o.onChronicle?.(ev);
-  const HOME = { x: ISLAND.nest.x, z: ISLAND.nest.z };
+  const HOME = { x: map.citySites[0].x, z: map.citySites[0].z };
+  const wv = new THREE.Vector3();
+  const W = (x, h, z) => worldAt(map, x, z, h, new THREE.Vector3());
+  const rig = createPlanetCamera(camera, map, { x: HOME.x, z: HOME.z, dist: 125 });
+  rig.snap();
   const myColors = { base: 0xf2efe6, accent: o.color ?? 0x3fa9d6, trim: 0x2f3d4f };
 
   /* ---- state -------------------------------------------------------------------------------- */
@@ -166,21 +190,11 @@ export function createCivStage(o) {
   }
   const plain = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, flatShading: true, ...extra });
   const sharedGeo = {
-    wall: new THREE.TorusGeometry(15, 0.45, 6, 48).rotateX(Math.PI / 2),
-    plaza: new THREE.CircleGeometry(15, 40).rotateX(-Math.PI / 2),
     plot: new THREE.CircleGeometry(2.6, 18).rotateX(-Math.PI / 2),
-    vent: new THREE.CylinderGeometry(1.4, 2.2, 0.8, 10),
-    plume: new THREE.ConeGeometry(1.1, 5, 10, 1, true),
-    derrick: new THREE.CylinderGeometry(0.35, 1.3, 5, 4),
-    flag: new THREE.PlaneGeometry(1.4, 0.9),
     ring: new THREE.RingGeometry(1.6, 2.1, 24).rotateX(-Math.PI / 2),
   };
   const sharedMat = {
-    plaza: plain(0xcfc4a8),
     plot: plain(0xa89c80),
-    vent: plain(0x6b5a48),
-    plume: new THREE.MeshBasicMaterial({ color: 0xffa14a, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide }),
-    derrick: plain(0x3a3f45),
     sel: new THREE.MeshBasicMaterial({ color: 0x8ff0a8, transparent: true, opacity: 0.9, depthTest: false }),
     foe: new THREE.MeshBasicMaterial({ color: 0xef4b48, transparent: true, opacity: 0.9, depthTest: false }),
   };
@@ -194,6 +208,7 @@ export function createCivStage(o) {
       id: "n" + i,
       index: i,
       type,
+      species: sp,
       name: sp.name,
       color: NATION_COLORS[type],
       colors: { base: 0xe8dcc0, accent: NATION_COLORS[type], trim: 0x3a3f45 },
@@ -210,24 +225,44 @@ export function createCivStage(o) {
   const ownerColor = (owner) => (owner === YOU ? myColors.accent : nationOf(owner)?.color ?? INDEPENDENT_COLOR);
   const ownerName = (owner) => (owner === YOU ? "your nation" : owner ? nationOf(owner)?.name + " nation" : "Independent");
 
+  /* ---- cultures: how each nation's cities look, from its species -------------------------------------- */
+  const youSpecies = o.species?.record ? o.species : { record: null, diet: "omni" };
+  {
+    const order = [
+      { key: YOU, traits: traitsOf(youSpecies), seed: 1 },
+      ...T.nations.map((n) => ({ key: n.id, traits: traitsOf(n.species), seed: 90210 + n.index * 7919 })),
+    ];
+    const styles = chooseStyles(order);
+    T.cultures = { [YOU]: makeCulture({ key: YOU, species: youSpecies, accent: myColors.accent, style: styles.get(YOU), seed: 1 }) };
+    for (const n of T.nations) T.cultures[n.id] = makeCulture({ key: n.id, species: n.species, accent: n.color, style: styles.get(n.id), seed: n.index });
+  }
+  /** Independent cities have a weathered local style per continent. */
+  const localCultures = new Map();
+  const cultureFor = (c) => {
+    if (c.owner === YOU) return T.cultures[YOU];
+    if (c.owner && T.cultures[c.owner]) return T.cultures[c.owner];
+    const key = "local:" + c.continent;
+    if (!localCultures.has(key)) localCultures.set(key, makeCulture({ key, species: generateSpecies(5150 + c.continent * 31, "omni", 1), accent: INDEPENDENT_COLOR, style: STYLE_IDS[(c.continent * 3 + 1) % STYLE_IDS.length], seed: c.continent, muted: true }));
+    return localCultures.get(key);
+  };
+
   /* ---- cities -------------------------------------------------------------------------------------- */
-  // Your capital where your village stood; ten more cities on the island's other nest sites: two for
+  // Your capital where your village stood; eleven more cities across the planet's continents: two for
   // each rival nation (the nearer ones for the friendlier nations) and the rest independent.
   {
-    const sites = world.nestSites.filter((s) => Math.hypot(s.x - HOME.x, s.z - HOME.z) > 40).slice(0, 10);
-    const owners = [YOU, "n1", "n2", "n0", null, "n1", "n2", "n0", null, null, null];
-    [HOME, ...sites].forEach((site, i) => {
+    const owners = [YOU, "n1", "n2", "n0", null, "n1", "n2", "n0", null, null, null, null];
+    map.citySites.forEach((site, i) => {
       const saved = save?.cities[i];
       const owner = saved ? saved.owner : owners[i] === undefined ? null : owners[i];
       const nat = nationOf(owner);
       const type = saved ? saved.type : owner === YOU ? T.startType : nat ? nat.type : TYPE_IDS[i % 3];
       // Rivals start with a working town; independents with a couple of houses and a turret.
       const startPlots = owner === YOU ? ["house", "factory", null, null, null, null] : nat ? ["house", "factory", "fun", "house", null, null] : ["house", "house", null, null, null, null];
-      const dist = Math.hypot(site.x, site.z);
       const city = {
         id: i,
         x: site.x,
         z: site.z,
+        continent: site.continent,
         name: i === 0 ? o.name : cityName(i * 7919 + (o.regionId || "").length),
         owner,
         type,
@@ -238,16 +273,13 @@ export function createCivStage(o) {
         trade: saved ? saved.trade : {},
         conv: saved ? saved.conv : {},
         unrest: saved ? saved.unrest : 0,
-        coastal: ISLAND.shore - dist < 48,
-        group: null,
+        coastal: !!site.coastal,
+        // Where boats anchor off this city (coastal cities only).
+        sea: site.coastal ? site.sea : null,
+        art: null,
         calm: 99,
         mark: null,
       };
-      // Where sea vehicles anchor off this city: straight out from the island's centre.
-      const ang = Math.atan2(site.z, site.x);
-      let r = dist;
-      while (r < ISLAND.shore + 40 && heightAt(Math.cos(ang) * r, Math.sin(ang) * r) > -0.6) r += 2;
-      city.sea = { x: Math.cos(ang) * (r + 4), z: Math.sin(ang) * (r + 4), r: r + 4 };
       T.cities.push(city);
     });
   }
@@ -255,107 +287,77 @@ export function createCivStage(o) {
   const citiesOf = (owner) => T.cities.filter((c) => c.owner === owner);
   const capital = () => T.cities[0].owner === YOU ? T.cities[0] : yourCities()[0] || T.cities[0];
   const distXZ = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
-  const groundY = (x, z) => Math.max(0, heightAt(x, z));
+  const groundY = (x, z) => Math.max(0, map.heightAt(x, z));
 
-  const ownerDesign = (owner, role) => {
+  const cityArt = createCityArt(scene, map, { quality: o.quality });
+  const spiceArt = createSpiceArt(scene, map);
+  const ownerDesign = (owner, role, culture = null) => {
     if (owner === YOU) return T.designs.building[role];
-    const colors = nationOf(owner)?.colors || { base: 0xd9d4c8, accent: INDEPENDENT_COLOR, trim: 0x3a3f45 };
+    const pal = culture?.palette;
+    const colors = pal ? { base: pal.wall, accent: pal.accent, trim: pal.trim } : nationOf(owner)?.colors || { base: 0xd9d4c8, accent: INDEPENDENT_COLOR, trim: 0x3a3f45 };
     return { ...STARTER_DESIGNS.building[role], colors };
   };
   const plotSpot = (c, k) => {
-    const a = (k / PLOTS) * TAU + TAU / 12;
-    return { x: c.x + Math.cos(a) * 9, z: c.z + Math.sin(a) * 9 };
+    const a = SPOTS.plotAngle(k);
+    return { x: c.x + Math.cos(a) * CITY.plotRing, z: c.z + Math.sin(a) * CITY.plotRing };
   };
   const turretSpot = (c, k) => {
-    const a = (k / MAX_TURRETS) * TAU - Math.PI / 2;
-    return { x: c.x + Math.cos(a) * 15, z: c.z + Math.sin(a) * 15 };
+    const a = SPOTS.turretAngle(k);
+    return { x: c.x + Math.cos(a) * CITY.turretRing, z: c.z + Math.sin(a) * CITY.turretRing };
   };
+  const boxTmp = new THREE.Box3();
+  /** Stand one designed building on the ground at a spot, facing the way given; returns its model and height. */
   function placeModel(group, design, at, scale, face = 0) {
     const m = buildDesignMesh(design, { materials: matsFor(design.colors) });
     m.root.scale.setScalar(scale);
-    m.root.position.set(at.x, groundY(at.x, at.z), at.z);
-    m.root.rotation.y = face;
+    m.root.updateMatrixWorld(true);
+    const height = boxTmp.setFromObject(m.root).max.y;
+    placeOnPlanet(map, m.root, at.x, at.z, groundY(at.x, at.z), face);
     group.add(m.root);
+    m.height = height;
     return m;
   }
   function buildCity(c) {
-    if (c.group) {
+    if (c.art) {
       c.models.forEach((m) => m.dispose());
-      c.wallMat.dispose();
-      scene.remove(c.group);
+      c.art.dispose();
     }
-    const g = new THREE.Group();
     c.models = [];
-    c.wallMat = plain(ownerColor(c.owner));
-    const gy = groundY(c.x, c.z);
-    const plaza = new THREE.Mesh(sharedGeo.plaza, sharedMat.plaza);
-    plaza.position.set(c.x, gy + 0.05, c.z);
-    g.add(plaza);
-    const wall = new THREE.Mesh(sharedGeo.wall, c.wallMat);
-    wall.position.set(c.x, gy + 0.3, c.z);
-    g.add(wall);
+    const culture = cultureFor(c);
+    c.culture = culture;
+    const econ = cityEconomy(c, ownerMods(c.owner));
+    const art = cityArt.build(c, { culture, ownerColor: ownerColor(c.owner), spots: SPOTS, pop: econ.pop });
+    c.art = art;
+    c.world = W(c.x, groundY(c.x, c.z), c.z);
     const face = (p) => Math.atan2(c.x - p.x, c.z - p.z);
-    c.models.push(placeModel(g, ownerDesign(c.owner, "hall"), c, SCALE.hall));
+    const hall = placeModel(art.detail, ownerDesign(c.owner, "hall", culture), c, SCALE.hall);
+    c.models.push(hall);
+    art.crownAt(hall.height);
     for (let k = 0; k < PLOTS; k++) {
       const at = plotSpot(c, k);
-      if (c.plots[k]) c.models.push(placeModel(g, ownerDesign(c.owner, c.plots[k]), at, SCALE.building, face(at)));
+      if (c.plots[k]) c.models.push(placeModel(art.detail, ownerDesign(c.owner, c.plots[k], culture), at, SCALE.building, face(at)));
       else {
         const pad = new THREE.Mesh(sharedGeo.plot, sharedMat.plot);
-        pad.position.set(at.x, groundY(at.x, at.z) + 0.06, at.z);
-        g.add(pad);
+        placeOnPlanet(map, pad, at.x, at.z, groundY(at.x, at.z) + 0.3);
+        art.detail.add(pad);
       }
     }
     for (let k = 0; k < c.turrets; k++) {
       const at = turretSpot(c, k);
-      c.models.push(placeModel(g, ownerDesign(c.owner, "turret"), at, SCALE.building * 0.9, face(at)));
+      c.models.push(placeModel(art.detail, ownerDesign(c.owner, "turret", culture), at, SCALE.building * 0.9, face(at)));
     }
-    c.group = g;
-    scene.add(g);
   }
 
   /* ---- spice geysers ------------------------------------------------------------------------------ */
-  {
-    let seed = 1337 + (o.regionId || "").length * 101;
-    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
-    for (let tries = 0; T.geysers.length < 9 && tries < 4000; tries++) {
-      const a = rnd() * TAU,
-        r = 30 + rnd() * (ISLAND.beach - 40);
-      const x = Math.cos(a) * r,
-        z = Math.sin(a) * r;
-      if (heightAt(x, z) < 0.5 || !world.isOpen(x, z, 4, ISLAND.beach)) continue;
-      if (T.cities.some((c) => Math.hypot(c.x - x, c.z - z) < 30)) continue;
-      if (T.geysers.some((g) => Math.hypot(g.x - x, g.z - z) < 35)) continue;
-      const saved = save?.geysers[T.geysers.length];
-      T.geysers.push({ id: T.geysers.length, x, z, owner: saved ? saved.owner : null, hp: saved ? saved.hp : 1, group: null });
-    }
-  }
+  // Spice vents sit where the planet map put them, each with its own richness (map.spiceSites[i].yield).
+  map.spiceSites.forEach((sp, i) => {
+    const saved = save?.geysers[i];
+    T.geysers.push({ id: i, x: sp.x, z: sp.z, yield: sp.yield, biome: sp.biome, continent: sp.continent, owner: saved ? saved.owner : null, hp: saved ? saved.hp : 1, view: null, plume: null });
+  });
   function buildGeyser(gz) {
-    if (gz.group) {
-      gz.flagMat?.dispose();
-      scene.remove(gz.group);
-    }
-    const g = new THREE.Group();
-    const gy = groundY(gz.x, gz.z);
-    g.position.set(gz.x, gy, gz.z);
-    const vent = new THREE.Mesh(sharedGeo.vent, sharedMat.vent);
-    vent.position.y = 0.4;
-    g.add(vent);
-    if (gz.owner) {
-      const tower = new THREE.Mesh(sharedGeo.derrick, sharedMat.derrick);
-      tower.position.y = 3;
-      g.add(tower);
-      gz.flagMat = plain(ownerColor(gz.owner), { side: THREE.DoubleSide });
-      const flag = new THREE.Mesh(sharedGeo.flag, gz.flagMat);
-      flag.position.set(0.7, 5, 0);
-      g.add(flag);
-      gz.plume = null;
-    } else {
-      gz.plume = new THREE.Mesh(sharedGeo.plume, sharedMat.plume);
-      gz.plume.position.y = 3;
-      g.add(gz.plume);
-    }
-    gz.group = g;
-    scene.add(g);
+    gz.view?.dispose();
+    gz.view = spiceArt.build(gz, ownerColor(gz.owner));
+    gz.plume = gz.view.plume;
   }
 
   /* ---- vehicles ------------------------------------------------------------------------------------ */
@@ -364,12 +366,23 @@ export function createCivStage(o) {
     const [role, mode] = key.split(":");
     return starterVehicle(role, mode, nationOf(owner)?.colors);
   };
+  /** A free spot for a land or air vehicle near a city: on open ground just outside its walls. */
+  function spawnSpot(city, mode) {
+    const base = Math.random() * TAU;
+    for (let r = 20; r < 60; r += 6)
+      for (let k = 0; k < 10; k++) {
+        const a = base + (k / 10) * TAU;
+        const x = city.x + Math.cos(a) * r,
+          z = city.z + Math.sin(a) * r;
+        if (map.walkable(mode === "air" ? "air" : "land", x, z)) return { x, z };
+      }
+    return { x: city.x + 20, z: city.z };
+  }
   function spawnVehicle(owner, key, city, at = null, hpFrac = 1) {
     const design = vehicleDesign(owner, key);
     const unit = vehicleUnit(design, unitMods(owner));
     const [role, mode] = key.split(":");
-    let start = at || (mode === "sea" ? city.sea : { x: city.x + (Math.random() - 0.5) * 8, z: city.z + 17 * (Math.random() < 0.5 ? 1 : -1) });
-    if (mode === "land" && !at) start = world.resolve(start.x, start.z, 1.6);
+    let start = at || (mode === "sea" ? city.sea || spawnSpot(city, "land") : spawnSpot(city, mode));
     const model = buildDesignMesh(design, { materials: matsFor(design.colors) });
     model.root.scale.setScalar(SCALE.vehicle);
     const ring = new THREE.Mesh(sharedGeo.ring, owner === YOU ? sharedMat.sel : sharedMat.foe);
@@ -378,7 +391,7 @@ export function createCivStage(o) {
     const g = new THREE.Group();
     g.add(model.root, ring);
     scene.add(g);
-    const v = { id: nextVehicleId++, owner, key, role, mode, unit, model, group: g, ring, pos: { x: start.x, z: start.z }, y: 0, heading: Math.random() * TAU, hp: unit.hp * hpFrac, home: city.id, order: null, cool: 0, bob: Math.random() * 10, dead: false };
+    const v = { id: nextVehicleId++, owner, key, role, mode, unit, model, group: g, ring, pos: { x: start.x, z: start.z }, y: 0, heading: Math.random() * TAU, hp: unit.hp * hpFrac, home: city.id, order: null, cool: 0, bob: Math.random() * 10, dead: false, path: null, planT: 0, far: false };
     T.vehicles.push(v);
     placeVehicle(v, 0);
     return v;
@@ -397,8 +410,9 @@ export function createCivStage(o) {
   const shots = [];
   const shotMat = { you: new THREE.LineBasicMaterial({ color: 0xfff1a8 }), foe: new THREE.LineBasicMaterial({ color: 0xff7b5c }), faith: new THREE.LineBasicMaterial({ color: 0xc9b5ff, transparent: true, opacity: 0.7 }), trade: new THREE.LineBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.7 }) };
   function shot(a, b, kind) {
-    const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(a.x, a.y, a.z), new THREE.Vector3(b.x, b.y, b.z)]);
+    const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
     const line = new THREE.Line(geo, shotMat[kind]);
+    line.frustumCulled = false;
     scene.add(line);
     shots.push({ line, t: kind === "faith" || kind === "trade" ? 0.35 : 0.12 });
   }
@@ -425,6 +439,13 @@ export function createCivStage(o) {
     <div class="trGoal" id="cvGoal" role="status" aria-live="polite"></div>
     <div class="trTribes cvNations" id="cvNations" role="list" aria-label="Rival nations"></div>
     <div class="trMarks" id="cvMarks" aria-hidden="true"></div>
+    <div class="cvCam" role="group" aria-label="Camera">
+      <button id="cvZoomIn" aria-label="Zoom in" title="Zoom in (+)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button id="cvZoomOut" aria-label="Zoom out" title="Zoom out (-)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+      <button id="cvGlobe" aria-label="Show the whole planet" title="Whole planet (G)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16"/></svg></button>
+      <button id="cvNorth" aria-label="Compass: face north" title="Face north (N)"><svg viewBox="0 0 24 24" aria-hidden="true"><g id="cvNeedle"><path d="M12 3l4 9h-8z" class="n"/><path d="M12 21l4-9h-8z"/></g></svg></button>
+    </div>
+    <div class="cvRegion" id="cvRegion" hidden role="status" aria-live="polite"></div>
     <div class="trToast" id="cvToast" role="status" aria-live="polite"></div>
     <div class="trPlace" id="cvTarget" hidden role="status" aria-live="polite"><span id="cvTargetText"></span><button id="cvTargetCancel">Cancel</button></div>
     <div class="trSheet" id="cvSheet" hidden></div>
@@ -462,10 +483,11 @@ export function createCivStage(o) {
     seenTips.add(key);
     toast(text, s);
   };
-  const v3 = new THREE.Vector3();
+  const projOut = { x: 0, y: 0, on: false };
+  /** Screen position of a map point `y` metres above the sea (x and z are map metres). */
   function project(x, y, z) {
-    v3.set(x, y, z).project(camera);
-    return { x: (v3.x * 0.5 + 0.5) * innerWidth, y: (-v3.y * 0.5 + 0.5) * innerHeight, on: v3.z < 1 && v3.z > -1 };
+    worldAt(map, x, z, y, wv);
+    return { ...rig.project(wv, innerWidth, innerHeight, projOut) };
   }
   function pop(x, y, z, text, cls = "") {
     const p = project(x, y, z);
@@ -477,6 +499,25 @@ export function createCivStage(o) {
     el.style.top = p.y + "px";
     $h("#cvMarks").appendChild(el);
     setTimeout(() => el.remove(), 1300);
+  }
+
+  /* ---- region inspector: tap open ground to learn about it -------------------------------------------- */
+  let regionT = 0;
+  function closeRegion() {
+    $h("#cvRegion").hidden = true;
+  }
+  function inspect(at) {
+    const d = map.describe(at.x, at.z);
+    if (d.kind === "ice") return toast("Polar ice: nothing lives or builds here.");
+    const near = T.cities.map((c) => ({ c, d: distXZ(c, at) })).sort((a, b) => a.d - b.d)[0];
+    const spiceNear = T.geysers.map((g) => ({ g, d: distXZ(g, at) })).sort((a, b) => a.d - b.d)[0];
+    const place = d.kind === "land" ? `${esc(d.label)}${d.continent ? ` · ${esc(d.continent)}` : ""}` : d.kind === "ocean" ? "Open ocean" : "Lake";
+    const fact = d.kind === "land" ? `${d.altitude} m up` : `${d.depth} m deep`;
+    const el = $h("#cvRegion");
+    el.innerHTML = `<b>${place}</b><span>${fact} · ${Math.abs(d.latitude)}°${d.latitude >= 0 ? "N" : "S"}</span>${near ? `<span>Nearest city: ${esc(near.c.name)} (${esc(cap(ownerName(near.c.owner)))}), ${Math.round(near.d)} m</span>` : ""}${spiceNear && spiceNear.d < 130 ? `<span>Spice: ${spiceNear.g.owner ? esc(cap(ownerName(spiceNear.g.owner))) + "'s derrick" : "a free geyser"}, ${Math.round(spiceNear.d)} m</span>` : ""}`;
+    el.hidden = false;
+    regionT = 6;
+    flash(at);
   }
 
   /* ---- sheets ------------------------------------------------------------------------------------------ */
@@ -518,7 +559,8 @@ export function createCivStage(o) {
   function cityHtml(c) {
     const econ = cityEconomy(c, ownerMods(c.owner));
     const head = `<div class="tsHead"><div>${CITY_TYPES[c.type].icon} ${esc(c.name)}<small>${esc(cap(ownerName(c.owner)))} · ${CITY_TYPES[c.type].name} city</small></div><button class="tsClose" aria-label="Close">✕</button></div>
-      <div class="tsStats cvCityStats"><span><b>${econ.pop}k</b>people</span><span><b>${econ.happiness > 0 ? "+" : ""}${econ.happiness}</b>${econ.riot ? "rioting!" : "happiness"}</span><span><b>${econ.income.toFixed(1)}</b>§ / s</span><span><b>${c.turrets}</b>turrets</span></div>`;
+      <div class="tsStats cvCityStats"><span><b>${econ.pop}k</b>people</span><span><b>${econ.happiness > 0 ? "+" : ""}${econ.happiness}</b>${econ.riot ? "rioting!" : "happiness"}</span><span><b>${econ.income.toFixed(1)}</b>§ / s</span><span><b>${c.turrets}</b>turrets</span></div>
+      <p class="tsHint cvCulture"><b>${esc(c.culture ? describeCulture(c.culture) : "")}</b> · ${esc(map.continents[c.continent]?.name || "")}</p>`;
     if (c.owner === YOU) {
       const plots = c.plots
         .map((role, k) =>
@@ -616,14 +658,14 @@ export function createCivStage(o) {
   function helpHtml() {
     return `<div class="tsHead"><b>Civilization Stage · how to play</b><button class="tsClose" aria-label="Close">✕</button></div>
       <ul class="tsHelp">
-        <li><b>Look around:</b> drag to move, pinch or scroll to zoom.</li>
+        <li><b>Look around:</b> drag to slide over the planet, pinch or scroll to zoom (all the way out shows the whole globe), twist two fingers or hold <b>Q</b>/<b>E</b> to turn the map, and use the buttons or the map in the corner to jump. <b>N</b> faces north, <b>G</b> shows the whole planet, <b>H</b> goes home. Tap open ground to learn about it.</li>
         <li><b>Your cities:</b> tap one to build houses (people), factories (money, but unhappy people), entertainment (happiness), temples (faith) and turrets.</li>
         <li><b>Vehicles:</b> each city makes vehicles of its own kind. Tap vehicles (or 🚙 All) to select them, then tap a city, a spice geyser or the ground.</li>
         <li><b>Take cities</b> three ways: ⚔ military vehicles knock out turrets and then the hall; 💰 economic vehicles trade until you can buy the city; 🕊 religious vehicles preach until it converts. Every city you take makes vehicles of its kind.</li>
-        <li><b>Spice:</b> drive any vehicle to a geyser to claim it. Each one pays you. Military vehicles can wreck a rival's derrick.</li>
+        <li><b>Spice:</b> glowing geysers dot the planet (and the map). Send a land or air vehicle to claim one: it pays you every second, richer ones more. Rivals claim them too, and military vehicles can wreck a derrick.</li>
         <li><b>Nations:</b> tap a nation at the top for gifts and peace. Military nations go to war with those they hate; religious ones preach; economic ones trade.</li>
-        <li><b>Superweapon:</b> hold half the island's cities and it's yours: one city at a time, the way you've been winning them.</li>
-        <li><b>Goal:</b> unite every city on the island under your flag. How you do it decides your card.</li>
+        <li><b>Superweapon:</b> hold half the planet's cities and it's yours: one city at a time, the way you've been winning them.</li>
+        <li><b>Goal:</b> unite every city on the planet under your flag. Land vehicles cannot cross the sea: other continents need boats or aircraft. How you do it decides your card.</li>
       </ul>
       ${legacy.lines.length ? `<h5 class="tsKind">What your species brings</h5><ul class="tsHelp tsLegacy">${legacy.lines.map((l) => `<li>${l.icon} ${esc(l.text)}</li>`).join("")}</ul>` : ""}`;
   }
@@ -672,10 +714,7 @@ export function createCivStage(o) {
       o.sfx("build");
       renderSheet();
     });
-    on("#cvFocus", () => {
-      cam.x = sheet.city.x;
-      cam.z = sheet.city.z;
-    });
+    on("#cvFocus", () => rig.flyTo(sheet.city.x, sheet.city.z, 90));
     on("#cvSend", () => {
       orderTo([...T.selected], { type: "city", city: sheet.city });
       closeSheet();
@@ -868,17 +907,46 @@ export function createCivStage(o) {
   }
 
   /* ---- orders -------------------------------------------------------------------------------------------- */
+  /** Can this vehicle get to a map point at all? Land vehicles need a land route, boats need water. */
+  function canGet(v, goal, memo) {
+    if (v.mode === "air") return true;
+    const key = v.mode + ":" + Math.round(v.pos.x / 8) + ":" + Math.round(v.pos.z / 8) + ":" + Math.round(goal.x / 8) + ":" + Math.round(goal.z / 8);
+    if (!memo.has(key)) memo.set(key, map.reachable(v.mode, v.pos, goal));
+    return memo.get(key);
+  }
   function orderTo(list, order) {
-    let refused = 0;
+    let refused = 0,
+      noRoute = 0,
+      noSea = 0;
+    const memo = new Map();
     for (const v of list) {
       if (v.dead || v.owner !== YOU) continue;
       if (order.type === "city" && !canReach(v.mode, order.city)) {
         refused++;
         continue;
       }
+      if (v.mode === "sea" && order.type === "geyser") {
+        noSea++;
+        continue;
+      }
+      if (v.mode === "sea" && order.type === "move" && !map.walkable("sea", order.x, order.z)) {
+        noSea++;
+        continue;
+      }
+      if (order.type !== "vehicle" && v.mode !== "air") {
+        const goal = order.type === "city" ? (v.mode === "sea" ? order.city.sea : order.city) : order;
+        if (!goal || !canGet(v, goal, memo)) {
+          noRoute++;
+          continue;
+        }
+      }
       v.order = { ...order };
+      v.path = null;
+      v.planT = 0;
     }
     if (refused) toast("Boats can only reach cities on the coast.");
+    else if (noSea) toast("Boats stay on the water: send land or air vehicles inland.");
+    else if (noRoute) toast("No way there by land or sea: it is across the water. Build boats or aircraft.");
     o.sfx("click");
     flash(order.type === "city" ? order.city : order);
   }
@@ -891,61 +959,29 @@ export function createCivStage(o) {
       flashMesh = new THREE.Mesh(flashGeo, flashMat);
       scene.add(flashMesh);
     }
-    flashMesh.position.set(p.x, groundY(p.x, p.z) + 0.3, p.z);
-    flashMesh.scale.setScalar(p.group ? 5 : 1);
+    placeOnPlanet(map, flashMesh, p.x, p.z, groundY(p.x, p.z) + 0.4);
+    flashMesh.scale.setScalar(p.plots ? 5 : 1);
     flashT = 0.6;
   }
 
   /* ---- camera and input ----------------------------------------------------------------------------- */
-  const cam = { x: HOME.x, z: HOME.z - 20, dist: 115, sx: HOME.x, sz: HOME.z - 20, sd: 115 };
-  const PITCH = { up: 0.78, back: 0.62 };
-  function placeCamera(dt) {
-    const k = 1 - Math.exp(-dt * 10);
-    cam.sx += (cam.x - cam.sx) * k;
-    cam.sz += (cam.z - cam.sz) * k;
-    cam.sd += (cam.dist - cam.sd) * k;
-    const gy = groundY(cam.sx, cam.sz);
-    camera.position.set(cam.sx, gy + cam.sd * PITCH.up, cam.sz + cam.sd * PITCH.back);
-    camera.lookAt(cam.sx, gy, cam.sz);
-  }
-  function clampCam() {
-    const d = Math.hypot(cam.x, cam.z),
-      max = ISLAND.shore + 30;
-    if (d > max) {
-      cam.x *= max / d;
-      cam.z *= max / d;
-    }
-    cam.dist = Math.max(30, Math.min(220, cam.dist));
-  }
-  const ray = new THREE.Raycaster();
+  // Drag slides over the planet, pinch or scroll zooms, two fingers (or right-drag) turn it, and every
+  // control only moves a target the camera eases toward (see planet-camera.js).
+  const groundHit = {};
   function groundAt(px, py) {
-    ray.setFromCamera(new THREE.Vector2((px / innerWidth) * 2 - 1, -(py / innerHeight) * 2 + 1), camera);
-    const { origin, direction } = ray.ray;
-    if (direction.y >= -0.01) return null;
-    for (let t = 2, prev = 0; t < 900; prev = t, t += 2) {
-      const y = origin.y + direction.y * t;
-      if (y <= groundY(origin.x + direction.x * t, origin.z + direction.z * t)) {
-        let lo = prev,
-          hi = t;
-        for (let i = 0; i < 6; i++) {
-          const mid = (lo + hi) / 2;
-          if (origin.y + direction.y * mid <= groundY(origin.x + direction.x * mid, origin.z + direction.z * mid)) hi = mid;
-          else lo = mid;
-        }
-        return { x: origin.x + direction.x * hi, z: origin.z + direction.z * hi };
-      }
-    }
-    return null;
+    return rig.groundAt(px, py, innerWidth, innerHeight, groundHit) ? { x: groundHit.x, z: groundHit.z } : null;
   }
   const pointers = new Map();
   let gesture = null;
   const onDown = (e) => {
     if (paused || e.target !== canvas) return;
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
-    if (pointers.size === 1) gesture = { panned: false, pinch: 0 };
+    rig.holding = true;
+    if (pointers.size === 1) gesture = { panned: false, pinch: 0, twist: 0, turning: e.button === 2 || e.button === 1 || e.shiftKey };
     else if (pointers.size === 2 && gesture) {
       const [a, b] = [...pointers.values()];
       gesture.pinch = Math.hypot(a.x - b.x, a.y - b.y);
+      gesture.twist = Math.atan2(b.y - a.y, b.x - a.x);
       gesture.panned = true;
     }
     try {
@@ -964,32 +1000,45 @@ export function createCivStage(o) {
     if (pointers.size >= 2) {
       const [a, b] = [...pointers.values()];
       const d = Math.hypot(a.x - b.x, a.y - b.y);
-      if (gesture.pinch > 0 && d > 0) cam.dist *= gesture.pinch / d;
+      if (gesture.pinch > 0 && d > 0) rig.zoom(gesture.pinch / d);
       gesture.pinch = d;
-      clampCam();
+      // Twisting turns the map; both fingers moving together slide it.
+      const ang = Math.atan2(b.y - a.y, b.x - a.x);
+      let da = ang - gesture.twist;
+      while (da > Math.PI) da -= TAU;
+      while (da < -Math.PI) da += TAU;
+      if (Math.abs(da) > 0.003) rig.rotate(da);
+      gesture.twist = ang;
+      rig.pan(dx * 0.5, dy * 0.5, innerHeight);
       return;
     }
     if (!gesture.panned && Math.hypot(e.clientX - p.sx, e.clientY - p.sy) < 10) return;
     gesture.panned = true;
-    const wpp = (2 * cam.sd * Math.tan((camera.fov * Math.PI) / 360)) / innerHeight;
-    cam.x -= dx * wpp;
-    cam.z -= (dy * wpp) / PITCH.up;
-    clampCam();
+    if (gesture.turning) rig.rotate(dx * 0.006);
+    else rig.pan(dx, dy, innerHeight);
   };
   const onUp = (e) => {
     const p = pointers.get(e.pointerId);
     pointers.delete(e.pointerId);
+    if (!pointers.size) rig.holding = false;
     if (!p || !gesture) return;
     if (pointers.size === 0) {
       if (!gesture.panned && e.type === "pointerup") tap(e.clientX, e.clientY);
       gesture = null;
     }
   };
+  const aimVec = new THREE.Vector3();
   const onWheel = (e) => {
     if (paused || e.target !== canvas) return;
     e.preventDefault();
-    cam.dist *= Math.exp(e.deltaY * 0.0012);
-    clampCam();
+    // Zooming in drifts the view toward whatever is under the cursor, so you can zoom into a place.
+    const g = e.deltaY < 0 ? groundAt(e.clientX, e.clientY) : null;
+    let towards = null;
+    if (g) {
+      const { lon, lat } = mapToLonLat(g.x, g.z);
+      towards = aimVec.set(...unitVector(lon, lat));
+    }
+    rig.zoom(Math.exp(Math.max(-120, Math.min(120, e.deltaY)) * 0.0012), towards);
   };
   const keys = new Set();
   const onKey = (e) => {
@@ -997,6 +1046,7 @@ export function createCivStage(o) {
     if (e.key === "Escape") {
       if (T.targeting) stopTargeting();
       else if (sheet) closeSheet();
+      else if (!$h("#cvRegion").hidden) closeRegion();
       else T.selected.clear();
       return;
     }
@@ -1005,7 +1055,14 @@ export function createCivStage(o) {
       selectAll();
       return;
     }
-    keys.add(e.key.toLowerCase());
+    const k = e.key.toLowerCase();
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (k === "n") rig.north();
+    else if (k === "g") toggleGlobe();
+    else if (k === "h" || k === "home") goCapital();
+    else if (k === "+" || k === "=") rig.zoom(0.8);
+    else if (k === "-" || k === "_") rig.zoom(1.25);
+    keys.add(k);
   };
   const onKeyUp = (e) => keys.delete(e.key.toLowerCase());
   const onContext = (e) => e.target === canvas && e.preventDefault();
@@ -1017,6 +1074,18 @@ export function createCivStage(o) {
   window.addEventListener("keydown", onKey);
   window.addEventListener("keyup", onKeyUp);
   window.addEventListener("contextmenu", onContext);
+  let lastZoom = 125;
+  function toggleGlobe() {
+    if (rig.target.dist > ZOOM.region * 1.6) rig.setDistance(lastZoom > ZOOM.region ? ZOOM.city + 30 : lastZoom);
+    else {
+      lastZoom = rig.target.dist;
+      rig.globe();
+    }
+  }
+  function goCapital() {
+    const c = capital();
+    rig.flyTo(c.x, c.z, Math.min(rig.target.dist, 150));
+  }
 
   function selectAll() {
     T.selected = new Set(vehiclesOf(YOU));
@@ -1080,7 +1149,10 @@ export function createCivStage(o) {
       return toast(hit.gz.owner === YOU ? "Your spice derrick: it pays you §" + SPICE_INCOME + " a second." : hit.gz.owner ? `A spice derrick of the ${ownerName(hit.gz.owner)}. Military vehicles can wreck it.` : "A spice geyser. Send any vehicle here to claim it.");
     }
     if (sel.length) orderTo(sel, { type: "move", x: hit.at.x, z: hit.at.z });
-    else if (sheet) closeSheet();
+    else {
+      if (sheet) closeSheet();
+      inspect(hit.at);
+    }
   }
   function declareOn(owner, why) {
     const n = nationOf(owner);
@@ -1095,60 +1167,78 @@ export function createCivStage(o) {
   /* ---- vehicle behaviour --------------------------------------------------------------------------- */
   function placeVehicle(v, dt) {
     v.bob += dt;
-    if (v.mode === "air") v.y = groundY(v.pos.x, v.pos.z) + 13 + Math.sin(v.bob * 1.4) * 0.4;
+    const gh = groundY(v.pos.x, v.pos.z);
+    if (v.mode === "air") v.y = gh + 13 + Math.sin(v.bob * 1.4) * 0.4;
     else if (v.mode === "sea") v.y = Math.sin(v.bob * 1.8) * 0.12;
-    else v.y = groundY(v.pos.x, v.pos.z);
-    v.group.position.set(v.pos.x, v.y, v.pos.z);
+    else v.y = gh;
+    placeOnPlanet(map, v.group, v.pos.x, v.pos.z, v.y, 0);
     v.model.root.rotation.y = v.heading;
-    v.ring.position.y = v.mode === "air" ? -v.y + groundY(v.pos.x, v.pos.z) + 0.2 : 0.2;
-    v.ring.visible = T.selected.has(v);
+    v.ring.position.y = v.mode === "air" ? gh - v.y + 0.3 : 0.3;
+    v.ring.visible = T.selected.has(v) && !v.far;
   }
-  /** Move toward a point; returns the distance left. */
+  /**
+   * Move toward a point along a route that suits the vehicle: land vehicles keep to land and round
+   * mountains and lakes, boats to the sea and round the coast, aircraft fly straight. Routes are planned
+   * on the planet map (and replanned if the goal moves). Returns the distance left; sets v.unreachable
+   * when there is no way.
+   */
   function drive(v, x, z, dt, stop = 1) {
-    let dx = x - v.pos.x,
-      dz = z - v.pos.z;
-    const d = Math.hypot(dx, dz);
+    const d = Math.hypot(x - v.pos.x, z - v.pos.z);
+    v.unreachable = false;
     if (d <= stop) return d;
-    if (v.mode === "sea") {
-      // Boats keep to the water: round the island on the sea ring, then in to the anchorage.
-      const r = Math.hypot(v.pos.x, v.pos.z);
-      const a = Math.atan2(v.pos.z, v.pos.x),
-        ta = Math.atan2(z, x);
-      let da = ta - a;
-      while (da > Math.PI) da -= TAU;
-      while (da < -Math.PI) da += TAU;
-      if (Math.abs(da) * r > 18) {
-        const ring = Math.max(SEA_RING, Math.hypot(x, z));
-        const tx = Math.cos(a + Math.sign(da) * 0.25) * ring,
-          tz = Math.sin(a + Math.sign(da) * 0.25) * ring;
-        dx = tx - v.pos.x;
-        dz = tz - v.pos.z;
+    let tx = x,
+      tz = z;
+    if (v.mode !== "air") {
+      v.planT -= dt;
+      const moved = !v.pathGoal || Math.hypot(v.pathGoal.x - x, v.pathGoal.z - z) > 14;
+      if ((!v.path || moved) && v.planT <= 0) {
+        v.planT = 1.5;
+        v.pathGoal = { x, z };
+        v.path = map.findPath(v.mode, v.pos, { x, z });
+        v.pathFail = !v.path;
+      }
+      if (v.pathFail && !moved) {
+        v.unreachable = true;
+        return d;
+      }
+      if (v.path) {
+        while (v.path.length > 1 && Math.hypot(v.path[0].x - v.pos.x, v.path[0].z - v.pos.z) < 3.5) v.path.shift();
+        tx = v.path[0].x;
+        tz = v.path[0].z;
       }
     }
-    let dir = { x: dx / (Math.hypot(dx, dz) || 1), z: dz / (Math.hypot(dx, dz) || 1) };
-    if (v.mode === "land") dir = steerAround(v.pos.x, v.pos.z, dir.x, dir.z, 1.6, 10);
-    const step = Math.min(d - stop + 0.01, v.unit.speed * dt);
+    const dl = Math.hypot(tx - v.pos.x, tz - v.pos.z) || 1;
+    const dir = { x: (tx - v.pos.x) / dl, z: (tz - v.pos.z) / dl };
+    const step = Math.min(Math.max(0, d - stop) + 0.01, v.unit.speed * dt);
     let nx = v.pos.x + dir.x * step,
       nz = v.pos.z + dir.z * step;
-    if (v.mode === "land") {
-      const r = world.resolve(nx, nz, 1.4);
-      nx = r.x;
-      nz = r.z;
-      // Land vehicles stop at the water's edge.
-      if (heightAt(nx, nz) < 0.1) {
-        const k = (ISLAND.beach - 2) / Math.max(1, Math.hypot(nx, nz));
-        if (k < 1) (nx *= k), (nz *= k);
+    if (v.mode !== "air" && !map.walkable(v.mode, nx, nz)) {
+      // Something is in the way: slide round it, or wait for a new route.
+      let free = false;
+      for (const a of [0.5, -0.5, 1.0, -1.0, 1.6, -1.6]) {
+        const ca = Math.cos(a),
+          sa = Math.sin(a);
+        const px = v.pos.x + (dir.x * ca - dir.z * sa) * step,
+          pz = v.pos.z + (dir.x * sa + dir.z * ca) * step;
+        if (map.walkable(v.mode, px, pz)) {
+          nx = px;
+          nz = pz;
+          free = true;
+          break;
+        }
       }
-    } else if (v.mode === "sea" && heightAt(nx, nz) > -0.4) {
-      // Ran aground: push back out to sea.
-      const r = Math.hypot(nx, nz) || 1;
-      nx += (nx / r) * step;
-      nz += (nz / r) * step;
+      if (!free) {
+        nx = v.pos.x;
+        nz = v.pos.z;
+        v.path = null;
+        v.planT = Math.min(v.planT, 0.3);
+      }
     }
-    v.heading = Math.atan2(nx - v.pos.x, nz - v.pos.z);
-    v.pos.x = nx;
-    v.pos.z = nz;
-    return d - step;
+    const c = clampToMap(nx, nz, v.mode === "air" ? 8 : 12);
+    if (Math.hypot(c.x - v.pos.x, c.z - v.pos.z) > 1e-4) v.heading = Math.atan2(c.x - v.pos.x, c.z - v.pos.z);
+    v.pos.x = c.x;
+    v.pos.z = c.z;
+    return Math.hypot(x - v.pos.x, z - v.pos.z);
   }
   const hostile = (a, b) => {
     if (!a || !b || a === b) return false;
@@ -1175,8 +1265,8 @@ export function createCivStage(o) {
     removeVehicle(v);
   }
   function actAt(v, c, dt) {
-    const at = { x: v.pos.x, y: v.y + 1.5, z: v.pos.z },
-      to = { x: c.x, y: groundY(c.x, c.z) + 4, z: c.z };
+    const at = W(v.pos.x, v.y + 1.5, v.pos.z),
+      to = W(c.x, groundY(c.x, c.z) + 4, c.z);
     if (v.role === "military") {
       if (v.owner === YOU) declareOn(c.owner, `You attacked ${c.name}`);
       else if (c.owner === YOU) {
@@ -1234,12 +1324,14 @@ export function createCivStage(o) {
       const foe = ord?.type === "vehicle" && !ord.target.dead ? ord.target : nearestFoeVehicle(v, 16);
       if (foe) {
         const d = distXZ(v.pos, foe.pos);
-        if (d > 10) drive(v, foe.pos.x, foe.pos.z, dt, 9);
-        else {
+        if (d > 10) {
+          drive(v, foe.pos.x, foe.pos.z, dt, 9);
+          if (v.unreachable && ord?.type === "vehicle") v.order = null;
+        } else {
           hurtVehicle(foe, v.unit.dps * dt, v.owner);
           if ((v.cool -= dt) <= 0) {
             v.cool = 0.45;
-            shot({ x: v.pos.x, y: v.y + 1.5, z: v.pos.z }, { x: foe.pos.x, y: foe.y + 1.2, z: foe.pos.z }, v.owner === YOU ? "you" : "foe");
+            shot(W(v.pos.x, v.y + 1.5, v.pos.z), W(foe.pos.x, foe.y + 1.2, foe.pos.z), v.owner === YOU ? "you" : "foe");
           }
         }
         return;
@@ -1249,14 +1341,23 @@ export function createCivStage(o) {
     if (ord?.type === "city") {
       const c = ord.city;
       if (c.owner === v.owner) return void (v.order = null);
-      const goal = v.mode === "sea" ? c.sea : c;
+      const goal = v.mode === "sea" ? c.sea || c : c;
       const left = drive(v, goal.x, goal.z, dt, RANGE[v.mode] + (v.mode === "sea" ? 0 : 3));
+      if (v.unreachable) {
+        v.order = null;
+        if (v.owner === YOU) toast(`There is no way through to ${c.name}.`);
+        return;
+      }
       const inRange = v.mode === "sea" ? left <= RANGE.sea + 0.5 : left <= RANGE[v.mode] + 3.5;
       if (inRange) actAt(v, c, dt);
       return;
     }
     if (ord?.type === "move" || ord?.type === "geyser") {
-      if (drive(v, ord.x, ord.z, dt, ord.type === "geyser" ? 3 : 2) <= (ord.type === "geyser" ? 3.2 : 2.2)) {
+      const left = drive(v, ord.x, ord.z, dt, ord.type === "geyser" ? 3 : 2);
+      if (v.unreachable) {
+        v.order = null;
+        if (v.owner === YOU) toast("There is no way through to there.");
+      } else if (left <= (ord.type === "geyser" ? 3.2 : 2.2)) {
         if (ord.type === "geyser") claimGeyser(ord.geyser, v, dt);
         else v.order = null;
       }
@@ -1264,9 +1365,15 @@ export function createCivStage(o) {
     }
     // Idle: park near home, and claim any free geyser close by.
     const home = T.cities[v.home] || capital();
-    const free = T.geysers.find((g) => !g.owner && distXZ(g, v.pos) < 28);
+    const free = T.geysers.find((g) => !g.owner && distXZ(g, v.pos) < 40 && canClaim(v, g));
     if (free) v.order = { type: "geyser", geyser: free, x: free.x, z: free.z };
-    else if (distXZ(v.pos, home) > 30) drive(v, home.x, home.z + 20, dt, 18);
+    else if (distXZ(v.pos, home) > 30) drive(v, v.mode === "sea" ? home.sea?.x ?? home.x : home.x, v.mode === "sea" ? home.sea?.z ?? home.z : home.z + 20, dt, 18);
+  }
+  /** Can this kind of vehicle reach a geyser? Boats cannot (spice lies inland); land vehicles need to be on its continent. */
+  function canClaim(v, g) {
+    if (v.mode === "sea") return false;
+    if (v.mode === "air") return true;
+    return map.continentAt(v.pos.x, v.pos.z) === g.continent;
   }
   function claimGeyser(g, v, dt) {
     if (g.owner === v.owner) return void (v.order = null);
@@ -1279,7 +1386,7 @@ export function createCivStage(o) {
         g.owner = null;
         g.hp = 1;
         buildGeyser(g);
-        pop(g.x, 6, g.z, "💥");
+        pop(g.x, groundY(g.x, g.z) + 6, g.z, "💥");
       }
       return;
     }
@@ -1290,7 +1397,7 @@ export function createCivStage(o) {
     if (v.owner === YOU) {
       o.sfx("unlock");
       pop(g.x, groundY(g.x, g.z) + 7, g.z, "+ spice", "good");
-      tipOnce("spice", `Spice! Each derrick pays you §${SPICE_INCOME} a second.`);
+      tipOnce("spice", `Spice! This derrick pays you §${(SPICE_INCOME * g.yield).toFixed(1)} a second: richer geysers pay more.`);
       chronicle({ key: "civ:spice:first", stage: "civ", icon: "🌶", text: "Claimed the first spice geyser." });
     }
   }
@@ -1300,7 +1407,7 @@ export function createCivStage(o) {
       calmUnrest(c, dt);
       // Conversion fades while nobody is preaching.
       for (const k of Object.keys(c.conv)) {
-        if (T.vehicles.some((v) => v.owner === k && !v.dead && v.order?.city === c && v.role === "religious" && distXZ(v.mode === "sea" ? c.sea : c, v.pos) < 20)) continue;
+        if (T.vehicles.some((v) => v.owner === k && !v.dead && v.order?.city === c && v.role === "religious" && distXZ(v.mode === "sea" && c.sea ? c.sea : c, v.pos) < 20)) continue;
         c.conv[k] = Math.max(0, c.conv[k] - 0.6 * dt);
         if (!c.conv[k]) delete c.conv[k];
       }
@@ -1325,7 +1432,7 @@ export function createCivStage(o) {
         c.shotCool = 0.6;
         const k = Math.floor(Math.random() * c.turrets),
           t = turretSpot(c, k);
-        shot({ x: t.x, y: groundY(t.x, t.z) + 5, z: t.z }, { x: target.pos.x, y: target.y + 1, z: target.pos.z }, c.owner === YOU ? "you" : "foe");
+        shot(W(t.x, groundY(t.x, t.z) + 5, t.z), W(target.pos.x, target.y + 1, target.pos.z), c.owner === YOU ? "you" : "foe");
       }
     }
   }
@@ -1339,7 +1446,7 @@ export function createCivStage(o) {
         n.alive = false;
         continue;
       }
-      n.money += (mine.reduce((s, c) => s + cityEconomy(c, {}).income, 0) + T.geysers.filter((g) => g.owner === n.id).length * SPICE_INCOME + tradeIncome(T.cities, n.id)) * dt;
+      n.money += (mine.reduce((s, c) => s + cityEconomy(c, {}).income, 0) + spiceIncomeOf(n.id) + tradeIncome(T.cities, n.id)) * dt;
       // Relations settle toward a resting point that falls as your nation grows: a rising power worries everyone.
       const rest = n.base - 6 * Math.max(0, yourCities().length - 1);
       if (!n.war) n.relation = clampRel(n.relation + Math.sign(rest - n.relation) * Math.min(Math.abs(rest - n.relation), DIPLO.drift * dt));
@@ -1382,12 +1489,23 @@ export function createCivStage(o) {
         n.money -= vehicleUnit(vehicleDesign(n.id, key)).cost;
         spawnVehicle(n.id, key, c);
       }
+      // Spice: idle vehicles go and claim free geysers they can reach, and raiders wreck their enemies' derricks.
+      if (T.time > 60)
+        for (const v of fleet) {
+          if (v.order || v.mode === "sea") continue;
+          const taken = new Set(fleet.filter((u) => u.order?.type === "geyser").map((u) => u.order.geyser));
+          const home = T.cities[v.home] || mine[0];
+          const free = T.geysers
+            .filter((g) => (!g.owner || (n.war && g.owner === YOU && v.role === "military")) && !taken.has(g) && canClaim(v, g) && distXZ(g, home) < 330)
+            .sort((a, b) => distXZ(a, home) - distXZ(b, home))[0];
+          if (free && Math.random() < 0.5) v.order = { type: "geyser", geyser: free, x: free.x, z: free.z };
+        }
       // The first minute and a half is for building up, on every side.
       if (plan.target && T.time > 90) {
         const pool = plan.target === "you" ? yourCities() : citiesOf(null);
         for (const v of fleet) {
           if (v.order) continue;
-          const reachable = pool.filter((c) => canReach(v.mode, c));
+          const reachable = pool.filter((c) => canReach(v.mode, c) && (v.mode !== "land" || map.continentAt(v.pos.x, v.pos.z) === c.continent));
           if (!reachable.length) continue;
           const home = T.cities[v.home] || mine[0];
           reachable.sort((a, b) => distXZ(a, home) - distXZ(b, home));
@@ -1411,10 +1529,12 @@ export function createCivStage(o) {
   }
 
   /* ---- HUD refresh -------------------------------------------------------------------------------------- */
-  const income = () => yourCities().reduce((s, c) => s + cityEconomy(c, ownerMods(YOU)).income, 0) + T.geysers.filter((g) => g.owner === YOU).length * SPICE_INCOME + tradeIncome(T.cities, YOU);
+  const spiceIncomeOf = (owner) => T.geysers.filter((g) => g.owner === owner).reduce((s, g) => s + SPICE_INCOME * g.yield, 0);
+  const income = () => yourCities().reduce((s, c) => s + cityEconomy(c, ownerMods(YOU)).income, 0) + spiceIncomeOf(YOU) + tradeIncome(T.cities, YOU);
   let hudClock = 0,
     liveClock = 1;
   const marks = new Map();
+  const spiceMarks = new Map();
   function updateMarks() {
     const layer = $h("#cvMarks");
     for (const c of T.cities) {
@@ -1426,7 +1546,7 @@ export function createCivStage(o) {
         marks.set(c, m);
       }
       const p = project(c.x, groundY(c.x, c.z) + 10, c.z);
-      m.hidden = !p.on || cam.sd > 200;
+      m.hidden = !p.on;
       if (m.hidden) continue;
       m.style.left = p.x + "px";
       m.style.top = p.y + "px";
@@ -1436,6 +1556,24 @@ export function createCivStage(o) {
       const html = `${CITY_TYPES[c.type].icon} ${esc(c.name)}${damaged ? `<i><b style="width:${Math.round(c.hallHp * 100)}%;background:#ef4b48"></b></i>` : progress > 0 ? `<i><b style="width:${Math.round(progress * 100)}%;background:${c.owner === YOU ? "#c9b5ff" : "#ffd24a"}"></b></i>` : ""}`;
       if (m._html !== html) m.innerHTML = m._html = html;
     }
+    // Spice: a small diamond in the owner's colour on every geyser, so they can be found from any height.
+    for (const g of T.geysers) {
+      let m = spiceMarks.get(g);
+      if (!m) {
+        m = document.createElement("div");
+        m.className = "cvSpice";
+        m.setAttribute("aria-hidden", "true");
+        layer.appendChild(m);
+        spiceMarks.set(g, m);
+      }
+      const p = project(g.x, groundY(g.x, g.z) + 8, g.z);
+      m.hidden = !p.on || rig.distance < 40;
+      if (m.hidden) continue;
+      m.style.left = p.x + "px";
+      m.style.top = p.y + "px";
+      m.style.setProperty("--own", g.owner ? hex(ownerColor(g.owner)) : "#ffa14a");
+      m.classList.toggle("free", !g.owner);
+    }
   }
   function updateHUD() {
     $h("#cvMoney").textContent = Math.floor(T.money);
@@ -1443,7 +1581,7 @@ export function createCivStage(o) {
     $h("#cvCities").textContent = yourCities().length + "/" + T.cities.length;
     $h("#cvVeh").textContent = vehiclesOf(YOU).length + "/" + vehicleCap(YOU);
     const left = T.cities.length - yourCities().length;
-    $h("#cvGoal").textContent = T.won ? `${CIV_CARDS[T.card]?.icon || "✦"} The world is united` : left ? `Unite the island: ${left} ${left === 1 ? "city" : "cities"} to go` : "";
+    $h("#cvGoal").textContent = T.won ? `${CIV_CARDS[T.card]?.icon || "✦"} The world is united` : left ? `Unite the planet: ${left} ${left === 1 ? "city" : "cities"} to go` : "";
     $h("#cvNations").innerHTML = T.nations
       .map((n) => {
         const col = n.war ? "#ef4b48" : n.relation >= DIPLO.allyAt ? "#3fc26e" : n.relation >= 20 ? "#8fd18f" : n.relation > -20 ? "#b9c3c9" : "#f0a04b";
@@ -1466,8 +1604,7 @@ export function createCivStage(o) {
             if (!v) return;
             if (T.selected.has(v)) T.selected.delete(v);
             else T.selected.add(v);
-            cam.x = v.pos.x;
-            cam.z = v.pos.z;
+            rig.flyTo(v.pos.x, v.pos.z);
             updateHUD();
           }),
       );
@@ -1482,15 +1619,16 @@ export function createCivStage(o) {
     else selectAll();
     updateHUD();
   };
-  $h("#cvHome").onclick = () => {
-    const c = capital();
-    cam.x = c.x;
-    cam.z = c.z;
-  };
+  $h("#cvHome").onclick = goCapital;
+  $h("#cvZoomIn").onclick = () => rig.zoom(0.7);
+  $h("#cvZoomOut").onclick = () => rig.zoom(1.45);
+  $h("#cvGlobe").onclick = toggleGlobe;
+  $h("#cvNorth").onclick = () => rig.north();
   $h("#cvCity").onclick = () => {
     const mine = yourCities();
     if (!mine.length) return;
-    const c = mine.sort((a, b) => Math.hypot(a.x - cam.x, a.z - cam.z) - Math.hypot(b.x - cam.x, b.z - cam.z))[0];
+    const f = rig.focusMap();
+    const c = mine.sort((a, b) => Math.hypot(a.x - f.x, a.z - f.z) - Math.hypot(b.x - f.x, b.z - f.z))[0];
     openSheet("city", { city: c });
   };
   const openDesigns = () => openSheet("designs");
@@ -1517,6 +1655,7 @@ export function createCivStage(o) {
   function saveState() {
     const data = {
       v: 1,
+      planet: 1,
       money: Math.round(T.money),
       startType: T.startType,
       nations: T.nations.map((n) => ({ id: n.id, type: n.type, relation: n.relation, war: n.war, money: Math.round(n.money), alive: n.alive })),
@@ -1541,13 +1680,47 @@ export function createCivStage(o) {
   /* ---- start ------------------------------------------------------------------------------------------------ */
   T.cities.forEach(buildCity);
   T.geysers.forEach(buildGeyser);
-  for (const sv of save?.vehicles || []) {
+  // Roads join neighbouring cities on the same continent wherever the way is open land.
+  const roadMeshes = [];
+  const links = roadLinks(map.citySites, (x, z) => map.walkable("land", x, z));
+  for (const [a, b] of links) {
+    const mesh = cityArt.buildRoad(T.cities[a], T.cities[b]);
+    if (mesh) roadMeshes.push(mesh);
+  }
+  const flora = createPlanetFlora(scene, map, {
+    quality: o.quality,
+    cities: T.cities,
+    spice: T.geysers,
+    links: links.map(([a, b]) => [T.cities[a], T.cities[b]]),
+  });
+  const mini = createMinimap(map, { onPick: (x, z) => rig.flyTo(x, z, Math.min(Math.max(rig.target.dist, ZOOM.city + 40), 260)) });
+  hud.appendChild(mini.el);
+  // Distant vehicles are drawn as coloured dots instead of full models.
+  const farGeo = new THREE.BufferGeometry();
+  const FAR_MAX = 160;
+  farGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(FAR_MAX * 3), 3));
+  farGeo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(FAR_MAX * 3), 3));
+  const farPoints = new THREE.Points(farGeo, new THREE.PointsMaterial({ size: 7, sizeAttenuation: false, vertexColors: true, depthWrite: false }));
+  farPoints.frustumCulled = false;
+  farPoints.renderOrder = 4;
+  scene.add(farPoints);
+  const tmpColor = new THREE.Color();
+  for (const sv of save?.planet ? save.vehicles || [] : []) {
     const [role, mode] = sv.design.split(":");
     if (!TYPE_IDS.includes(role) || !["land", "sea", "air"].includes(mode)) continue;
     if (sv.owner !== YOU && !nationOf(sv.owner)?.alive) continue;
     const home = T.cities[sv.city] || capital();
     spawnVehicle(sv.owner, sv.design, home, { x: sv.x, z: sv.z }, sv.hp);
   }
+  // A save from before the planet kept vehicles on the old island: they come home to their cities.
+  if (save && !save.planet)
+    for (const sv of save.vehicles || []) {
+      const [role, mode] = sv.design.split(":");
+      if (!TYPE_IDS.includes(role) || !["land", "sea", "air"].includes(mode)) continue;
+      if (sv.owner !== YOU && !nationOf(sv.owner)?.alive) continue;
+      const home = T.cities[sv.city] && T.cities[sv.city].owner === sv.owner ? T.cities[sv.city] : citiesOf(sv.owner)[0];
+      if (home) spawnVehicle(sv.owner, sv.design, home, null, sv.hp);
+    }
   if (!save) {
     // Your first vehicle, so there is something to do from the first second.
     spawnVehicle(YOU, T.startType + ":land", T.cities[0]);
@@ -1557,7 +1730,43 @@ export function createCivStage(o) {
   }
   if (!yourCities().length) T.lost = true;
   updateHUD();
-  let saveClock = 15;
+  hud.style.setProperty("--cvB", ($h(".trBottom")?.offsetHeight || 130) + 8 + "px");
+  let saveClock = 15,
+    miniClock = 0;
+  const sunVec = new THREE.Vector3();
+  /** Level of detail: what each city, vehicle and geyser is drawn as, from the camera's distance. */
+  function updateDetail() {
+    const cp = camera.position;
+    for (const c of T.cities) {
+      if (!c.art) continue;
+      const d = c.world.distanceTo(cp);
+      const hidden = rig.occluded(c.world);
+      const full = !hidden && d < 240;
+      c.art.always.visible = !hidden;
+      c.art.detail.visible = full;
+      c.art.proxy.visible = !hidden && !full;
+    }
+    let far = 0;
+    for (const v of T.vehicles) {
+      if (v.dead) continue;
+      const d = v.group.position.distanceTo(cp);
+      const hidden = rig.occluded(v.group.position);
+      v.far = d > 230;
+      v.model.root.visible = !v.far && !hidden;
+      v.ring.visible = T.selected.has(v) && !v.far && !hidden;
+      if (v.far && !hidden && far < FAR_MAX) {
+        const p = v.group.position;
+        farGeo.attributes.position.setXYZ(far, p.x, p.y, p.z);
+        tmpColor.setHex(v.owner === YOU ? (T.selected.has(v) ? 0xffffff : 0x8ff0a8) : ownerColor(v.owner));
+        farGeo.attributes.color.setXYZ(far, tmpColor.r, tmpColor.g, tmpColor.b);
+        far++;
+      }
+    }
+    farGeo.setDrawRange(0, far);
+    farGeo.attributes.position.needsUpdate = true;
+    farGeo.attributes.color.needsUpdate = true;
+    for (const g of T.geysers) if (g.view) g.view.group.visible = !rig.occluded(g.view.group.children[0].position);
+  }
 
   return {
     get state() {
@@ -1570,22 +1779,25 @@ export function createCivStage(o) {
     resize() {
       camera.aspect = innerWidth / innerHeight;
       camera.updateProjectionMatrix();
+      hud.style.setProperty("--cvB", ($h(".trBottom")?.offsetHeight || 130) + 8 + "px");
     },
     update(dt) {
       if (paused) return;
       if (toastT > 0 && (toastT -= dt) <= 0) $h("#cvToast").classList.remove("show");
-      // Arrow keys and WASD pan the map.
+      // Arrow keys and WASD slide over the planet; Q and E turn the map.
       const kx = (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0),
-        kz = (keys.has("s") || keys.has("arrowdown") ? 1 : 0) - (keys.has("w") || keys.has("arrowup") ? 1 : 0);
-      if (kx || kz) {
-        cam.x += kx * cam.dist * 0.9 * dt;
-        cam.z += kz * cam.dist * 0.9 * dt;
-        clampCam();
-      }
-      placeCamera(dt);
-      // Cities keep office hours: the Civilization Stage stays in daylight.
-      world.setTimeOfDay(0.22);
-      world.update(dt, { x: cam.sx, z: cam.sz });
+        kz = (keys.has("w") || keys.has("arrowup") ? 1 : 0) - (keys.has("s") || keys.has("arrowdown") ? 1 : 0);
+      if (kx || kz) rig.panMetres(kx * rig.distance * 0.9 * dt, kz * rig.distance * 0.9 * dt);
+      const kr = (keys.has("e") ? 1 : 0) - (keys.has("q") ? 1 : 0);
+      if (kr) rig.rotate(kr * 1.4 * dt);
+      rig.update(dt);
+      planetView.setSun(rig.sunDir(sunVec));
+      planetView.update(camera);
+      const focus = rig.focusMap();
+      flora.update(camera, focus, rig.distance);
+      updateDetail();
+      $h("#cvNeedle").setAttribute("transform", `rotate(${((-rig.heading() * 180) / Math.PI).toFixed(1)} 12 12)`);
+      if (regionT > 0 && (regionT -= dt) <= 0) closeRegion();
       if (!T.lost && !(sheet && (sheet.kind === "won" || sheet.kind === "lost"))) {
         T.time += dt;
         T.superCool = Math.max(0, T.superCool - dt);
@@ -1609,6 +1821,16 @@ export function createCivStage(o) {
       }
       updateShots(dt);
       updateMarks();
+      if ((miniClock -= dt) <= 0) {
+        miniClock = 0.3;
+        mini.el.hidden = !!sheet;
+        mini.draw({
+          cities: T.cities.map((c) => ({ x: c.x, z: c.z, color: hex(ownerColor(c.owner)) })),
+          spice: T.geysers.map((g) => ({ x: g.x, z: g.z, color: g.owner ? hex(ownerColor(g.owner)) : null })),
+          units: T.vehicles.filter((v) => !v.dead).map((v) => ({ x: v.pos.x, z: v.pos.z, color: hex(ownerColor(v.owner)) })),
+          view: { x: focus.x, z: focus.z, r: rig.distance * 1.1 },
+        });
+      }
       if ((hudClock -= dt) <= 0) {
         hudClock = 0.25;
         updateHUD();
@@ -1638,9 +1860,20 @@ export function createCivStage(o) {
       T.vehicles.forEach((v) => v.model.dispose());
       T.cities.forEach((c) => {
         c.models?.forEach((m) => m.dispose());
-        c.wallMat?.dispose();
+        c.art?.dispose();
       });
-      T.geysers.forEach((g) => g.flagMat?.dispose());
+      T.geysers.forEach((g) => g.view?.dispose());
+      roadMeshes.forEach((m) => {
+        scene.remove(m);
+        m.geometry.dispose();
+      });
+      flora.dispose();
+      cityArt.dispose();
+      spiceArt.dispose();
+      mini.dispose();
+      farGeo.dispose();
+      farPoints.material.dispose();
+      scene.remove(farPoints);
       shots.forEach((s) => s.line.geometry.dispose());
       Object.values(shotMat).forEach((m) => m.dispose());
       matCache.forEach((set) => Object.values(set).forEach((m) => m.dispose()));
@@ -1648,12 +1881,27 @@ export function createCivStage(o) {
       Object.values(sharedMat).forEach((m) => m.dispose());
       flashGeo.dispose();
       flashMat.dispose();
-      world.dispose();
+      planetView.dispose();
       hud.remove();
     },
     debug: {
       T,
-      cam,
+      map,
+      rig,
+      planetView,
+      flora,
+      cultures: () => T.cultures,
+      inspect,
+      groundAt,
+      cityArt,
+      get camera() {
+        return camera;
+      },
+      /** Render statistics for tests: what the planet costs to draw. */
+      stats() {
+        const info = o.renderer.info.render;
+        return { calls: info.calls, triangles: info.triangles, chunks: { ...planetView.stats }, scenery: { ...flora.stats }, units: { total: T.vehicles.length, far: T.vehicles.filter((v) => v.far).length } };
+      },
       openSheet,
       takeCity,
       spawnVehicle,
@@ -1671,6 +1919,13 @@ export function createCivStage(o) {
       cityScreen(i) {
         const c = T.cities[i];
         return project(c.x, groundY(c.x, c.z) + 4, c.z);
+      },
+      geyserScreen(i) {
+        const g = T.geysers[i];
+        return project(g.x, groundY(g.x, g.z) + 3, g.z);
+      },
+      vehicleScreen(v) {
+        return project(v.pos.x, v.y + 1.5, v.pos.z);
       },
     },
   };

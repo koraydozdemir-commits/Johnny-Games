@@ -2350,6 +2350,7 @@ function startCivStage() {
     renderer,
     save: loadCivSave(),
     regionId: ts?.region || cs?.homeRegion || "coast",
+    species: cs?.record ? { record: cs.record, diet: cs.record.diet } : null,
     quality: getQuality(),
     name: ts?.look?.name || cs?.record?.name || state.cellName || "Your nation",
     color: ts?.look?.color ?? 0x3fa9d6,

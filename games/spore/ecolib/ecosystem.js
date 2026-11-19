@@ -52,9 +52,9 @@ export const fbm = (seed, x, y, oct = 3) => {
 
 /* ------------------------------------------------------------------------ biomes */
 /** Ground that goes with each biome. */
-const BIOME_TERRAIN = { desert: "sand", tundra: "snow", taiga: "soil", alpine: "rock", volcanic: "ash", swamp: "mud", wasteland: "rock", crystalline: "crystal", shallows: "sand", fungal: "soil", freshwater: "mud" };
+export const BIOME_TERRAIN = { desert: "sand", tundra: "snow", taiga: "soil", alpine: "rock", volcanic: "ash", swamp: "mud", wasteland: "rock", crystalline: "crystal", shallows: "sand", fungal: "soil", freshwater: "mud" };
 /** What a marine biome looks like on its shore, for the land stages (the water itself is drawn by the world). */
-const SHORE_OF = { shallows: "grassland", coral_reef: "grassland", deep_ocean: "wasteland", freshwater: "swamp" };
+export const SHORE_OF = { shallows: "grassland", coral_reef: "grassland", deep_ocean: "wasteland", freshwater: "swamp" };
 const BIOME_TEMP_SHIFT = { alpine: -1, tundra: -1, volcanic: 1, desert: 1, rainforest: 0 };
 /** Plant categories each layer of a landscape is made of. */
 const LAYERS = [

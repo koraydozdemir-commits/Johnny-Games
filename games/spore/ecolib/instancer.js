@@ -24,7 +24,7 @@ const sphere = new THREE.Sphere();
  * @param {{ lodNear?: number, lodFar?: number, cullDistance?: number, moveThreshold?: number, material?: THREE.Material }} [opts]
  */
 export function createEcoInstancer(parent, library, opts = {}) {
-  const { lodNear = 45, lodFar = 120, cullDistance = 280, moveThreshold = 3 } = opts;
+  const { lodNear = 45, lodFar = 120, cullDistance = 280, moveThreshold = 3, spherical = false } = opts;
   const material = opts.material || libraryMaterial();
   const group = new THREE.Group();
   group.name = "ecoInstances";
@@ -57,13 +57,14 @@ export function createEcoInstancer(parent, library, opts = {}) {
   };
 
   /** Bucket placements by (asset, variant, palette, level of detail) and write the instance matrices. */
-  function regroup(cx, cz, view) {
+  function regroup(cx, cy, cz, view) {
     dirty = false;
     const buckets = new Map();
     stats.culled = 0;
     stats.byLod = [0, 0, 0];
     for (const p of placements) {
-      const dist = Math.hypot(p.x - cx, p.z - cz);
+      // On a planet the placements are in world space (x, y, z): distance is in 3D, and `q` stands them on the ground.
+      const dist = spherical ? Math.hypot(p.x - cx, p.y - cy, p.z - cz) : Math.hypot(p.x - cx, p.z - cz);
       if (dist > cullDistance) {
         stats.culled++;
         continue;
@@ -81,6 +82,7 @@ export function createEcoInstancer(parent, library, opts = {}) {
       const k = p.id + ":" + (lod === 2 ? 0 : p.variant) + ":" + lod + ":" + p.pk;
       let list = buckets.get(k);
       if (!list) buckets.set(k, (list = []));
+      list.lod = lod;
       list.push(p);
       stats.byLod[lod]++;
     }
@@ -88,12 +90,13 @@ export function createEcoInstancer(parent, library, opts = {}) {
     for (const b of batches.values()) b.mesh.count = 0;
     for (const [, list] of buckets) {
       const f = list[0];
-      const lod = f.lod ?? (Math.hypot(f.x - cx, f.z - cz) < lodNear ? 0 : Math.hypot(f.x - cx, f.z - cz) < lodFar ? 1 : 2);
+      const lod = list.lod;
       const b = batchFor(f.id, lod === 2 ? 0 : f.variant, lod, list.length, f.pk, f.palette);
       for (let i = 0; i < list.length; i++) {
         const p = list[i];
         dummy.position.set(p.x, p.y, p.z);
-        dummy.rotation.set(0, p.yaw || 0, 0);
+        if (p.q) dummy.quaternion.copy(p.q);
+        else dummy.rotation.set(0, p.yaw || 0, 0);
         dummy.scale.setScalar(p.scale);
         dummy.updateMatrix();
         b.mesh.setMatrixAt(i, dummy.matrix);
@@ -147,7 +150,7 @@ export function createEcoInstancer(parent, library, opts = {}) {
       camera.updateMatrixWorld();
       projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
       frustum.setFromProjectionMatrix(projView);
-      return regroup(camera.position.x, camera.position.z, frustum);
+      return regroup(camera.position.x, camera.position.y, camera.position.z, frustum);
     },
     /**
      * Like update() for views that are not a perspective camera (the top-down Tribal and Civilization
@@ -156,7 +159,7 @@ export function createEcoInstancer(parent, library, opts = {}) {
     updateFocus(x, z, { force = false } = {}) {
       if (!force && !dirty && Math.hypot(lastCam.x - x, lastCam.z - z) < moveThreshold) return stats;
       lastCam.set(x, 0, z);
-      return regroup(x, z, null);
+      return regroup(x, 0, z, null);
     },
     stats: () => stats,
     dispose() {

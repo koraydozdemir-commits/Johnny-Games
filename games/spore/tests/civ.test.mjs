@@ -185,7 +185,7 @@ test("saves are read safely", () => {
   assert.deepEqual(s.cities[0].trade, { n0: 50 });
   assert.equal(s.cities[1].owner, null);
   assert.equal(s.vehicles.length, 1);
-  assert.equal(s.vehicles[0].x, 400);
+  assert.equal(s.vehicles[0].x, 900);
   assert.deepEqual(s.captures, { military: 2, economic: 0, religious: 0 });
   assert.equal(s.card, "religious");
 });

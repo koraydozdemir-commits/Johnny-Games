@@ -1435,6 +1435,26 @@ body.galaxyStart>:not(#scene):not(.gs):not(.uv):not(.settingsScreen):not(.homeAr
 .creatureHUD .chTarget.social .ctHint{display:block;margin-top:3px;font-size:10px}
 .creatureHUD .chTarget.fade[hidden]{display:none}
 @media (prefers-reduced-motion:reduce){.creatureHUD .chTarget{transition:none}}
+
+/* ---- Civilization Stage: planet camera controls, planet map, region card, spice markers ---- */
+.civHUD .cvCam{position:absolute;right:10px;bottom:calc(var(--cvB,150px) + 10px);display:flex;flex-direction:column;gap:6px;z-index:2;pointer-events:auto}
+.civHUD .cvCam button{width:44px;height:44px;min-width:44px;border-radius:12px;border:1px solid #ffffff3a;background:#0b1c28dd;color:#eaf6ff;display:grid;place-items:center;padding:0;box-shadow:0 2px 8px #0006}
+.civHUD .cvCam button:active{background:#17384d}
+.civHUD .cvCam svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.civHUD .cvCam #cvNeedle path{fill:#8fa0ab;stroke:none}.civHUD .cvCam #cvNeedle .n{fill:#ef4b48}
+.civHUD .cvMini{position:absolute;left:10px;bottom:calc(var(--cvB,150px) + 10px);border-radius:12px;overflow:hidden;border:1px solid #ffffff55;background:#050c14cc;touch-action:none;z-index:2;cursor:crosshair;pointer-events:auto;box-shadow:0 2px 10px #0007}
+.civHUD .cvMini[hidden]{display:none}
+.civHUD .cvMini canvas{display:block}
+.civHUD .cvMini:focus-visible,.civHUD .cvCam button:focus-visible{outline:2px solid #8ff0a8;outline-offset:2px}
+.civHUD .cvRegion{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(var(--cvB,150px) + 10px);max-width:min(340px,calc(100vw - 150px));display:flex;flex-direction:column;gap:2px;background:#0d2232ee;border:1px solid #ffffff44;border-radius:12px;padding:8px 12px;font-size:12px;color:#d6e6ee;z-index:2;pointer-events:none}
+.civHUD .cvRegion[hidden]{display:none}.civHUD .cvRegion b{font-size:13px;color:#fff}
+.civHUD .cvSpice{--own:#ffa14a;position:absolute;width:13px;height:13px;margin:-7px 0 0 -7px;transform:rotate(45deg);background:var(--own);border:2px solid #fff;border-radius:3px;box-shadow:0 0 10px var(--own);pointer-events:none}
+.civHUD .cvSpice.free{animation:cvSpicePulse 1.6s ease-in-out infinite}
+.civHUD .cvSpice[hidden]{display:none}
+@keyframes cvSpicePulse{0%,100%{box-shadow:0 0 6px var(--own)}50%{box-shadow:0 0 16px 3px var(--own)}}
+.civHUD .cvCulture{margin:6px 0 0}
+@media (prefers-reduced-motion:reduce){.civHUD .cvSpice.free{animation:none}}
+@media (max-height:520px){.civHUD .cvCam{flex-direction:row;right:10px;bottom:calc(var(--cvB,84px) + 8px)}}
 </style>
 </head>
 <body class="galaxyStart">

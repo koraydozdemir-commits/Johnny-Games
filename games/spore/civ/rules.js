@@ -255,7 +255,7 @@ export const SUPERWEAPONS = {
 };
 export const SUPER_COST = 400;
 export const SUPER_COOLDOWN = 150;
-/** The superweapon unlocks when you hold at least half the island's cities. */
+/** The superweapon unlocks when you hold at least half of the planet's cities. */
 export const superUnlocked = (yours, total) => total > 0 && yours >= Math.ceil(total / 2);
 
 /** How you have mostly won cities: the kind of superweapon you get and the card you finish with. */
@@ -329,12 +329,13 @@ export function readCivSave(raw) {
   const designs = d.designs && typeof d.designs === "object" ? d.designs : {};
   return {
     v: CIV_VERSION,
+    planet: d.planet === 1,
     money: num(d.money, 0, 1e7, START_MONEY),
     startType: TYPE_IDS.includes(d.startType) ? d.startType : "economic",
     nations,
     cities,
     geysers: (Array.isArray(d.geysers) ? d.geysers : []).slice(0, 16).map((g) => ({ owner: ownerOk(g?.owner ?? null, ids), hp: num(g?.hp, 0, 1, 1) })),
-    vehicles: (Array.isArray(d.vehicles) ? d.vehicles : []).slice(0, 60).map((v) => ({ owner: ownerOk(v?.owner, ids), design: typeof v?.design === "string" ? v.design.slice(0, 40) : null, x: num(v?.x, -400, 400, 0), z: num(v?.z, -400, 400, 0), hp: num(v?.hp, 0, 1, 1), city: Number.isInteger(v?.city) ? v.city : -1 })).filter((v) => v.owner && v.design),
+    vehicles: (Array.isArray(d.vehicles) ? d.vehicles : []).slice(0, 60).map((v) => ({ owner: ownerOk(v?.owner, ids), design: typeof v?.design === "string" ? v.design.slice(0, 40) : null, x: num(v?.x, -900, 900, 0), z: num(v?.z, -900, 900, 0), hp: num(v?.hp, 0, 1, 1), city: Number.isInteger(v?.city) ? v.city : -1 })).filter((v) => v.owner && v.design),
     designs: { building: designs.building && typeof designs.building === "object" ? designs.building : {}, vehicle: designs.vehicle && typeof designs.vehicle === "object" ? designs.vehicle : {} },
     captures: Object.fromEntries(TYPE_IDS.map((t) => [t, Math.round(num(d.captures?.[t], 0, 99, 0))])),
     superCool: num(d.superCool, 0, SUPER_COOLDOWN, 0),
