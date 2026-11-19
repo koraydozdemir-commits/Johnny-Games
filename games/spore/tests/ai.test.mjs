@@ -14,7 +14,7 @@ function world(over = {}) {
     dip,
     cities,
     geysers: [],
-    nations: [{ id: YOU, type: "economic", alive: true, strength: 6, cities: 1 }, ...nations.map((n) => ({ ...n, alive: true, strength: strengthOf(cities.filter((c) => c.owner === n.id), 2), cities: 1 }))],
+    nations: [{ id: YOU, type: "economic", alive: true, strength: 6, cities: 1 }, ...nations.map((n) => ({ ...n, alive: true, strength: strengthOf(cities.filter((c) => c.owner === n.id), 2), cities: cities.filter((c) => c.owner === n.id).length }))],
     buyoutCost: () => 200,
     vehicleCost: 110,
     rand: () => 0.05,
@@ -50,7 +50,8 @@ test("at war, the militarist goes for the enemy's cities, not the independents'"
 test("the militarist picks a fight with a weaker neighbour, not in the early grace, and not an ally", () => {
   const w = world();
   w.nations.find((n) => n.id === "n1").strength = 1;
-  assert.ok(planNation(me("n0", "military"), w).some((i) => i.k === "war" && i.on === "n1"));
+  assert.ok(planNation(me("n0", "military", 500, { vehicles: 3 }), w).some((i) => i.k === "war" && i.on === "n1"));
+  assert.ok(!planNation(me("n0", "military", 500, { vehicles: 1 }), w).some((i) => i.k === "war"), "not before it has an army");
   assert.ok(!planNation(me("n0", "military"), { ...w, grace: true }).some((i) => i.k === "war"), "no wars in the grace period");
   const dip = createDiplomacy(nations, { n0: -20, n1: 80, n2: 0 });
   makeAlliance(dip, "n0", "n1");
@@ -124,4 +125,18 @@ test("the militarist demands tribute from a weak neighbour it dislikes; friends 
   const dip = createDiplomacy(nations, { n0: -20, n1: 70, n2: 0 });
   const eco = planNation(me("n1", "economic", 500), world({ dip, rand: () => 0.01 }));
   assert.ok(eco.some((i) => i.k === "offer" && i.kind === "alliance"), "a friend proposes an alliance");
+});
+
+test("everyone leans on a nation that is taking over the planet", () => {
+  const cities = [city(0, YOU), city(1, "n1"), city(2, "n1"), city(3, "n1"), city(4, "n1"), city(5, "n0"), city(6, "n2"), city(7, null)];
+  const w = world({ cities, rand: () => 0.01 });
+  w.nations.find((n) => n.id === "n1").strength = 15;
+  const mil = planNation(me("n0", "military", 500, { vehicles: 4, cities: [city(5, "n0")] }), w);
+  assert.ok(mil.some((i) => i.k === "war" && i.on === "n1" && /leader/.test(i.why)), "the militarist goes for the leader");
+  const rel = planNation(me("n2", "religious", 500, { cities: [city(6, "n2", { type: "religious" })] }), w);
+  assert.equal(rel.find((i) => i.k === "target").city > 0, true);
+  // A merchant past half the planet stops buying.
+  const rich = [city(0, YOU, { trade: { n1: 100 } }), ...[1, 2, 3, 4, 5].map((i) => city(i, "n1"))];
+  const eco = planNation(me("n1", "economic", 3000, { cities: rich.filter((c) => c.owner === "n1") }), world({ cities: rich, rand: () => 0.01 }));
+  assert.ok(!eco.some((i) => i.k === "buy"), "no monopoly");
 });

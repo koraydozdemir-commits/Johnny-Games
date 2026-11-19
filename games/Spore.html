@@ -1486,6 +1486,25 @@ body.galaxyStart>:not(#scene):not(.gs):not(.uv):not(.settingsScreen):not(.homeAr
 .civHUD .cvQItem .noPic{font-size:20px}.civHUD .cvQItem b{display:block;font-size:12px;margin-bottom:3px}.civHUD .cvQItem small{color:#cfe3ea;min-width:42px;text-align:right}
 .civHUD .cvQItem button{width:32px;height:32px;min-width:32px;padding:0;border-radius:8px}
 @media (max-height:520px){.civHUD .cvCmd{width:min(420px,calc(100vw - 150px));padding:5px 8px}.civHUD .cvCmdRow button{min-height:42px}}
+
+/* ---- Civilization Stage: city planner, diplomacy, economy sheets ---- */
+.civHUD .cvPlot{position:relative}
+.civHUD .cvPlot.sel{border-color:#8ff0a8;box-shadow:0 0 0 2px #8ff0a866}
+.civHUD .cvPlot.lv2{background:#ffffff1f}.civHUD .cvPlot.lv3{background:linear-gradient(#f5c75a33,#ffffff14);border-color:#f5c75a99}
+.civHUD .cvAdj{position:absolute;top:3px;right:4px;width:16px;height:16px;border-radius:50%;font-style:normal;font-size:12px;line-height:16px;text-align:center;font-weight:900;color:#06210f;background:#3fc26e}
+.civHUD .cvAdj.bad{background:#ef7b48;color:#2a0c04}
+.civHUD .cvPlotInfo{display:flex;flex-direction:column;gap:3px;font-size:12px;margin:8px 0;padding:8px 10px;border-radius:10px;background:#ffffff12}
+.civHUD .cvPlotInfo .good{color:#8fe0a8}.civHUD .cvPlotInfo .bad{color:#f4a07a}
+.civHUD .cvDipFacts{display:flex;gap:8px;margin:6px 0}
+.civHUD .cvDipFacts span{flex:1;text-align:center;background:#ffffff12;border-radius:10px;padding:6px 4px;font-size:11px;color:#cfe3ea}.civHUD .cvDipFacts b{display:block;font-size:15px;color:#fff}
+.civHUD .cvDip{flex-wrap:wrap}.civHUD .cvDip button{flex:1 1 44%;min-height:44px}
+.civHUD .cvDip .warn{border-color:#ef4b48aa;color:#ffb4ae}
+.civHUD .cvDipList,.civHUD .cvEcon{list-style:none;margin:6px 0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:12px}
+.civHUD .cvDipList li,.civHUD .cvEcon li{display:flex;justify-content:space-between;gap:10px;background:#ffffff10;border-radius:8px;padding:6px 9px}
+.civHUD .cvDipList .good{color:#8fe0a8}.civHUD .cvDipList .bad{color:#f4a07a}
+.civHUD .cvEcon li.cost b{color:#f4a07a}.civHUD .cvEcon small{color:#a9c0c9}
+.civHUD .cvNation.ally{box-shadow:0 0 0 3px #3fc26e88}.civHUD .cvNation.deal{box-shadow:0 0 0 2px #ffd24a77}
+.civHUD .trStats{cursor:pointer}.civHUD .trStats:focus-visible{outline:2px solid #8ff0a8;outline-offset:3px;border-radius:8px}
 </style>
 </head>
 <body class="galaxyStart">

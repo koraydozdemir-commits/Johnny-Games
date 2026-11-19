@@ -6,6 +6,7 @@
  * Rates are per second of play. Money is "§" (Sporebucks).
  */
 import { designStats, partOf, vehicleMode } from "../creations/modular.js";
+import { readDiplomacy } from "./diplomacy.js";
 
 export const CIV_SAVE_KEY = "johnny-spore-civ-stage";
 export const CIV_VERSION = 1;
@@ -454,12 +455,14 @@ export function readCivSave(raw) {
   for (const c of cities) c.turrets = Math.min(c.turrets, turretSlots(c.hall));
   if (!cities.some((c) => c.owner === YOU)) return null;
   const designs = d.designs && typeof d.designs === "object" ? d.designs : {};
+  const dip = d.dip && typeof d.dip === "object" ? readDiplomacy(d.dip, [YOU, ...ids]) : null;
   return {
     v: CIV_VERSION,
     planet: d.planet === 1,
     money: num(d.money, 0, 1e7, START_MONEY),
     startType: TYPE_IDS.includes(d.startType) ? d.startType : "economic",
     nations,
+    dip,
     cities,
     geysers: (Array.isArray(d.geysers) ? d.geysers : []).slice(0, 16).map((g) => ({ owner: ownerOk(g?.owner ?? null, ids), hp: num(g?.hp, 0, 1, 1) })),
     vehicles: (Array.isArray(d.vehicles) ? d.vehicles : []).slice(0, 60).map((v) => ({ owner: ownerOk(v?.owner, ids), design: typeof v?.design === "string" ? v.design.slice(0, 40) : null, x: num(v?.x, -900, 900, 0), z: num(v?.z, -900, 900, 0), hp: num(v?.hp, 0, 1, 1), city: Number.isInteger(v?.city) ? v.city : -1 })).filter((v) => v.owner && v.design),

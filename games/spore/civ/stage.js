@@ -18,6 +18,9 @@ import { createPlanetFlora } from "./planet-flora.js";
 import { createCityArt, createSpiceArt } from "./city-view.js";
 import { CITY, STYLE_IDS, chooseStyles, describeCulture, makeCulture, roadLinks, traitsOf } from "./culture.js";
 import { createMinimap } from "./minimap.js";
+import { ALLIANCE_COST, DEAL_COST, accepts, alliesOf, allied, atWar, canAlly, canDeal, cannotDeclare, createDiplomacy, dealIncomeOf, declareWar, endAlliance, endDeal, hasDeal, joiners, makeAlliance, makeDeal, makeOffer, makePeace, pairKey, react, rel as relOf, relationWord as dipWord, setRel, settle, soureAlliances, tributeDemand, buyoutOffer, bump } from "./diplomacy.js";
+import { PERSONALITY } from "./diplomacy.js";
+import { planNation, strengthOf } from "./ai.js";
 import { createCombatFx } from "./combat-fx.js";
 import { COMMANDS, QUEUE_MAX, assignFormation, buildTime, availableCommands, canQueue, contextCommand, newItem, pickTarget, refundOf, separation, shotDamage, tickQueue, unitsInRect } from "./rts.js";
 import { buildDesignMesh, designMaterials } from "../creations/mesh.js";
@@ -51,12 +54,21 @@ import {
   cityName,
   civArchetype,
   civLegacy,
-  civWon,
+  dominance,
+  HALL_MAX,
+  MAX_LEVEL,
+  levelFactor,
+  hallCost,
+  improveCost,
+  turretSlots,
+  vehicleCapOf,
+  VEHICLE_UPKEEP,
+  adjacency,
+  upkeepOf,
   clampRel,
   damageCity,
   deliverTrade,
   dominantMethod,
-  nationPlan,
   preachRate,
   preachTo,
   relationWord,
@@ -97,6 +109,8 @@ const SPOTS = {
 };
 /** For the first few minutes nobody comes for your cities: time to build up. */
 const GRACE = 240;
+/** How much of its income a rival nation makes use of. */
+const AI_EFFICIENCY = 0.75;
 
 /**
  * @param {object} o
@@ -215,16 +229,46 @@ export function createCivStage(o) {
       name: sp.name,
       color: NATION_COLORS[type],
       colors: { base: 0xe8dcc0, accent: NATION_COLORS[type], trim: 0x3a3f45 },
-      relation: saved ? saved.relation : clampRel(NATION_START[type] + mods.relation),
       base: clampRel(NATION_START[type] + mods.relation),
-      war: saved ? saved.war : false,
       money: saved ? saved.money : 120,
       alive: saved ? saved.alive : true,
       clock: 4 + i * 1.3,
       buildClock: 20 + i * 7,
     });
   });
+  // Every pair of nations (you included) has a relationship, wars, alliances and trade agreements: see diplomacy.js.
+  // A nation's `relation` and `war` towards you read and write that state, so the rest of the stage can use them.
+  T.dip =
+    save?.dip && Object.keys(save.dip.rel).length
+      ? save.dip
+      : (() => {
+          const d = createDiplomacy(T.nations, Object.fromEntries(T.nations.map((n, i) => [n.id, save?.nations[i] ? save.nations[i].relation : clampRel(NATION_START[n.type] + mods.relation)])));
+          T.nations.forEach((n, i) => {
+            if (save?.nations[i]?.war) d.war[pairKey(YOU, n.id)] = true;
+          });
+          return d;
+        })();
+  T.offers = [];
+  for (const n of T.nations)
+    Object.defineProperties(n, {
+      relation: { enumerable: true, get: () => relOf(T.dip, YOU, n.id), set: (v) => setRel(T.dip, YOU, n.id, v) },
+      war: {
+        enumerable: true,
+        get: () => atWar(T.dip, YOU, n.id),
+        set: (v) => {
+          const k = pairKey(YOU, n.id);
+          if (v) {
+            T.dip.war[k] = true;
+            delete T.dip.deals[k];
+            delete T.dip.allies[k];
+          } else delete T.dip.war[k];
+        },
+      },
+    });
   const nationOf = (id) => T.nations.find((n) => n.id === id) || null;
+  const nationIds = () => [YOU, ...T.nations.map((n) => n.id)];
+  const aliveIds = () => [YOU, ...T.nations.filter((n) => n.alive).map((n) => n.id)];
+  const typeOfNation = (id) => (id === YOU ? T.startType : nationOf(id)?.type);
   const ownerColor = (owner) => (owner === YOU ? myColors.accent : nationOf(owner)?.color ?? INDEPENDENT_COLOR);
   const ownerName = (owner) => (owner === YOU ? "your nation" : owner ? nationOf(owner)?.name + " nation" : "Independent");
 
@@ -280,6 +324,9 @@ export function createCivStage(o) {
         // Where boats anchor off this city (coastal cities only).
         sea: site.coastal ? site.sea : null,
         art: null,
+        levels: saved?.levels ? saved.levels.slice() : Array.from({ length: PLOTS }, () => 1),
+        hall: saved?.hall || 1,
+        devout: !!saved?.devout,
         queue: saved?.queue ? saved.queue.map((i) => ({ ...i })) : [],
         calm: 99,
         mark: null,
@@ -305,8 +352,13 @@ export function createCivStage(o) {
     const a = SPOTS.plotAngle(k);
     return { x: c.x + Math.cos(a) * CITY.plotRing, z: c.z + Math.sin(a) * CITY.plotRing };
   };
+  /** A city's building plots and turret sites: the hall's level adds turret sites. */
+  const spotsFor = (c) => {
+    const n = turretSlots(c.hall);
+    return { plots: PLOTS, turretSlots: n, plotAngle: SPOTS.plotAngle, turretAngle: (k) => (k / n) * TAU - Math.PI / 2 };
+  };
   const turretSpot = (c, k) => {
-    const a = SPOTS.turretAngle(k);
+    const a = spotsFor(c).turretAngle(k);
     return { x: c.x + Math.cos(a) * CITY.turretRing, z: c.z + Math.sin(a) * CITY.turretRing };
   };
   const boxTmp = new THREE.Box3();
@@ -330,7 +382,7 @@ export function createCivStage(o) {
     const culture = cultureFor(c);
     c.culture = culture;
     const econ = cityEconomy(c, ownerMods(c.owner));
-    const art = cityArt.build(c, { culture, ownerColor: ownerColor(c.owner), spots: SPOTS, pop: econ.pop });
+    const art = cityArt.build(c, { culture, ownerColor: ownerColor(c.owner), spots: spotsFor(c), pop: econ.pop });
     c.art = art;
     c.world = W(c.x, groundY(c.x, c.z), c.z);
     const face = (p) => Math.atan2(c.x - p.x, c.z - p.z);
@@ -408,7 +460,7 @@ export function createCivStage(o) {
     T.vehicles = T.vehicles.filter((x) => x !== v);
   }
   const vehiclesOf = (owner) => T.vehicles.filter((v) => v.owner === owner && !v.dead);
-  const vehicleCap = (owner) => VEHICLES_PER_CITY * citiesOf(owner).length;
+  const vehicleCap = (owner) => citiesOf(owner).reduce((sum, c) => sum + vehicleCapOf(c.hall), 0);
 
   /* ---- effects: shots, pops ------------------------------------------------------------------------- */
   const shots = [];
@@ -480,6 +532,15 @@ export function createCivStage(o) {
   document.body.appendChild(hud);
   const $h = (q) => hud.querySelector(q);
   $h("#cvName").textContent = o.name;
+  {
+    const box = hud.querySelector(".trStats");
+    box.setAttribute("role", "button");
+    box.setAttribute("tabindex", "0");
+    box.setAttribute("aria-label", "Economy: where your money comes from and goes");
+    box.style.cursor = "pointer";
+    box.onclick = () => openSheet("econ");
+    box.onkeydown = (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), openSheet("econ"));
+  }
   let toastT = 0;
   function toast(text, seconds = 3) {
     const el = $h("#cvToast");
@@ -556,6 +617,8 @@ export function createCivStage(o) {
     if (sheet.kind === "city") html = cityHtml(sheet.city);
     else if (sheet.kind === "nation") html = nationHtml(sheet.nation);
     else if (sheet.kind === "designs") html = designsHtml();
+    else if (sheet.kind === "offer") html = offerHtml();
+    else if (sheet.kind === "econ") html = econHtml();
     else if (sheet.kind === "won") html = wonHtml();
     else if (sheet.kind === "lost") html = lostHtml();
     else html = helpHtml();
@@ -569,20 +632,41 @@ export function createCivStage(o) {
   function cityHtml(c) {
     const econ = cityEconomy(c, ownerMods(c.owner));
     const head = `<div class="tsHead"><div>${CITY_TYPES[c.type].icon} ${esc(c.name)}<small>${esc(cap(ownerName(c.owner)))} · ${CITY_TYPES[c.type].name} city</small></div><button class="tsClose" aria-label="Close">✕</button></div>
-      <div class="tsStats cvCityStats"><span><b>${econ.pop}k</b>people</span><span><b>${econ.happiness > 0 ? "+" : ""}${econ.happiness}</b>${econ.riot ? "rioting!" : "happiness"}</span><span><b>${econ.income.toFixed(1)}</b>§ / s</span><span><b>${c.turrets}</b>turrets</span></div>
+      <div class="tsStats cvCityStats"><span><b>${econ.pop}k</b>people</span><span><b>${econ.happiness > 0 ? "+" : ""}${econ.happiness}</b>${econ.riot ? "rioting!" : "happiness"}</span><span><b>${(econ.income - econ.upkeep).toFixed(1)}</b>§ / s net</span><span><b>${c.turrets}</b>turrets</span></div>
       <p class="tsHint cvCulture"><b>${esc(c.culture ? describeCulture(c.culture) : "")}</b> · ${esc(map.continents[c.continent]?.name || "")}</p>`;
     if (c.owner === YOU) {
+      const adj = adjacency(c.plots);
       const plots = c.plots
-        .map((role, k) =>
-          role
-            ? `<button class="cvPlot" data-plot="${k}" aria-label="${ROLES.building[role].name}: tap to demolish">${ROLE_ICON[role]}<small>${ROLES.building[role].name}</small></button>`
-            : `<button class="cvPlot empty" data-plot="${k}" aria-label="Empty plot: tap to build">＋<small>Empty</small></button>`,
-        )
+        .map((role, k) => {
+          const lvl = c.levels[k] || 1;
+          const notes = adj.notes[k];
+          const mark = notes.length ? `<i class="cvAdj ${notes.some((x) => !x.good) ? "bad" : "good"}" aria-hidden="true">${notes.some((x) => !x.good) ? "−" : "+"}</i>` : "";
+          return role
+            ? `<button class="cvPlot lv${lvl} ${sheet.plot === k ? "sel" : ""}" data-plot="${k}" aria-pressed="${sheet.plot === k}" aria-label="${ROLES.building[role].name}, level ${lvl} of ${MAX_LEVEL}.${notes.map((x) => " " + x.text + ".").join("")} Tap for options">${ROLE_ICON[role]}<small>${ROLES.building[role].name} · Lv ${lvl}</small>${mark}</button>`
+            : `<button class="cvPlot empty ${sheet.plot === k ? "sel" : ""}" data-plot="${k}" aria-pressed="${sheet.plot === k}" aria-label="Empty plot: tap to build">＋<small>Empty</small></button>`;
+        })
         .join("");
-      const choosing = sheet.plot != null && !c.plots[sheet.plot];
-      const choices = choosing
-        ? `<div class="tsTrade">${PLOT_ROLES.map((r) => `<button class="tsTradeBtn" data-build="${r}" ${dis(T.money < BUILD_COST[r])}><span>${ROLE_ICON[r]}</span><b>${ROLES.building[r].name}</b><em>§${BUILD_COST[r]}</em></button>`).join("")}</div><p class="tsHint">${PLOT_ROLES.map((r) => `${ROLE_ICON[r]} ${ROLES.building[r].desc}`).join(" ")}</p>`
-        : "";
+      const sel = sheet.plot;
+      let panel = "";
+      if (sel != null && !c.plots[sel]) {
+        // What each building would do here: its own effect, and what it does to its neighbours.
+        const preview = (role) => {
+          const test = c.plots.slice();
+          test[sel] = role;
+          const a = adjacency(test);
+          const d = { happiness: a.happiness - adj.happiness, income: a.income - adj.income, faith: a.faith - adj.faith };
+          const bits = [d.happiness && `${d.happiness > 0 ? "+" : ""}${d.happiness.toFixed(1)} happiness`, d.income && `${d.income > 0 ? "+" : ""}${d.income.toFixed(2)} output`, d.faith && `${d.faith > 0 ? "+" : ""}${d.faith.toFixed(1)} faith`].filter(Boolean);
+          return bits.length ? bits.join(", ") + " from its neighbours" : "no neighbour effect";
+        };
+        panel = `<div class="tsTrade">${PLOT_ROLES.map((r) => `<button class="tsTradeBtn" data-build="${r}" ${dis(T.money < BUILD_COST[r])}><span>${ROLE_ICON[r]}</span><b>${ROLES.building[r].name}<small>${preview(r)}</small></b><em>§${BUILD_COST[r]}</em></button>`).join("")}</div><p class="tsHint">${PLOT_ROLES.map((r) => `${ROLE_ICON[r]} ${ROLES.building[r].desc}`).join(" ")} Plots form a ring: what stands next to a building changes how it works.</p>`;
+      } else if (sel != null) {
+        const role = c.plots[sel];
+        const lvl = c.levels[sel] || 1;
+        const next = lvl < MAX_LEVEL ? improveCost(role, lvl) : null;
+        panel = `<div class="cvPlotInfo"><b>${ROLE_ICON[role]} ${ROLES.building[role].name} · level ${lvl} of ${MAX_LEVEL}</b><span>${Math.round((levelFactor(lvl) - 1) * 100)}% better than a plain one${next ? `; level ${lvl + 1} adds 35% more` : ""}.</span>${adj.notes[sel].map((x) => `<span class="${x.good ? "good" : "bad"}">${x.good ? "＋" : "−"} ${x.text}</span>`).join("")}</div>
+          <div class="tsBtns"><button class="good" data-improve="1" ${dis(next == null || T.money < next)}>${next == null ? "Fully improved" : `Improve · §${next}`}</button><button data-demolish="1">Demolish</button></div>`;
+      }
+      const hallBtn = c.hall >= HALL_MAX ? `<button disabled aria-disabled="true">Hall fully expanded</button>` : `<button id="cvHall" ${dis(T.money < hallCost(c.hall))}>Expand the hall (level ${c.hall + 1}) · §${hallCost(c.hall)}</button>`;
       const cap = vehicleCap(YOU),
         have = vehiclesOf(YOU).length + queuedFor(YOU);
       const modes = allowedModes(yourCities().length, c.coastal);
@@ -597,8 +681,11 @@ export function createCivStage(o) {
         })
         .join("");
       return `${head}
-        <h5 class="tsKind">Buildings · tap a plot</h5><div class="cvPlots">${plots}</div>${choices}
-        <div class="tsBtns cvRow"><button id="cvTurret" ${dis(c.turrets >= MAX_TURRETS || T.money < BUILD_COST.turret)}>🗼 Turret · §${BUILD_COST.turret} (${c.turrets}/${MAX_TURRETS})</button><button id="cvFocus">📍 Look here</button></div>
+        <h5 class="tsKind">Buildings · tap a plot</h5><div class="cvPlots">${plots}</div>${panel}
+        <h5 class="tsKind">City hall · level ${c.hall} of ${HALL_MAX}</h5>
+        <p class="tsHint">A bigger hall holds more people (+25% each level), adds a turret site and a vehicle slot, and toughens the walls.</p>
+        <div class="tsBtns cvRow">${hallBtn}</div>
+        <div class="tsBtns cvRow"><button id="cvTurret" ${dis(c.turrets >= turretSlots(c.hall) || T.money < BUILD_COST.turret)}>🗼 Turret · §${BUILD_COST.turret} (${c.turrets}/${turretSlots(c.hall)})</button><button id="cvFocus">📍 Look here</button></div>
         <h5 class="tsKind">${CITY_TYPES[role].icon} ${CITY_TYPES[role].name} vehicles · ${have}/${cap}</h5><div class="tsTrade">${builds}</div>
         ${c.queue.length ? `<h5 class="tsKind">In production · ${c.queue.length}/${QUEUE_MAX}${factoriesOf(c) ? ` · ${factoriesOf(c)} ${factoriesOf(c) === 1 ? "factory speeds" : "factories speed"} it up` : ""}</h5><div class="cvQueue">${c.queue.map((q, i) => `<div class="cvQItem"><span class="noPic">${MODE_ICON[q.key.split(":")[1]]}</span><div><b>${esc(T.designs.vehicle[q.key].name)}</b>${bar(q.t / q.total, "trade")}</div><small>${q.t >= q.total ? "waiting" : Math.ceil(q.total - q.t) + " s"}</small><button data-cancel="${i}" aria-label="Cancel ${esc(T.designs.vehicle[q.key].name)}: refund §${refundOf(q)}">✕</button></div>`).join("")}</div>` : ""}
         <p class="tsHint">${CITY_TYPES[role].desc}${econ.riot ? " <b>This city is rioting:</b> build entertainment, or fewer factories." : ""}</p>`;
@@ -618,17 +705,64 @@ export function createCivStage(o) {
       </div>
       <p class="tsHint">${sel.length ? "Military vehicles attack its turrets, then its hall. Economic ones trade (buy it when trade is full). Religious ones preach until it converts." : "Select vehicles first (tap them, or 🚙 All), then send them here."}${nat && !nat.war && sel.some((v) => v.role === "military") ? " <b>Attacking means war with this nation.</b>" : ""}</p>`;
   }
+  const NATION_AI_LINE = { military: "Respects strength. Attacks the weak, and will demand tribute from a neighbour it can bully.", economic: "Prefers deals to wars. Trades with anyone, buys cities outright, and sues for peace at once.", religious: "Spreads its faith and answers conversion with temples. Despises militarists." };
   function nationHtml(n) {
     const cities = citiesOf(n.id).length;
-    return `<div class="tsHead"><div>${CITY_TYPES[n.type].icon} ${esc(n.name)} nation<small>${CITY_TYPES[n.type].name} · ${cities} ${cities === 1 ? "city" : "cities"} · ${vehiclesOf(n.id).length} vehicles</small></div><button class="tsClose" aria-label="Close">✕</button></div>
-      ${bar((n.relation + 100) / 200, n.war ? "foe" : "")}
-      <p class="tsHint"><b>${relationWord(n.relation, n.war)}</b> (${Math.round(n.relation)}). ${
-        n.type === "military" ? "A military nation: if it grows to hate you, it declares war and sends its army." : n.type === "economic" ? "An economic nation: it trades with you while relations are decent. Trade routes pay you both." : "A religious nation: it preaches to cities of nations it dislikes. Temples help your cities resist."
-      }</p>
-      <div class="tsBtns">
+    const state = dipWord(T.dip, YOU, n.id);
+    const war = n.war,
+      ally = allied(T.dip, YOU, n.id),
+      deal = hasDeal(T.dip, YOU, n.id);
+    const others = T.nations.filter((m) => m !== n && m.alive).map((m) => `<li><b>${esc(m.name)}</b> <span class="${atWar(T.dip, n.id, m.id) ? "bad" : allied(T.dip, n.id, m.id) ? "good" : ""}">${dipWord(T.dip, n.id, m.id)}</span></li>`);
+    const eco = econOf(n.id);
+    const can = (k) => (!n.alive ? "Fallen." : k === "deal" && !canDeal(T.dip, YOU, n.id) ? "" : "");
+    return `<div class="tsHead"><div>${CITY_TYPES[n.type].icon} ${esc(n.name)} nation<small>${PERSONALITY[n.type].name} · ${cities} ${cities === 1 ? "city" : "cities"} · ${vehiclesOf(n.id).length} vehicles</small></div><button class="tsClose" aria-label="Close">✕</button></div>
+      ${bar((n.relation + 100) / 200, war ? "foe" : "")}
+      <p class="tsHint"><b>${state}</b> (${Math.round(n.relation)}). ${esc(PERSONALITY[n.type].blurb)} ${NATION_AI_LINE[n.type]}</p>
+      <div class="cvDipFacts"><span><b>§${Math.round(n.money)}</b>treasury</span><span><b>${eco.net >= 0 ? "+" : ""}${eco.net.toFixed(1)}</b>§ / s</span><span><b>${T.geysers.filter((g) => g.owner === n.id).length}</b>spice</span></div>
+      <div class="tsBtns cvDip">
         <button class="gift" id="cvGift" ${dis(T.money < DIPLO.giftCost || !n.alive)}>Gift · §${DIPLO.giftCost}</button>
-        <button class="${n.war ? "good" : ""}" id="cvPeace" ${dis(!n.war || T.money < DIPLO.peaceCost)}>${n.war ? `Offer peace · §${DIPLO.peaceCost}` : "At peace"}</button>
-      </div>`;
+        ${deal ? `<button id="cvEndDeal">End trade agreement</button>` : `<button id="cvDeal" ${dis(!n.alive || war || T.money < DEAL_COST)}>Trade agreement · §${DEAL_COST}</button>`}
+        ${ally ? `<button id="cvBreakAlly">End alliance</button>` : `<button id="cvAlly" ${dis(!n.alive || war || T.money < ALLIANCE_COST)}>Alliance · §${ALLIANCE_COST}</button>`}
+        ${war ? `<button class="good" id="cvPeace" ${dis(!n.alive || T.money < DIPLO.peaceCost)}>Offer peace · §${DIPLO.peaceCost}</button>` : `<button class="warn" id="cvWar" ${dis(!n.alive || ally)}>Declare war</button>`}
+      </div>
+      <p class="tsHint">${ally ? "Allies never fight you, take your side in wars, defend your cities and pay more on trade." : deal ? "The agreement pays you both every second while you are at peace." : "A trade agreement pays you both. An alliance needs warm feelings (55+)."}${can("")}</p>
+      <h5 class="tsKind">Relations with the other nations</h5><ul class="cvDipList">${others.join("") || "<li>None left.</li>"}</ul>`;
+  }
+  /** An offer a rival has put to you. */
+  function offerHtml() {
+    const off = T.offers[0];
+    if (!off) return `<div class="tsHead"><b>No offers</b><button class="tsClose" aria-label="Close">✕</button></div><p class="tsHint">Nobody is waiting for an answer.</p>`;
+    const n = nationOf(off.from);
+    const left = Math.max(0, Math.ceil(off.ttl - off.t));
+    const accept = { buyout: `Sell · +§${off.amount}`, tribute: `Pay §${off.amount}`, alliance: "Accept the alliance", deal: "Accept the agreement", peace: "Accept peace" }[off.kind];
+    const decline = { buyout: "Keep the city", tribute: "Refuse", alliance: "Decline", deal: "Decline", peace: "Fight on" }[off.kind];
+    return `<div class="tsHead"><div>${CITY_TYPES[n.type].icon} ${esc(n.name)} nation<small>${off.kind === "tribute" ? "A demand" : "An offer"} · ${left} s to answer${T.offers.length > 1 ? ` · ${T.offers.length} waiting` : ""}</small></div><button class="tsClose" aria-label="Close">✕</button></div>
+      <p class="tsWonText">${esc(off.text)}</p>
+      <div class="tsBtns"><button class="good" id="cvAccept" ${dis(off.kind === "tribute" && T.money < off.amount)}>${accept}</button><button id="cvDecline">${decline}</button></div>`;
+  }
+  /** Where your money comes from and goes. */
+  function econHtml() {
+    const e = econOf(YOU);
+    const row = (label, v, cls = "") => `<li class="${cls}"><span>${label}</span><b>${v >= 0 ? "+" : "−"}§${Math.abs(v).toFixed(1)}/s</b></li>`;
+    const em = ownerMods(YOU);
+    const cityRows = yourCities().map((c) => {
+      const ec = cityEconomy(c, em);
+      return `<li><span>${esc(c.name)} <small>${ec.pop}k people · ${ec.riot ? "rioting" : "happiness " + ec.happiness}</small></span><b>${ec.income - ec.upkeep >= 0 ? "+" : "−"}§${Math.abs(ec.income - ec.upkeep).toFixed(1)}/s</b></li>`;
+    });
+    const buildingsUp = yourCities().reduce((sum, c) => sum + upkeepOf(c), 0);
+    const geysers = T.geysers.filter((g) => g.owner === YOU);
+    return `<div class="tsHead"><b>§ Economy</b><button class="tsClose" aria-label="Close">✕</button></div>
+      <p class="tsHint">You have <b>§${Math.floor(T.money)}</b> and earn <b>${e.net >= 0 ? "+" : "−"}§${Math.abs(e.net).toFixed(1)}</b> a second.</p>
+      <ul class="cvEcon">
+        ${row("Cities (people and factories)", e.cities)}
+        ${row(`Spice (${geysers.length} derrick${geysers.length === 1 ? "" : "s"})`, e.spice)}
+        ${row("Trade routes", e.trade)}
+        ${row("Trade agreements", e.deals)}
+        ${row("Upkeep: buildings and turrets", -buildingsUp, "cost")}
+        ${row(`Upkeep: ${vehiclesOf(YOU).length} vehicles`, -(vehiclesOf(YOU).length * VEHICLE_UPKEEP), "cost")}
+      </ul>
+      <h5 class="tsKind">Your cities</h5><ul class="cvEcon">${cityRows.join("")}</ul>
+      <p class="tsHint">Spice is the richest income: each derrick pays by its richness, and rivals will fight for them. Factories earn but upset people, so balance them with entertainment; better buildings and a bigger hall earn more but cost more to keep.</p>`;
   }
   function designsHtml() {
     const row = (kind, key, design, label, sub) => `<button class="tsTradeBtn cvDesign" data-design="${kind}|${key}"><span>${label}</span><b>${esc(design.name)}<small>${esc(sub)}</small></b><em>Edit</em></button>`;
@@ -656,7 +790,7 @@ export function createCivStage(o) {
   function wonHtml() {
     const card = CIV_CARDS[T.card] || civArchetype(T.captures, T.startType);
     return `<div class="tsHead tsWon"><b>${card.icon} Civilization Stage complete</b><button class="tsClose" aria-label="Close">✕</button></div>
-      <p class="tsWonText"><b>One world, one nation.</b> ${esc(card.text)}</p>
+      <p class="tsWonText"><b>One world, one nation.</b> ${esc(card.text)}${T.wonBy === "alliance" ? " You won with your allies at your side: every rival that remained was a friend." : ""}</p>
       <div class="tsStats"><span><b>${T.cities.length}</b>cities</span><span><b>${T.captures.military}</b>by force</span><span><b>${T.captures.economic}</b>bought</span><span><b>${T.captures.religious}</b>converted</span></div>
       <p class="tsHint">Your species earns the <b>${card.name}</b> card. The Space Stage comes next and isn't part of the game yet: keep playing here, or go back to the Tribal Stage.</p>
       <div class="tsBtns"><button class="good" id="cvKeep">Keep playing</button><button id="cvBack">Back to the Tribal Stage</button></div>`;
@@ -674,9 +808,11 @@ export function createCivStage(o) {
         <li><b>Vehicles:</b> each city builds vehicles of its own kind over time (see its production line; factories speed it up). Tap a vehicle, or drag a box (mouse: just drag; touch: switch on the box button) to select several. A command bar appears: <b>Move, Attack, Defend, Follow, Trade/Preach, Capture, Stop</b>. Pick one, then tap its target. Or just tap: a place moves, an enemy is attacked, a spice geyser is captured, a city of yours is defended. On a mouse, right-click does the same.</li>
         <li><b>Take cities</b> three ways: ⚔ military vehicles knock out turrets and then the hall; 💰 economic vehicles trade until you can buy the city; 🕊 religious vehicles preach until it converts. Every city you take makes vehicles of its kind.</li>
         <li><b>Spice:</b> glowing geysers dot the planet (and the map). Send a land or air vehicle to claim one: it pays you every second, richer ones more. Rivals claim them too, and military vehicles can wreck a derrick.</li>
+        <li><b>Cities and money:</b> tap a plot to build or improve (three levels, each better and dearer to keep). Plots form a ring: factories beside factories earn more, houses beside entertainment are happier, houses beside factories are not, temples beside houses spread the faith. Expand the hall for more people, turrets and vehicles. Tap your money at the top to see the books: spice and trade pay, buildings and vehicles cost upkeep.</li>
+        <li><b>Diplomacy:</b> tap a nation for gifts, trade agreements, alliances, war and peace. Allies never fight you and help in your wars; rivals fight each other too. Offers arrive from the rivals: answer them in time.</li>
         <li><b>Nations:</b> tap a nation at the top for gifts and peace. Military nations go to war with those they hate; religious ones preach; economic ones trade.</li>
         <li><b>Superweapon:</b> hold half the planet's cities and it's yours: one city at a time, the way you've been winning them.</li>
-        <li><b>Goal:</b> unite every city on the planet under your flag. Land vehicles cannot cross the sea: other continents need boats or aircraft. How you do it decides your card.</li>
+        <li><b>Goal:</b> unite the planet: hold every city, or three quarters of them with every rival either fallen or your ally. Land vehicles cannot cross the sea: other continents need boats or aircraft. How you do it decides your card.</li>
       </ul>
       ${legacy.lines.length ? `<h5 class="tsKind">What your species brings</h5><ul class="tsHelp tsLegacy">${legacy.lines.map((l) => `<li>${l.icon} ${esc(l.text)}</li>`).join("")}</ul>` : ""}`;
   }
@@ -688,14 +824,8 @@ export function createCivStage(o) {
     el.querySelectorAll("[data-plot]").forEach(
       (b) =>
         (b.onclick = () => {
-          const k = Number(b.dataset.plot),
-            c = sheet.city;
-          if (c.plots[k]) {
-            c.plots[k] = null;
-            buildCity(c);
-            o.sfx("click");
-            sheet.plot = null;
-          } else sheet.plot = sheet.plot === k ? null : k;
+          const k = Number(b.dataset.plot);
+          sheet.plot = sheet.plot === k ? null : k;
           renderSheet();
         }),
     );
@@ -704,13 +834,30 @@ export function createCivStage(o) {
         (b.onclick = () => {
           const role = b.dataset.build,
             c = sheet.city;
-          if (T.money < BUILD_COST[role] || sheet.plot == null) return toast("Not enough money.");
-          T.money -= BUILD_COST[role];
-          c.plots[sheet.plot] = role;
-          sheet.plot = null;
-          buildCity(c);
+          if (sheet.plot == null || !planBuild(c, sheet.plot, role, YOU)) return toast("Not enough money.");
           o.sfx("build");
           pop(c.x, groundY(c.x, c.z) + 8, c.z, "−§" + BUILD_COST[role], "bad");
+          renderSheet();
+        }),
+    );
+    el.querySelectorAll("[data-improve]").forEach(
+      (b) =>
+        (b.onclick = () => {
+          const c = sheet.city;
+          if (b.getAttribute("aria-disabled") === "true" || sheet.plot == null) return;
+          const cost = improveCost(c.plots[sheet.plot], c.levels[sheet.plot]);
+          if (planImprove(c, sheet.plot, YOU)) {
+            o.sfx("build");
+            pop(c.x, groundY(c.x, c.z) + 8, c.z, "−§" + cost, "bad");
+          } else toast("Not enough money.");
+          renderSheet();
+        }),
+    );
+    el.querySelectorAll("[data-demolish]").forEach(
+      (b) =>
+        (b.onclick = () => {
+          if (sheet.plot != null && planDemolish(sheet.city, sheet.plot)) o.sfx("click");
+          sheet.plot = null;
           renderSheet();
         }),
     );
@@ -718,14 +865,19 @@ export function createCivStage(o) {
     el.querySelectorAll("[data-cancel]").forEach((b) => (b.onclick = () => cancelQueued(sheet.city, Number(b.dataset.cancel))));
     el.querySelectorAll("[data-design]").forEach((b) => (b.onclick = () => editDesign(...b.dataset.design.split("|"))));
     on("#cvTurret", () => {
-      const c = sheet.city;
-      T.money -= BUILD_COST.turret;
-      c.turrets++;
-      c.turretHp = 1;
-      buildCity(c);
-      o.sfx("build");
+      if (planTurret(sheet.city, YOU)) o.sfx("build");
       renderSheet();
     });
+    on("#cvHall", () => {
+      const c = sheet.city;
+      if (planHall(c, YOU)) {
+        o.sfx("unlock");
+        toast(`${c.name}'s hall grows: more people, a new turret site and a vehicle slot.`, 4);
+      }
+      renderSheet();
+    });
+    on("#cvAccept", () => T.offers[0] && resolveOffer(T.offers[0], true));
+    on("#cvDecline", () => T.offers[0] && resolveOffer(T.offers[0], false));
     on("#cvFocus", () => rig.flyTo(sheet.city.x, sheet.city.z, 90));
     on("#cvSend", () => {
       orderTo([...T.selected], { type: "city", city: sheet.city });
@@ -735,20 +887,58 @@ export function createCivStage(o) {
     on("#cvGift", () => {
       const n = sheet.nation;
       T.money -= DIPLO.giftCost;
-      n.relation = clampRel(n.relation + DIPLO.gift);
+      react(T.dip, nationIds(), typeOfNation, { kind: "gift", by: YOU, to: n.id });
       o.sfx("gift");
       toast(`The ${n.name} nation thanks you for the gift.`);
       renderSheet();
     });
+    on("#cvDeal", () => {
+      const n = sheet.nation;
+      if (accepts(T.dip, n, "deal", Math.random())) {
+        T.money -= DEAL_COST;
+        makeDeal(T.dip, YOU, n.id);
+        o.sfx("unlock");
+        toast(`Trade agreement with the ${n.name} nation: it pays you both.`);
+        chronicle({ key: "civ:deal:" + n.id, stage: "civ", icon: "💰", text: `Signed a trade agreement with the ${n.name} nation.` });
+      } else toast(`The ${n.name} nation is not interested yet: improve relations first.`);
+      renderSheet();
+    });
+    on("#cvEndDeal", () => {
+      endDeal(T.dip, YOU, sheet.nation.id);
+      renderSheet();
+    });
+    on("#cvAlly", () => {
+      const n = sheet.nation;
+      if (!canAlly(T.dip, YOU, n.id)) toast(`The ${n.name} nation does not trust you that far yet: feelings must reach ${Math.round(55)} (now ${Math.round(n.relation)}). Gifts and trade help.`, 4.5);
+      else if (accepts(T.dip, n, "alliance", Math.random())) {
+        T.money -= ALLIANCE_COST;
+        makeAlliance(T.dip, YOU, n.id);
+        o.sfx("unlock");
+        toast(`You and the ${n.name} nation are allies.`, 4);
+        chronicle({ key: "civ:ally:" + n.id, stage: "civ", icon: "🤝", text: `Allied with the ${n.name} nation.` });
+        checkWin();
+      } else toast(`The ${n.name} nation considers it, but not today.`);
+      renderSheet();
+    });
+    on("#cvBreakAlly", () => {
+      endAlliance(T.dip, YOU, sheet.nation.id);
+      renderSheet();
+    });
+    on("#cvWar", () => {
+      declareBetween(YOU, sheet.nation.id, "You declared war");
+      renderSheet();
+    });
     on("#cvPeace", () => {
       const n = sheet.nation;
-      T.money -= DIPLO.peaceCost;
-      n.war = false;
-      n.relation = Math.max(n.relation, DIPLO.peaceAt);
-      vehiclesOf(n.id).forEach((v) => (v.order = null));
-      o.sfx("unlock");
-      toast(`Peace with the ${n.name} nation.`);
-      chronicle({ key: "civ:peace:" + n.id + ":" + Math.floor(T.time), stage: "civ", icon: "🕊", text: "Made peace with the " + n.name + " nation." });
+      if (accepts(T.dip, n, "peace", Math.random())) {
+        T.money -= DIPLO.peaceCost;
+        makePeace(T.dip, YOU, n.id);
+        vehiclesOf(n.id).forEach((v) => (v.order = null));
+        vehiclesOf(YOU).forEach((v) => v.order?.type === "vehicle" && (v.order = null));
+        o.sfx("unlock");
+        toast(`Peace with the ${n.name} nation.`);
+        chronicle({ key: "civ:peace:" + n.id + ":" + Math.floor(T.time), stage: "civ", icon: "🕊", text: "Made peace with the " + n.name + " nation." });
+      } else toast(`The ${n.name} nation refuses peace for now.`);
       renderSheet();
     });
     on("#cvKeep", closeSheet);
@@ -865,29 +1055,33 @@ export function createCivStage(o) {
   /* ---- taking cities -------------------------------------------------------------------------------- */
   function takeCity(c, owner, method) {
     const from = c.owner;
-    transferCity(c, owner, method);
     // Whatever the old owner had in production is lost with the city (refunded to you if it was yours).
-    if (from === YOU) T.money += c.queue.reduce((s, i) => s + refundOf(i), 0);
-    c.queue = [];
+    const refund = c.queue.reduce((sum, i) => sum + refundOf(i), 0);
+    transferCity(c, owner, method);
+    c.turrets = Math.min(c.turrets, turretSlots(c.hall));
+    if (from === YOU) T.money += refund;
     // A city keeps its kind unless taken by force; force makes it a military city of the taker.
     if (method === "military") c.type = "military";
     else if (method === "religious") c.type = "religious";
     else if (method === "economic") c.type = "economic";
     buildCity(c);
     T.vehicles.filter((v) => v.order?.city === c).forEach((v) => (v.order = null));
+    if (from) react(T.dip, nationIds(), typeOfNation, { kind: "conquest", by: owner, to: from });
+    // A nation that loses its last city falls.
+    const fallen = nationOf(from);
+    if (fallen && fallen.alive && citiesOf(fallen.id).length === 0) {
+      fallen.alive = false;
+      vehiclesOf(fallen.id).forEach(removeVehicle);
+      for (const k of Object.keys(T.dip.allies)) if (k.split("|").includes(fallen.id)) delete T.dip.allies[k];
+      for (const k of Object.keys(T.dip.deals)) if (k.split("|").includes(fallen.id)) delete T.dip.deals[k];
+      toast(`The ${fallen.name} nation is no more.`, 4);
+      if (owner === YOU) chronicle({ key: "civ:fall:" + fallen.id, stage: "civ", icon: "🏳", text: "Absorbed the last city of the " + fallen.name + " nation." });
+    }
     if (owner === YOU) {
       T.captures[method] = (T.captures[method] || 0) + 1;
       o.sfx("unlock");
-      toast(`${c.name} is yours! ${method === "military" ? "Taken by force." : method === "economic" ? "Bought." : "Converted."}`, 4);
+      toast(`${c.name} is yours! ${method === "military" ? "Taken by force: two buildings were lost and the people are restless." : method === "economic" ? "Bought: everything is intact." : "Converted: its people are devout."}`, 4.5);
       chronicle({ key: "civ:take:" + c.id + ":" + method, stage: "civ", icon: CITY_TYPES[method].icon, text: `${method === "military" ? "Captured" : method === "economic" ? "Bought" : "Converted"} the city of ${c.name}.` });
-      const n = nationOf(from);
-      if (n && citiesOf(n.id).length === 0) {
-        n.alive = false;
-        vehiclesOf(n.id).forEach(removeVehicle);
-        toast(`The ${n.name} nation is no more.`, 4);
-        chronicle({ key: "civ:fall:" + n.id, stage: "civ", icon: "🏳", text: "Absorbed the last city of the " + n.name + " nation." });
-      }
-      checkWin();
     } else if (from === YOU) {
       o.sfx("hurt");
       toast(`${c.name} has fallen to the ${ownerName(owner)}.`, 4);
@@ -899,7 +1093,8 @@ export function createCivStage(o) {
       // You may no longer field as many vehicles: the newest ones are lost.
       const extra = vehiclesOf(YOU).length - vehicleCap(YOU);
       if (extra > 0) vehiclesOf(YOU).slice(-extra).forEach(removeVehicle);
-    }
+    } else if (owner && from) tipOnce("rivalwar:" + owner + from, `The ${ownerName(owner)} took ${c.name} from the ${ownerName(from)}.`, 4);
+    checkWin();
     if (sheet?.city === c) renderSheet();
     saveState();
   }
@@ -912,12 +1107,16 @@ export function createCivStage(o) {
     if (nat) nat.relation = clampRel(nat.relation - 15);
     takeCity(c, YOU, "economic");
   }
+  const dominanceNow = () => dominance({ total: T.cities.length, yours: yourCities().length, rivals: T.nations.map((n) => ({ alive: n.alive, allied: allied(T.dip, YOU, n.id) })) });
   function checkWin() {
-    if (T.won || !civWon(T.cities)) return;
+    if (T.won) return;
+    const dom = dominanceNow();
+    if (!dom.won) return;
     T.won = true;
     const card = civArchetype(T.captures, T.startType);
     T.card = card.id;
-    chronicle({ key: "civ:won", stage: "civ", icon: card.icon, text: "United the world as a " + card.name.toLowerCase() + " nation." });
+    T.wonBy = dom.byAlliance ? "alliance" : "conquest";
+    chronicle({ key: "civ:won", stage: "civ", icon: card.icon, text: (dom.byAlliance ? "United the planet with allies as a " : "United the planet as a ") + card.name.toLowerCase() + " nation." });
     o.onWon?.(card);
     saveState();
     setTimeout(() => {
@@ -1395,14 +1594,26 @@ export function createCivStage(o) {
     hud.style.setProperty("--cvC", box.offsetHeight + 8 + "px");
   }
 
+  /** War between two nations (you are YOU). Allies take sides; feelings plunge; the history records it if you are involved. */
+  function declareBetween(a, b, why) {
+    if (cannotDeclare(T.dip, a, b)) return false;
+    declareWar(T.dip, a, b);
+    for (const j of joiners(T.dip, nationIds(), a, b)) {
+      if (!cannotDeclare(T.dip, j.id, j.against)) declareWar(T.dip, j.id, j.against);
+    }
+    const nA = nationOf(a),
+      nB = nationOf(b);
+    if (a === YOU || b === YOU) {
+      const n = a === YOU ? nB : nA;
+      toast(a === YOU ? `War with the ${n.name} nation! ${why}.` : `The ${n.name} nation has declared war on you!`, 4.5);
+      chronicle({ key: "civ:war:" + n.id + ":" + Math.floor(T.time), stage: "civ", icon: "⚔", text: a === YOU ? "Went to war with the " + n.name + " nation." : "The " + n.name + " nation declared war." });
+      o.sfx("roar");
+    } else tipOnce("war:" + pairKey(a, b), `The ${nA.name} and ${nB.name} nations are at war.`, 4);
+    return true;
+  }
   function declareOn(owner, why) {
-    const n = nationOf(owner);
-    if (!n || n.war) return;
-    n.war = true;
-    n.relation = clampRel(n.relation + DIPLO.attack);
-    toast(`War with the ${n.name} nation! ${why}.`, 4);
-    chronicle({ key: "civ:war:" + n.id + ":" + Math.floor(T.time), stage: "civ", icon: "⚔", text: "Went to war with the " + n.name + " nation." });
-    o.sfx("roar");
+    if (!nationOf(owner)) return;
+    declareBetween(YOU, owner, why);
   }
 
   /* ---- vehicle behaviour --------------------------------------------------------------------------- */
@@ -1481,12 +1692,7 @@ export function createCivStage(o) {
     v.pos.z = c.z;
     return Math.hypot(x - v.pos.x, z - v.pos.z);
   }
-  const hostile = (a, b) => {
-    if (!a || !b || a === b) return false;
-    if (a !== YOU && b !== YOU) return false; // rival nations leave each other's vehicles alone
-    const n = nationOf(a === YOU ? b : a);
-    return !!n?.war;
-  };
+  const hostile = (a, b) => !!a && !!b && a !== b && atWar(T.dip, a, b);
   function hurtVehicle(v, dmg, by) {
     v.hp -= dmg;
     v.hurtT = 1.2;
@@ -1562,8 +1768,7 @@ export function createCivStage(o) {
     } else if (v.role === "religious") {
       const faith = cityEconomy(c, ownerMods(c.owner)).faith;
       const done = preachTo(c, v.owner, preachRate(v.unit.preach, faith) * dt);
-      const n = nationOf(c.owner);
-      if (n && v.owner === YOU) n.relation = clampRel(n.relation + DIPLO.preach * dt);
+      if (c.owner) react(T.dip, nationIds(), typeOfNation, { kind: "preach", by: v.owner, to: c.owner, dt });
       if ((v.cool -= dt) <= 0) {
         v.cool = 1.1;
         shot(at, to, "faith");
@@ -1571,9 +1776,7 @@ export function createCivStage(o) {
       if (done) takeCity(c, v.owner, "religious");
     } else {
       const res = deliverTrade(c, v.owner, (v.unit.trade / 6) * dt);
-      const n = nationOf(c.owner);
-      if (n && v.owner === YOU) n.relation = clampRel(n.relation + (DIPLO.trade / 6) * dt);
-      if (c.owner === YOU && v.owner !== YOU) nationOf(v.owner) && (nationOf(v.owner).relation = clampRel(nationOf(v.owner).relation + (DIPLO.trade / 12) * dt));
+      if (c.owner && c.owner !== v.owner) react(T.dip, nationIds(), typeOfNation, { kind: "trade", by: v.owner, to: c.owner, dt });
       if ((v.cool -= dt) <= 0) {
         v.cool = 1.4;
         shot(at, to, "trade");
@@ -1585,14 +1788,8 @@ export function createCivStage(o) {
           v.toldBuy = true;
           v.order = null;
         } else {
-          // A rival economic nation buys a city once its trade is complete and it can afford it.
-          const n = nationOf(v.owner),
-            cost = buyoutCost(cityEconomy(c, {}), 0);
-          // (Your own cities are never for sale: trade with you just pays you both.)
-          if (n && n.money >= cost && c.owner !== YOU) {
-            n.money -= cost;
-            takeCity(c, v.owner, "economic");
-          }
+          // A rival merchant's trade is complete: its planner decides whether to buy (see ai.js), at a price that rises with its holdings.
+          v.order = null;
         }
       }
     }
@@ -1713,7 +1910,9 @@ export function createCivStage(o) {
       // Conversion fades while nobody is preaching.
       for (const k of Object.keys(c.conv)) {
         if (T.vehicles.some((v) => v.owner === k && !v.dead && v.order?.city === c && v.role === "religious" && distXZ(v.mode === "sea" && c.sea ? c.sea : c, v.pos) < 20)) continue;
-        c.conv[k] = Math.max(0, c.conv[k] - 0.6 * dt);
+        // The owner's missionaries at home answer a rival faith: conversion fades four times as fast.
+        const guarded = c.owner && T.vehicles.some((v) => !v.dead && v.owner === c.owner && v.role === "religious" && distXZ(v, c) < 30);
+        c.conv[k] = Math.max(0, c.conv[k] - (guarded ? 2.4 : 0.6) * dt);
         if (!c.conv[k]) delete c.conv[k];
       }
       if (!c.turrets || c.turretHp <= 0) continue;
@@ -1753,7 +1952,214 @@ export function createCivStage(o) {
   }
 
   /* ---- rival nations ---------------------------------------------------------------------------------- */
+  /* What is being done to a city: raiders at its gates or a faith winning over its people. */
+  function threatOf(c) {
+    if (!c.owner) return null;
+    const raided = T.vehicles.some((v) => !v.dead && v.role === "military" && v.order?.city === c && hostile(c.owner, v.owner) && distXZ(v.pos, c) < 80);
+    if (raided) return "military";
+    const conv = Math.max(0, ...Object.entries(c.conv || {}).filter(([k]) => k !== c.owner).map(([, v]) => v));
+    return conv > 25 ? "religious" : null;
+  }
+  /** What the rivals' planners see: every city, every nation's strength, the diplomatic state. */
+  function aiWorld() {
+    const cities = T.cities.map((c) => ({ id: c.id, owner: c.owner, type: c.type, plots: c.plots, turrets: c.turrets, hall: c.hall, hallHp: c.hallHp, turretHp: c.turretHp, faith: cityEconomy(c, {}).faith, devout: c.devout, coastal: c.coastal, continent: c.continent, trade: c.trade, conv: c.conv, queue: c.queue.length, threatened: threatOf(c) }));
+    const nat = (id, type) => {
+      const mine = cities.filter((c) => c.owner === id);
+      return { id, type, alive: mine.length > 0 && (id === YOU || nationOf(id)?.alive !== false), cities: mine.length, strength: strengthOf(mine, vehiclesOf(id).length) };
+    };
+    return {
+      time: T.time,
+      grace: T.time < GRACE,
+      dip: T.dip,
+      cities,
+      geysers: T.geysers,
+      nations: [nat(YOU, T.startType), ...T.nations.map((n) => nat(n.id, n.type))],
+      // The more cities a buyer already has, the dearer the next one: no one buys the planet.
+      buyoutCost: (c, buyer) => Math.round(buyoutCost(cityEconomy(T.cities[c.id], {}), 0) * (1 + 0.3 * Math.max(0, (buyer?.cities?.length ?? 2) - 2))),
+      vehicleCost: 110,
+      youVehicles: vehiclesOf(YOU).length,
+    };
+  }
+  /** Carry out one thing a rival's planner wants. */
+  function applyIntent(n, it, fleet, mine, world) {
+    const city = it.city != null ? T.cities[it.city] : null;
+    // Rivals develop at a human pace: one building, upgrade or turret every half minute or so (answers to threats are quicker).
+    if (["build", "turret", "hall", "improve"].includes(it.k)) {
+      if ((n.devClock ?? 0) > 0 && !it.why) return;
+      if ((n.devClock ?? 0) > 12 && it.why) return;
+      n.devClock = it.why ? 14 : 30 + Math.random() * 25;
+    }
+    if (it.k === "buy") {
+      if ((n.buyClock ?? 0) > 0) return;
+      n.buyClock = 140;
+    }
+    switch (it.k) {
+      case "build": {
+        const plot = city && city.plots[it.plot] === null ? it.plot : city?.plots.indexOf(null);
+        if (city && plot >= 0) planBuild(city, plot, it.role, n.id);
+        break;
+      }
+      case "turret":
+        if (city) planTurret(city, n.id);
+        break;
+      case "hall":
+        if (city) planHall(city, n.id);
+        break;
+      case "improve": {
+        if (!city) break;
+        const best = city.plots.map((r, i) => [r, i]).filter(([r, i]) => r && city.levels[i] < MAX_LEVEL).sort((a, b) => city.levels[a[1]] - city.levels[b[1]])[0];
+        if (best) planImprove(city, best[1], n.id);
+        break;
+      }
+      case "vehicle": {
+        n.vehicleClock = n.vehicleClock ?? 0;
+        if (n.vehicleClock > 0) break;
+        n.vehicleClock = 30;
+        const c = city && city.owner === n.id ? city : mine[0];
+        const modes = allowedModes(mine.length, c.coastal);
+        const mode = it.modeBias === "land" ? "land" : modes.length > 1 && Math.random() < 0.35 ? modes[1 + Math.floor(Math.random() * (modes.length - 1))] : "land";
+        queueVehicle(c, mode, n.id);
+        break;
+      }
+      case "war":
+        declareBetween(n.id, it.on, "");
+        break;
+      case "peace":
+        if (it.with === YOU) offerTo(n, "peace", {});
+        else if (atWar(T.dip, n.id, it.with)) {
+          makePeace(T.dip, n.id, it.with);
+          tipOnce("peace:" + pairKey(n.id, it.with) + Math.floor(T.time / 60), `The ${n.name} and ${nationOf(it.with).name} nations have made peace.`, 3.5);
+        }
+        break;
+      case "ally":
+        if (it.with === YOU) offerTo(n, "alliance", {});
+        else if (canAlly(T.dip, n.id, it.with)) {
+          makeAlliance(T.dip, n.id, it.with);
+          tipOnce("ally:" + pairKey(n.id, it.with), `The ${n.name} and ${nationOf(it.with).name} nations are now allies.`, 4);
+        }
+        break;
+      case "deal":
+        if (it.with === YOU) offerTo(n, "deal", {});
+        else if (canDeal(T.dip, n.id, it.with)) makeDeal(T.dip, n.id, it.with);
+        break;
+      case "gift":
+        if (n.money > 150 && it.to !== YOU) {
+          n.money -= 60;
+          react(T.dip, nationIds(), typeOfNation, { kind: "gift", by: n.id, to: it.to });
+        }
+        break;
+      case "offer":
+        offerTo(n, it.kind, { city: it.city, amount: it.amount });
+        break;
+      case "buy": {
+        if (!city || city.owner === YOU || city.owner === n.id) break;
+        const cost = Math.round(buyoutCost(cityEconomy(city, {}), city.owner ? relOf(T.dip, n.id, city.owner) : 0) * (1 + 0.3 * Math.max(0, mine.length - 2)));
+        if (n.money >= cost) {
+          n.money -= cost;
+          takeCity(city, n.id, "economic");
+        }
+        break;
+      }
+      case "counter":
+        for (const v of fleet) if (!v.order && v.role === "religious") v.order = { type: "defend", city, x: city.x, z: city.z, r: 30 };
+        break;
+      case "target": {
+        if (T.time < 90 && it.kind === "attack") break;
+        const target = city;
+        const role = it.kind === "attack" ? "military" : it.kind === "convert" ? "religious" : "economic";
+        // An army marches together: a militarist waits for three vehicles against a nation, two against an independent city.
+        const idle = fleet.filter((v) => !v.order && v.role === role);
+        if (it.kind === "attack" && idle.length < (target.owner ? 3 : 2)) break;
+        for (const v of fleet) {
+          if (v.order || v.role !== role) continue;
+          if (!canReach(v.mode, target) || (v.mode === "land" && map.continentAt(v.pos.x, v.pos.z) !== target.continent)) continue;
+          v.order = { type: "city", city: target };
+          if (target.owner === YOU && role !== "economic") tipOnce("incoming:" + role, role === "military" ? `Enemy vehicles are heading for ${target.name}! Turrets and your own military vehicles will fight them.` : `Missionaries from the ${n.name} nation are preaching to ${target.name}. Temples help it resist.`, 5);
+        }
+        break;
+      }
+    }
+  }
+
+  /* ---- offers: what the rivals put to you ------------------------------------------------------------ */
+  let offerCool = 60;
+  function offerTo(n, kind, o2) {
+    if (T.offers.length || offerCool > 0) return;
+    if (kind === "peace" && !n.war) return;
+    let text = "",
+      amount = o2.amount || 0;
+    const city = o2.city != null ? T.cities[o2.city] : null;
+    if (kind === "buyout") {
+      if (!city || city.owner !== YOU) return;
+      amount = buyoutOffer(buyoutCost(cityEconomy(city, {}), n.relation));
+      text = `The ${n.name} nation offers §${amount} for ${city.name}. If you sell, it joins them.`;
+    } else if (kind === "tribute") {
+      amount = tributeDemand(T.money);
+      text = `The ${n.name} nation demands §${amount} in tribute. Refuse, and expect trouble.`;
+    } else if (kind === "alliance") text = `The ${n.name} nation proposes an alliance: allies never fight, take your side in wars and help defend your cities.`;
+    else if (kind === "deal") text = `The ${n.name} nation proposes a trade agreement: it pays both of you every second while you are at peace.`;
+    else if (kind === "peace") text = `The ${n.name} nation asks for peace.`;
+    const offer = makeOffer(kind, n.id, { city: city?.id, amount, text });
+    T.offers.push(offer);
+    offerCool = 90;
+    o.sfx("gift");
+    toast(`${n.name} nation: ${kind === "tribute" ? "a demand" : "an offer"}. Tap the nations bar to answer.`, 4);
+    if (!sheet) openSheet("offer");
+  }
+  /** Answer an offer. `silent` for one that ran out. */
+  function resolveOffer(offer, accept, silent = false) {
+    T.offers = T.offers.filter((x) => x !== offer);
+    const n = nationOf(offer.from);
+    if (!n || !n.alive) return;
+    const city = offer.city != null ? T.cities[offer.city] : null;
+    if (offer.kind === "buyout") {
+      if (accept && city && city.owner === YOU) {
+        T.money += offer.amount;
+        chronicle({ key: "civ:sold:" + city.id, stage: "civ", icon: "💰", text: `Sold ${city.name} to the ${n.name} nation for §${offer.amount}.` });
+        takeCity(city, n.id, "economic");
+        bump(T.dip, YOU, n.id, 8);
+      } else if (!accept) bump(T.dip, YOU, n.id, -3);
+    } else if (offer.kind === "tribute") {
+      if (accept && T.money >= offer.amount) {
+        T.money -= offer.amount;
+        bump(T.dip, YOU, n.id, 10);
+        toast(`You paid the ${n.name} nation §${offer.amount}.`);
+      } else {
+        bump(T.dip, YOU, n.id, -20);
+        if (!silent || Math.random() < 0.5) if (Math.random() < 0.55 && T.time > GRACE) declareBetween(n.id, YOU, "");
+      }
+    } else if (offer.kind === "alliance") {
+      if (accept && canAlly(T.dip, YOU, n.id)) {
+        makeAlliance(T.dip, YOU, n.id);
+        chronicle({ key: "civ:ally:" + n.id, stage: "civ", icon: "🤝", text: `Allied with the ${n.name} nation.` });
+        toast(`You and the ${n.name} nation are allies.`);
+      } else if (!accept) bump(T.dip, YOU, n.id, -2);
+    } else if (offer.kind === "deal") {
+      if (accept && canDeal(T.dip, YOU, n.id)) {
+        makeDeal(T.dip, YOU, n.id);
+        toast(`Trade agreement with the ${n.name} nation: it pays you both.`);
+      } else if (!accept) bump(T.dip, YOU, n.id, -1);
+    } else if (offer.kind === "peace") {
+      if (accept) {
+        makePeace(T.dip, YOU, n.id);
+        toast(`Peace with the ${n.name} nation.`);
+        chronicle({ key: "civ:peace:" + n.id + ":" + Math.floor(T.time), stage: "civ", icon: "🕊", text: "Made peace with the " + n.name + " nation." });
+      }
+    }
+    if (sheet?.kind === "offer") {
+      if (T.offers.length) renderSheet();
+      else closeSheet();
+    }
+  }
+
+  /* ---- rival nations ---------------------------------------------------------------------------------- */
   function updateNations(dt) {
+    offerCool -= dt;
+    for (const off of [...T.offers]) if ((off.t += dt) > off.ttl) resolveOffer(off, false, true);
+    // Rivals' feelings toward each other settle; sour alliances end; a nation you fought its way up the world draws wary looks.
+    settle(T.dip, T.nations.filter((x) => x.alive), dt);
+    for (const [a, b] of soureAlliances(T.dip)) if (a === YOU || b === YOU) toast(`Your alliance with the ${nationOf(a === YOU ? b : a).name} nation has broken down.`, 4);
+    const world = aiWorld();
     for (const n of T.nations) {
       if (!n.alive) continue;
       const mine = citiesOf(n.id);
@@ -1761,47 +2167,20 @@ export function createCivStage(o) {
         n.alive = false;
         continue;
       }
-      n.money += (mine.reduce((s, c) => s + cityEconomy(c, {}).income, 0) + spiceIncomeOf(n.id) + tradeIncome(T.cities, n.id)) * dt;
-      // Relations settle toward a resting point that falls as your nation grows: a rising power worries everyone.
-      const rest = n.base - 6 * Math.max(0, yourCities().length - 1);
+      // The rivals are a little less efficient than a careful player (AI_EFFICIENCY), so the planet can be won.
+      n.money = Math.max(0, n.money + econOf(n.id).net * AI_EFFICIENCY * dt);
+      // Their feeling toward you settles toward a resting point that falls as your nation grows: a rising power worries everyone.
+      const rest = n.base - 6 * Math.max(0, yourCities().length - 1) + (allied(T.dip, YOU, n.id) ? 40 : 0) + (hasDeal(T.dip, YOU, n.id) ? 12 : 0);
       if (!n.war) n.relation = clampRel(n.relation + Math.sign(rest - n.relation) * Math.min(Math.abs(rest - n.relation), DIPLO.drift * dt));
-      // Growing their towns: a building or a turret now and then.
-      if ((n.buildClock -= dt) <= 0) {
-        n.buildClock = 45 + Math.random() * 30;
-        const c = mine[Math.floor(Math.random() * mine.length)];
-        const free = c.plots.indexOf(null);
-        if (n.type === "military" && c.turrets < MAX_TURRETS && n.money > BUILD_COST.turret * 2) {
-          c.turrets++;
-          n.money -= BUILD_COST.turret;
-          buildCity(c);
-        } else if (free >= 0 && n.money > 120) {
-          const role = ["house", "fun", "factory", "house", n.type === "religious" ? "temple" : "fun", "factory"][free];
-          c.plots[free] = role;
-          n.money -= BUILD_COST[role];
-          buildCity(c);
-        }
-      }
+      n.vehicleClock = (n.vehicleClock ?? 10) - dt;
+      n.devClock = (n.devClock ?? 20) - dt;
+      n.buyClock = (n.buyClock ?? 90) - dt;
       if ((n.clock -= dt) > 0) continue;
       n.clock = 4;
       const fleet = vehiclesOf(n.id);
-      const plan = nationPlan(
-        { type: n.type, relation: n.relation, war: n.war, money: n.money, vehicles: fleet.length + queuedFor(n.id), cap: vehicleCap(n.id) },
-        { yourCities: yourCities().length, freeCities: citiesOf(null).length, grace: T.time < GRACE },
-      );
-      if (plan.declareWar) {
-        n.war = true;
-        toast(`The ${n.name} nation has declared war on you!`, 4.5);
-        o.sfx("roar");
-        chronicle({ key: "civ:attacked:" + n.id + ":" + Math.floor(T.time), stage: "civ", icon: "⚔", text: "The " + n.name + " nation declared war." });
-      }
-      n.vehicleClock = (n.vehicleClock ?? 10) - 4;
-      if (plan.build && n.vehicleClock <= 0) {
-        n.vehicleClock = 30;
-        const c = mine[Math.floor(Math.random() * mine.length)];
-        const modes = allowedModes(mine.length, c.coastal);
-        const mode = modes.length > 1 && Math.random() < 0.35 ? modes[1 + Math.floor(Math.random() * (modes.length - 1))] : "land";
-        queueVehicle(c, mode, n.id);
-      }
+      const me = { id: n.id, type: n.type, money: n.money, vehicles: fleet.length + queuedFor(n.id), cap: vehicleCap(n.id), cities: world.cities.filter((c) => c.owner === n.id) };
+      const intents = planNation(me, world);
+      for (const it of intents.slice(0, 9)) applyIntent(n, it, fleet, mine, world);
       // Spice: idle vehicles go and claim free geysers they can reach, and raiders wreck their enemies' derricks.
       if (T.time > 60)
         for (const v of fleet) {
@@ -1809,42 +2188,83 @@ export function createCivStage(o) {
           const taken = new Set(fleet.filter((u) => u.order?.type === "geyser").map((u) => u.order.geyser));
           const home = T.cities[v.home] || mine[0];
           const free = T.geysers
-            .filter((g) => (!g.owner || (n.war && g.owner === YOU && v.role === "military")) && !taken.has(g) && canClaim(v, g) && distXZ(g, home) < 330)
+            .filter((g) => (!g.owner || (g.owner !== n.id && hostile(n.id, g.owner) && v.role === "military")) && !taken.has(g) && canClaim(v, g) && distXZ(g, home) < 330)
             .sort((a, b) => distXZ(a, home) - distXZ(b, home))[0];
           if (free && Math.random() < 0.5) v.order = { type: "geyser", geyser: free, x: free.x, z: free.z };
         }
-      // The first minute and a half is for building up, on every side.
-      if (plan.target && T.time > 90) {
-        const pool = plan.target === "you" ? yourCities() : citiesOf(null);
-        for (const v of fleet) {
-          if (v.order) continue;
-          const reachable = pool.filter((c) => canReach(v.mode, c) && (v.mode !== "land" || map.continentAt(v.pos.x, v.pos.z) === c.continent));
-          if (!reachable.length) continue;
-          const home = T.cities[v.home] || mine[0];
-          reachable.sort((a, b) => distXZ(a, home) - distXZ(b, home));
-          // Economic and religious vehicles only go to cities they would actually work on.
-          const c = reachable[0];
-          if (v.role === "military" && plan.target === "you" && !n.war) continue;
-          v.order = { type: "city", city: c };
-          if (c.owner === YOU && v.role !== "economic") tipOnce("incoming:" + v.role, v.role === "military" ? `Enemy vehicles are heading for ${c.name}! Turrets and your own military vehicles will fight them.` : `Missionaries from the ${n.name} nation are preaching to ${c.name}. Temples help it resist.`, 5);
-        }
-      }
     }
   }
   /** Your own military vehicles defend your cities: idle ones within reach go after attackers. */
   function autoDefend() {
-    // Idle armed vehicles near a city under attack go to its defence (yours and the rivals').
+    // Idle armed vehicles near a city under attack go to its defence: the owner's, and its allies'.
     for (const c of T.cities) {
       if (!c.owner) continue;
       const raiders = T.vehicles.filter((v) => !v.dead && v.owner !== c.owner && v.order?.city === c && distXZ(v.pos, c) < 45 && hostile(c.owner, v.owner));
       if (!raiders.length) continue;
-      for (const v of vehiclesOf(c.owner)) if (!v.order && armed(v) && distXZ(v.pos, c) < 70) v.order = { type: "defend", city: c, x: c.x, z: c.z, r: 40 };
+      for (const id of [c.owner, ...alliesOf(T.dip, c.owner)])
+        for (const v of vehiclesOf(id)) if (!v.order && armed(v) && distXZ(v.pos, c) < 70) v.order = { type: "defend", city: c, x: c.x, z: c.z, r: 40 };
     }
   }
 
   /* ---- HUD refresh -------------------------------------------------------------------------------------- */
   const spiceIncomeOf = (owner) => T.geysers.filter((g) => g.owner === owner).reduce((s, g) => s + SPICE_INCOME * g.yield, 0);
-  const income = () => yourCities().reduce((s, c) => s + cityEconomy(c, ownerMods(YOU)).income, 0) + spiceIncomeOf(YOU) + tradeIncome(T.cities, YOU);
+  /** Where an owner's money comes from and goes, a second: city income, spice, trade routes and agreements, less upkeep. */
+  function econOf(owner) {
+    const em = ownerMods(owner);
+    const cities = citiesOf(owner).reduce((sum, c) => sum + cityEconomy(c, em).income, 0);
+    const upkeep = citiesOf(owner).reduce((sum, c) => sum + upkeepOf(c), 0) + vehiclesOf(owner).length * VEHICLE_UPKEEP;
+    const spice = spiceIncomeOf(owner);
+    const trade = tradeIncome(T.cities, owner);
+    const deals = dealIncomeOf(T.dip, owner, aliveIds());
+    return { cities, spice, trade, deals, upkeep, net: cities + spice + trade + deals - upkeep };
+  }
+  const income = () => econOf(YOU).net;
+  const moneyOf = (owner) => (owner === YOU ? T.money : nationOf(owner)?.money ?? 0);
+  const spend = (owner, amount) => {
+    if (owner === YOU) T.money -= amount;
+    else nationOf(owner).money -= amount;
+  };
+  /* ---- the city planner: building, improving and expanding (you and the rivals use the same rules) ---- */
+  function planBuild(c, plot, role, owner = c.owner) {
+    if (c.owner !== owner || c.plots[plot] || !BUILD_COST[role] || moneyOf(owner) < BUILD_COST[role]) return false;
+    spend(owner, BUILD_COST[role]);
+    c.plots[plot] = role;
+    c.levels[plot] = 1;
+    buildCity(c);
+    return true;
+  }
+  function planImprove(c, plot, owner = c.owner) {
+    const role = c.plots[plot];
+    const level = c.levels[plot] || 1;
+    if (c.owner !== owner || !role || level >= MAX_LEVEL || moneyOf(owner) < improveCost(role, level)) return false;
+    spend(owner, improveCost(role, level));
+    c.levels[plot] = level + 1;
+    buildCity(c);
+    return true;
+  }
+  function planHall(c, owner = c.owner) {
+    if (c.owner !== owner || c.hall >= HALL_MAX || moneyOf(owner) < hallCost(c.hall)) return false;
+    spend(owner, hallCost(c.hall));
+    c.hall++;
+    c.hallHp = Math.min(1, c.hallHp + 0.2);
+    buildCity(c);
+    return true;
+  }
+  function planTurret(c, owner = c.owner) {
+    if (c.owner !== owner || c.turrets >= turretSlots(c.hall) || moneyOf(owner) < BUILD_COST.turret) return false;
+    spend(owner, BUILD_COST.turret);
+    c.turrets++;
+    c.turretHp = 1;
+    buildCity(c);
+    return true;
+  }
+  function planDemolish(c, plot) {
+    if (!c.plots[plot]) return false;
+    c.plots[plot] = null;
+    c.levels[plot] = 1;
+    buildCity(c);
+    return true;
+  }
   let hudClock = 0,
     liveClock = 1;
   const marks = new Map();
@@ -1929,11 +2349,14 @@ export function createCivStage(o) {
     $h("#cvCities").textContent = yourCities().length + "/" + T.cities.length;
     $h("#cvVeh").textContent = vehiclesOf(YOU).length + "/" + vehicleCap(YOU);
     const left = T.cities.length - yourCities().length;
-    $h("#cvGoal").textContent = T.won ? `${CIV_CARDS[T.card]?.icon || "✦"} The world is united` : left ? `Unite the planet: ${left} ${left === 1 ? "city" : "cities"} to go` : "";
+    const dom = dominanceNow();
+    $h("#cvGoal").textContent = T.won ? `${CIV_CARDS[T.card]?.icon || "✦"} The planet is united` : left ? `Unite the planet: ${dom.yours}/${dom.need} cities${dom.holdouts ? ` · ${dom.holdouts} rival${dom.holdouts === 1 ? "" : "s"} to subdue or ally` : " · all rivals allied or fallen"}` : "";
     $h("#cvNations").innerHTML = T.nations
       .map((n) => {
-        const col = n.war ? "#ef4b48" : n.relation >= DIPLO.allyAt ? "#3fc26e" : n.relation >= 20 ? "#8fd18f" : n.relation > -20 ? "#b9c3c9" : "#f0a04b";
-        return `<button class="trTribe cvNation" role="listitem" data-nation="${n.id}" style="--rel:${col}" aria-label="${esc(n.name)} nation, ${relationWord(n.relation, n.war)}${n.alive ? "" : ", fallen"}" ${n.alive ? "" : 'aria-disabled="true"'}><span>${n.alive ? CITY_TYPES[n.type].icon : "🏳"}</span></button>`;
+        const ally = allied(T.dip, YOU, n.id),
+          deal = hasDeal(T.dip, YOU, n.id);
+        const col = n.war ? "#ef4b48" : ally ? "#3fc26e" : n.relation >= 20 ? "#8fd18f" : n.relation > -20 ? "#b9c3c9" : "#f0a04b";
+        return `<button class="trTribe cvNation ${ally ? "ally" : deal ? "deal" : ""}" role="listitem" data-nation="${n.id}" style="--rel:${col}" aria-label="${esc(n.name)} nation, ${dipWord(T.dip, YOU, n.id)}${n.alive ? "" : ", fallen"}" ${n.alive ? "" : 'aria-disabled="true"'}><span>${n.alive ? CITY_TYPES[n.type].icon : "🏳"}</span></button>`;
       })
       .join("");
     $h("#cvNations")
@@ -2009,7 +2432,8 @@ export function createCivStage(o) {
       money: Math.round(T.money),
       startType: T.startType,
       nations: T.nations.map((n) => ({ id: n.id, type: n.type, relation: n.relation, war: n.war, money: Math.round(n.money), alive: n.alive })),
-      cities: T.cities.map((c) => ({ id: c.id, owner: c.owner, type: c.type, plots: c.plots, turrets: c.turrets, turretHp: c.turretHp, hallHp: c.hallHp, trade: c.trade, conv: c.conv, unrest: c.unrest, queue: c.queue.map((i) => ({ key: i.key, cost: i.cost, total: i.total, t: Math.round(i.t * 10) / 10 })) })),
+      dip: T.dip,
+      cities: T.cities.map((c) => ({ id: c.id, owner: c.owner, type: c.type, plots: c.plots, turrets: c.turrets, turretHp: c.turretHp, hallHp: c.hallHp, trade: c.trade, conv: c.conv, unrest: c.unrest, levels: c.levels, hall: c.hall, devout: c.devout, queue: c.queue.map((i) => ({ key: i.key, cost: i.cost, total: i.total, t: Math.round(i.t * 10) / 10 })) })),
       geysers: T.geysers.map((g) => ({ owner: g.owner, hp: g.hp })),
       vehicles: T.vehicles.filter((v) => !v.dead).map((v) => ({ owner: v.owner, design: v.key, x: Math.round(v.pos.x * 10) / 10, z: Math.round(v.pos.z * 10) / 10, hp: Math.round((v.hp / v.unit.hp) * 100) / 100, city: v.home })),
       designs: T.designs,
@@ -2250,6 +2674,17 @@ export function createCivStage(o) {
       flora,
       cultures: () => T.cultures,
       fx,
+      econOf,
+      planBuild,
+      planImprove,
+      planHall,
+      planTurret,
+      planDemolish,
+      resolveOffer,
+      declareBetween,
+      aiWorld,
+      dominanceNow,
+      checkWin,
       setCommand,
       executeCommand,
       contextOrder,

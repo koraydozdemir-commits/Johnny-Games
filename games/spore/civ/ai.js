@@ -39,11 +39,16 @@ const COST = { house: 40, factory: 60, fun: 50, temple: 55, turret: 50 };
 export function planNation(me, world) {
   const rand = world.rand || Math.random;
   const p = PERSONALITY[me.type];
+  if (!me.cities.length) return [];
   const out = [];
   const myStrength = strengthOf(me.cities, me.vehicles);
   const others = world.nations.filter((n) => n.id !== me.id && n.alive);
   const rivals = others.filter((n) => !allied(world.dip, me.id, n.id));
   const wars = others.filter((n) => atWar(world.dip, me.id, n.id));
+  // A nation that holds two cities in five is a threat to everyone: the others lean on it.
+  const total = world.cities.length;
+  const myShare = me.cities.length / Math.max(1, total);
+  const leader = others.filter((n) => n.cities >= total * 0.4 && !allied(world.dip, me.id, n.id)).sort((a, b) => b.cities - a.cities)[0] || null;
 
   /* ---- answer threats first: what is being done to my cities decides what I build ---- */
   for (const c of me.cities) {
@@ -93,10 +98,13 @@ export function planNation(me, world) {
   if (!world.grace) {
     if (me.type === "military") {
       // Pick on the weakest neighbour it can beat (never an ally); sue for peace only when losing.
-      const prey = rivals
-        .filter((n) => !atWar(world.dip, me.id, n.id) && n.strength < myStrength * 1.1 && rel(world.dip, me.id, n.id) < 15)
-        .sort((a, b) => a.strength - b.strength)[0];
-      if (prey && wars.length === 0 && rand() < p.aggression * 0.5) out.push({ k: "war", on: prey.id, why: "weak neighbour" });
+      const prey =
+        (leader && !atWar(world.dip, me.id, leader.id) && leader.strength < myStrength * 2 && rel(world.dip, me.id, leader.id) < 40 ? leader : null) ||
+        rivals
+          .filter((n) => !atWar(world.dip, me.id, n.id) && n.strength < myStrength * 1.1 && rel(world.dip, me.id, n.id) < 15)
+          .sort((a, b) => a.strength - b.strength)[0];
+      // It does not start a war before it has an army to fight it with.
+      if (prey && (wars.length === 0 || prey === leader) && me.vehicles >= 3 && rand() < p.aggression * (prey === leader ? 0.9 : 0.5)) out.push({ k: "war", on: prey.id, why: prey === leader ? "balance the leader" : "weak neighbour" });
       for (const w of wars) if (w.strength > myStrength * 1.8 && rand() < 0.5) out.push({ k: "peace", with: w.id });
     } else if (me.type === "religious") {
       // Holy wars against the militant who threaten it; peace with the penitent.
@@ -121,20 +129,22 @@ export function planNation(me, world) {
   const freeCities = world.cities.filter((c) => !c.owner);
   const notMine = world.cities.filter((c) => c.owner !== me.id && !(c.owner && allied(world.dip, me.id, c.owner)));
   if (me.type === "military") {
-    const pool = hostileCities.length ? hostileCities : world.grace ? [] : freeCities;
+    const pool = hostileCities.length ? hostileCities : world.time > 90 ? freeCities : [];
     const best = [...pool].sort((a, b) => cityPower(a) - cityPower(b))[0];
     if (best) out.push({ k: "target", kind: "attack", city: best.id, why: hostileCities.length ? "enemy city" : "independent city" });
   } else if (me.type === "religious") {
     // The weakest faith that is not already devout and not a friend; independents first.
     const pool = (freeCities.length ? freeCities : notMine).filter((c) => !c.devout || c.owner !== me.id);
-    const best = [...pool].sort((a, b) => a.faith + (a.owner ? 2 : 0) - (b.faith + (b.owner ? 2 : 0)))[0];
+    const lean = (c) => (leader && c.owner === leader.id ? -3 : 0);
+    const best = [...pool].sort((a, b) => a.faith + (a.owner ? 2 : 0) + lean(a) - (b.faith + (b.owner ? 2 : 0) + lean(b)))[0];
     if (best && !world.grace) out.push({ k: "target", kind: "convert", city: best.id });
     else if (best) out.push({ k: "target", kind: "convert", city: (freeCities[0] || best).id });
   } else {
     // Trade partners: any city of a nation we are not fighting, richest connection first; buy what is ready.
     const pool = notMine.filter((c) => !c.owner || !atWar(world.dip, me.id, c.owner));
     const ready = pool.filter((c) => (c.trade?.[me.id] || 0) >= 100);
-    const buy = ready.find((c) => me.money >= world.buyoutCost(c) + RESERVE.economic * 0.3);
+    // A merchant does not monopolise the world: past half the planet it stops buying.
+    const buy = myShare >= 0.5 ? null : ready.find((c) => me.money >= world.buyoutCost(c, me) + RESERVE.economic * 0.3);
     if (buy) out.push({ k: "buy", city: buy.id });
     const best = [...pool].filter((c) => (c.trade?.[me.id] || 0) < 100).sort((a, b) => (b.trade?.[me.id] || 0) - (a.trade?.[me.id] || 0) || cityPower(a) - cityPower(b))[0];
     if (best) out.push({ k: "target", kind: "trade", city: best.id });
@@ -147,7 +157,7 @@ export function planNation(me, world) {
     const you = world.cities.filter((c) => c.owner === "you");
     if (me.type === "economic" && me.money > 420 && you.length > 1 && rand() < 0.2 && !atWar(world.dip, me.id, "you")) {
       const weakest = [...you].sort((a, b) => cityPower(a) - cityPower(b))[0];
-      out.push({ k: "offer", kind: "buyout", city: weakest.id, amount: world.buyoutCost(weakest) });
+      out.push({ k: "offer", kind: "buyout", city: weakest.id, amount: world.buyoutCost(weakest, me) });
     }
     if (me.type === "military" && rel(world.dip, me.id, "you") < 10 && !atWar(world.dip, me.id, "you") && myStrength > strengthOf(world.cities.filter((c) => c.owner === "you"), world.youVehicles || 0) * 1.5 && rand() < 0.15) out.push({ k: "offer", kind: "tribute" });
     if (rel(world.dip, me.id, "you") >= ALLY_AT - 5 && canAlly(world.dip, me.id, "you") && rand() < 0.2) out.push({ k: "offer", kind: "alliance" });
