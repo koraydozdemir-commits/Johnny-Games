@@ -2196,9 +2196,9 @@ function startCreatureStage(resume = false, intro = false) {
   state.paused = true;
   document.body.classList.add("creatureMode");
   audio.setAmbient("land");
-  audio.setMusic(fresh && intro ? "land" : "creature");
   const cellCard = progress.dietCard || dietPath(state.plants, state.meat);
   const fresh = !save;
+  audio.setMusic(fresh && intro ? "land" : "creature");
   const record = save?.record || creatureFromCell(currentRecord(), state.cellName);
   creatureStage = createCreatureStage({
     renderer,
