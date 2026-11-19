@@ -14,8 +14,8 @@ export const TIPS = [
     when: (c) => c.playing && c.time > 1.5,
     done: (c) => c.distanceSwum > 4,
     text: {
-      touch: "Put your thumb anywhere on the water and drag the way you want to swim.",
-      desktop: "Hold the mouse button on the water to swim towards it, or use WASD / the arrow keys.",
+      touch: "Drag anywhere to swim.",
+      desktop: "Hold the mouse, or use WASD, to swim.",
     },
   },
   {
@@ -25,8 +25,8 @@ export const TIPS = [
     done: (c) => c.foodEaten > 0,
     text: (c) =>
       c.diet === "meat"
-        ? "Red chunks are meat. Swim your jaw into one to eat it. Bitten cells drop more."
-        : "Green buds are plants. Swim your mouth into one to eat it.",
+        ? "Food discovered: swim into the meat."
+        : "Food discovered: swim into the buds.",
   },
   {
     id: "wrong-diet",
@@ -34,34 +34,34 @@ export const TIPS = [
     when: (c) => c.playing && c.touchedWrongFood,
     text: (c) =>
       c.diet === "plant"
-        ? "Your filter mouth can only eat plants. A Jaw (found on Flickers and Gnashers) lets you eat meat."
-        : "Your jaw can only eat meat. Add a Filter mouth in the editor to eat plants too.",
+        ? "Your mouth only eats plants."
+        : "Your jaw only eats meat.",
   },
   {
     id: "predator",
     priority: 95,
     when: (c) => c.playing && c.predatorNear,
-    text: "Cells with a red rim are hunters. Swim away, or grow spikes and jaws to fight back.",
+    text: "Red rim: a hunter.",
   },
   {
     id: "low-health",
     priority: 92,
     when: (c) => c.playing && c.healthPct < 0.35,
     done: (c) => c.healthPct > 0.6,
-    text: "You're hurt. Eating heals you. Keep away from hunters until you recover.",
+    text: "Hurt. Eat to heal.",
   },
   {
     id: "growth-bar",
     priority: 60,
     when: (c) => c.playing && c.foodEaten >= 2 && !c.mateReady,
-    text: "Every bite fills the growth bar at the top. Fill it to call a mate and evolve.",
+    text: "Eating fills your growth bar.",
     anchor: "#growthBar",
   },
   {
     id: "diet-path",
     priority: 55,
     when: (c) => c.playing && c.foodEaten >= 5,
-    text: "Plants and meat shift your diet path. Where it ends decides your trait card for the next stage.",
+    text: "What you eat shapes your species.",
     anchor: "#dietPath",
   },
   {
@@ -69,38 +69,38 @@ export const TIPS = [
     priority: 80,
     when: (c) => c.playing && c.meteorNear,
     done: (c) => c.shards > 0,
-    text: "A meteor shard! Grab it to unlock a new part.",
+    text: "A meteor shard. Grab it.",
   },
   {
     id: "part-orb",
     priority: 82,
     when: (c) => c.playing && c.partOrbNear,
-    text: "That cell dropped a part. Swim over it to unlock that part.",
+    text: "A part! Swim over it.",
   },
   {
     id: "colony",
     priority: 50,
     when: (c) => c.playing && c.colonyNear && c.diet !== "meat",
-    text: "Plant colonies regrow their buds. Come back to graze them again.",
+    text: "Colonies regrow.",
   },
   {
     id: "kin",
     priority: 58,
     when: (c) => c.playing && c.kinNear,
-    text: "Cells with a teal rim are your own species. They won't hurt you, and your mate will be one of them.",
+    text: "Teal rim: your own kind.",
   },
   {
     id: "giant",
     priority: 88,
     when: (c) => c.playing && c.giantNear,
-    text: "That one is from the next stage. Steer clear until you've grown.",
+    text: "Too big for you. For now.",
   },
   {
     id: "new-part",
     priority: 75,
     when: (c) => c.playing && c.unlockedSinceEditor > 0,
     done: (c) => c.editor,
-    text: "New part unlocked! You can add it to your cell when you next mate and the editor opens.",
+    text: "New part! Add it when you next mate.",
     anchor: "#touchMate",
   },
   {
@@ -108,28 +108,28 @@ export const TIPS = [
     priority: 97,
     when: (c) => c.playing && c.mateReady && !c.mateSignal,
     done: (c) => c.mateSignal,
-    text: { touch: "Growth complete! Tap MATE to call one of your species.", desktop: "Growth complete! Press M (or ♡) to call one of your species." },
+    text: { touch: "Fully grown! Tap MATE to leave the water.", desktop: "Fully grown! Press M to call a mate and leave the water." },
     anchor: "#touchMate",
   },
   {
     id: "mate-follow",
     priority: 96,
     when: (c) => c.playing && c.mateSignal,
-    text: "Follow the heart arrow and touch your mate to start the next generation.",
+    text: "Follow the ♡ to your mate.",
   },
   {
     id: "history",
     priority: 70,
     when: (c) => c.playing && c.generations >= 2,
     done: (c) => c.pathOpened,
-    text: "A new generation joined your species history. Tap ◈ to see your lineage and which trait card your diet is earning.",
+    text: "Your history grows. Tap ◈.",
     anchor: "#pathToggle",
   },
   {
     id: "bite",
     priority: 86,
     when: (c) => c.playing && c.canBite && c.preyNear,
-    text: "Swim your jaw into smaller cells to bite them. A few bites finish them off, and they drop meat to eat.",
+    text: "Bite smaller cells.",
   },
   {
     id: "first-mouth",
@@ -138,8 +138,8 @@ export const TIPS = [
     when: (c) => c.editor && !c.hasMouth,
     done: (c) => c.hasMouth,
     text: {
-      touch: "Every cell needs a mouth. Open the parts drawer with the hammer and drag the Filter (eats plants) or the Jaw (eats meat) onto the front of your cell.",
-      desktop: "Every cell needs a mouth. Drag the Filter (eats plants) or the Jaw (eats meat) onto the front of your cell.",
+      touch: "Needs a mouth: drag one on from the drawer.",
+      desktop: "Needs a mouth: drag one onto the front.",
     },
     anchor: "#buildTool",
   },
@@ -150,8 +150,8 @@ export const TIPS = [
     anchor: "#buildTool",
     when: (c) => c.editor,
     text: {
-      touch: "Drag a part up from the drawer onto your cell. Drag a spine end to stretch it.",
-      desktop: "Drag parts from the list onto your cell. Drag a spine end to stretch it, and scroll on a vertebra to resize it.",
+      touch: "Drag parts onto your cell.",
+      desktop: "Drag parts onto your cell.",
     },
   },
   {
@@ -159,7 +159,7 @@ export const TIPS = [
     priority: 90,
     editor: true,
     when: (c) => c.editor && c.time > 4,
-    text: "Grey parts are still locked. Their card says where to find them: meteor shards, other cells, or growing a stage.",
+    text: "Grey parts are locked. Each card says where to find it.",
   },
 ];
 

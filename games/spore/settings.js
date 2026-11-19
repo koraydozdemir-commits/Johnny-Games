@@ -51,6 +51,8 @@ export function timeAgo(when, now = Date.now()) {
  * @param {() => string} o.getQuality
  * @param {(q:string) => void} o.onQuality
  * @param {(screen:"universes"|"galaxy"|"pedia"|"title") => void} o.onOpen  open one of the universe screens, or the main menu
+ * @param {{ enabled:()=>boolean, set:(on:boolean)=>void, actions:()=>{group:string,label:string,run:()=>void}[] }} [o.dev]
+ *   developer mode: tapping the credits seven times switches it; its tools then show here
  * @param {() => void} [o.onClose]
  */
 export function openSettings(o) {
@@ -82,6 +84,8 @@ export function openSettings(o) {
         <button data-open="pedia"><span aria-hidden="true">📖</span>Sporepedia<small>Everything you've made and found</small></button>
         <button data-open="title"><span aria-hidden="true">✦</span>Main menu<small>Save and go back to the galaxy</small></button>
       </div></section>
+      <section class="spDev" id="spDev" aria-labelledby="spDevTitle" hidden></section>
+      <button class="spCredits" type="button" id="spCredits">Johnny Spore · a Johnny Games project · made with three.js</button>
     </div>`;
   document.body.appendChild(el);
   const $ = (q) => el.querySelector(q);
@@ -106,6 +110,52 @@ export function openSettings(o) {
       el.querySelectorAll(".spSeg button").forEach((x) => x.setAttribute("aria-checked", String(x.dataset.q === o.getQuality())));
     };
   });
+
+  /* Developer tools: shown once developer mode is on. Seven quick taps on the credits switch it. */
+  const devBox = $("#spDev");
+  const renderDev = () => {
+    const on = !!o.dev?.enabled();
+    devBox.hidden = !on;
+    if (!on) return (devBox.innerHTML = "");
+    const groups = {};
+    for (const a of o.dev.actions()) (groups[a.group] ||= []).push(a);
+    const all = Object.values(groups).flat();
+    devBox.innerHTML =
+      '<h3 id="spDevTitle">Developer</h3>' +
+      Object.entries(groups)
+        .map(([g, list]) => `<div class="spDevGroup"><small>${g}</small><div>${list.map((a) => `<button data-dev="${all.indexOf(a)}">${a.label}</button>`).join("")}</div></div>`)
+        .join("") +
+      '<button class="spDevOff" id="spDevOff">Turn off developer mode</button>';
+    devBox.querySelectorAll("[data-dev]").forEach(
+      (b) =>
+        (b.onclick = () => {
+          const act = all[Number(b.dataset.dev)];
+          close();
+          setTimeout(() => act.run(), 260);
+        }),
+    );
+    $("#spDevOff").onclick = () => {
+      o.dev.set(false);
+      renderDev();
+    };
+  };
+  if (o.dev) {
+    renderDev();
+    let taps = 0,
+      last = 0;
+    $("#spCredits").onclick = () => {
+      // Seven taps in a row, each within a second and a half of the last.
+      const now = performance.now();
+      taps = now - last < 1500 ? taps + 1 : 1;
+      last = now;
+      if (taps < 7) return;
+      taps = 0;
+      o.dev.set(!o.dev.enabled());
+      renderDev();
+      $("#spCredits").classList.add("tapped");
+      setTimeout(() => $("#spCredits").classList.remove("tapped"), 600);
+    };
+  }
 
   /* Universes, the galaxy and the Sporepedia have their own screens: settings just opens them. */
   el.querySelectorAll("[data-open]").forEach(

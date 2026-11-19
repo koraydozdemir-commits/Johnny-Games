@@ -14,6 +14,8 @@ import { makeRng } from "../cell-format.js";
 import { atLevel, generateSpecies } from "./species.js";
 import { NPC_ATTACK, npcDamage } from "./balance.js";
 import { courageOf, retreatThreshold } from "./combat-ai.js";
+import { attitudeOf, emptyMemory, fade, readMemory, remember, wariness } from "./memory.js";
+import { addEcoGroup, createEcology, recordKill, saveEcology, startEcoEvent, stepEcology, sustainable } from "./populations.js";
 
 const TAU = Math.PI * 2;
 
@@ -37,11 +39,14 @@ const CAP = { low: 10, medium: 14, high: 22 };
 /**
  * @param {object} c the stage's context: world, regionSeed, wildlife (archetype ids), quality,
  *   spawnNPC, despawnNPC, npcs, P, level(), noticeScale(), distTo, act, voice, pop, hurtPlayer,
- *   noticeHunter, dropCarcass, carcasses, isNight(), now()
+ *   noticeHunter, dropCarcass, carcasses, isNight(), now(), fear(), trust(), provoke(),
+ *   saved (this region's saved wildlife: { groups: [{home, mem}], extra: [{arch, home, seed}], ecology }),
+ *   poi() (something worth a curious look: { x, z, key } or null)
  */
 export function createEcosystem(c) {
   const rng = makeRng(c.regionSeed + 4243);
   const groups = [];
+  const saved = c.saved || {};
   // Place each group's home range out on open ground, away from nests and the arrival shore.
   const avoid = [...c.world.nestSites.map((n) => ({ x: n.x, z: n.z, r: 24 })), { x: 0, z: 178, r: 34 }];
   c.wildlife.forEach((arch, k) => {
@@ -60,32 +65,64 @@ export function createEcosystem(c) {
       }
       if (!home) continue;
       const A = ARCHETYPES[arch];
-      const seed = c.regionSeed + 7001 + groups.length * 1291;
-      // On a homeworld, the wildlife are that planet's library creatures; otherwise a generated species.
-      const base = c.libraryFauna?.(arch, groups.length) || generateSpecies(seed, A.diet, 2);
-      base.role = A.role;
-      base.sizeJitter = (base.sizeJitter || 1) * A.scale;
-      base.temper = A.hunt || A.lurk ? "hostile" : A.territory || A.defend ? "wary" : "skittish";
-      base.wild = arch;
       const size = A.group[0] + Math.floor(rng() * (A.group[1] - A.group[0] + 1));
-      groups.push({
-        arch,
-        A,
-        base,
-        species: atLevel(base, levelFor(A)),
-        home,
-        pos: { ...home }, // the group's centre: drifts round its range even when nobody is watching
-        waypoint: { ...home },
-        hunger: rng() * 0.5,
-        target: null,
-        alarm: null,
-        members: Array.from({ length: size }, () => ({ alive: true, npc: null, back: 0 })),
-      });
+      makeGroup(arch, c.regionSeed + 7001 + groups.length * 1291, home, size, saved.groups?.[groups.length]);
     }
   });
+  /** A wild group: its species (a homeworld library creature, or a generated one), home range and members. */
+  function makeGroup(arch, seed, home, size, keep = null) {
+    const A = ARCHETYPES[arch];
+    const base = c.libraryFauna?.(arch, groups.length) || generateSpecies(seed, A.diet, 2);
+    base.role = A.role;
+    base.sizeJitter = (base.sizeJitter || 1) * A.scale;
+    base.temper = A.hunt || A.lurk ? "hostile" : A.territory || A.defend ? "wary" : "skittish";
+    base.wild = arch;
+    // A herd that moved keeps its new ground.
+    const at = keep?.home && Number.isFinite(keep.home.x) && Number.isFinite(keep.home.z) ? { x: keep.home.x, z: keep.home.z } : home;
+    const g = {
+      index: groups.length,
+      arch,
+      A,
+      base,
+      seed,
+      species: atLevel(base, levelFor(A)),
+      home: at,
+      pos: { ...at }, // the group's centre: drifts round its range even when nobody is watching
+      waypoint: { ...at },
+      hunger: rng() * 0.5,
+      target: null,
+      alarm: null,
+      mem: keep ? readMemory(keep.mem) : emptyMemory(), // what this herd remembers about your kind
+      memHurt: 0,
+      sick: false,
+      exit: null, // set while the group is leaving the region
+      members: Array.from({ length: size }, () => ({ alive: true, npc: null, back: 0 })),
+    };
+    groups.push(g);
+    return g;
+  }
   function levelFor(A) {
     return Math.max(1, Math.min(5, c.level() + A.levelOffset));
   }
+  const nativeCount = groups.length;
+  // Groups that migrated in on an earlier visit.
+  const arrivals = [];
+  for (const x of saved.extra || []) {
+    if (!ARCHETYPES[x?.arch] || !Number.isFinite(x.home?.x) || !Number.isFinite(x.home?.z) || groups.length >= 14) continue;
+    const g = makeGroup(x.arch, x.seed | 0, { x: x.home.x, z: x.home.z }, ARCHETYPES[x.arch].group[1], { home: x.home, mem: x.mem });
+    arrivals.push(g);
+  }
+  // The slow half of the ecosystem: how many each group can sustain, seasons and upheavals (populations.js).
+  const eco = createEcology(
+    groups.map((g) => ({ arch: g.arch, size: g.members.length })),
+    saved.ecology,
+  );
+  groups.forEach((g) => {
+    // A group that is gone (hunted out, starved, moved away) starts with nobody at home.
+    const e = eco.groups[g.index];
+    if (e.gone) g.members.forEach((m) => (m.alive = false));
+    else g.members.forEach((m, k) => (m.alive = k < sustainable(e)));
+  });
 
   /** A new brain level: every wild species moves to its new level (bodies rebuilt as they respawn). */
   function relevel() {
@@ -115,10 +152,24 @@ export function createEcosystem(c) {
     // Nearest groups first, so the cap keeps the ones you can see.
     const order = groups.map((g) => ({ g, d: Math.hypot(g.pos.x - px, g.pos.z - pz) })).sort((a, b) => a.d - b.d);
     for (const { g, d } of order) {
+      const e = eco.groups[g.index];
+      let alive = g.members.filter((m) => m.alive).length;
       g.members.forEach((m, k) => {
-        if (!m.alive && m.back && now > m.back) {
-          m.alive = true; // the ecosystem refills: new young replace the fallen
+        if (!m.alive && m.back && now > m.back && alive < sustainable(e)) {
+          m.alive = true; // the ecosystem refills: new young replace the fallen, if the land can feed them
           m.back = 0;
+          alive++;
+        } else if (!m.alive && !m.back && !e.gone && alive < sustainable(e) && !m.npc) {
+          m.alive = true; // a recovering herd grows back
+          alive++;
+        }
+        // Leaving the region: once at the edge they are gone.
+        if (g.exit && m.npc && !m.npc.dead && Math.hypot(m.npc.pos.x - g.exit.x, m.npc.pos.z - g.exit.z) < 8) {
+          c.despawnNPC(m.npc);
+          m.npc = null;
+          m.alive = false;
+          live--;
+          return;
         }
         if (d > active + 25 && m.npc && !m.npc.dead && !m.npc.hunting) {
           c.despawnNPC(m.npc);
@@ -133,9 +184,28 @@ export function createEcosystem(c) {
   }
 
   /* ---- the abstract simulation (every group, cheaply) ---------------------- */
+  let ecoClock = 0;
+  /** @returns {object[]} what the ecology did this step (for the stage to show), usually nothing */
   function simulate(dt) {
+    // A lean season makes hunters hungry (and bold); plenty makes them lazy.
+    const hungerRate = eco.lush < 0.8 ? 1.6 : eco.lush > 1.3 ? 0.75 : 1;
+    let actions = [];
+    if ((ecoClock -= dt) <= 0) {
+      ecoClock = 5;
+      actions = stepEcology(eco, 5, (i) => groups[i].members.some((m) => m.npc && !m.npc.dead));
+      actions.forEach(applyAction);
+    }
     for (const g of groups) {
-      g.hunger = Math.min(1, g.hunger + dt / (g.A.hunt || g.A.lurk ? 110 : 160));
+      fade(g.mem, dt);
+      g.hunger = Math.min(1, g.hunger + (dt / (g.A.hunt || g.A.lurk ? 110 : 160)) * hungerRate);
+      if (g.exit) {
+        g.waypoint = g.exit;
+        if (Math.hypot(g.pos.x - g.exit.x, g.pos.z - g.exit.z) < 8 && !g.members.some((m) => m.npc && !m.npc.dead)) {
+          g.members.forEach((m) => (m.alive = false));
+          g.pos = { ...g.home };
+          g.exit = null; // off the map: home again, empty, until they come back
+        }
+      }
       if (g.alarm && (g.alarm.t -= dt) <= 0) g.alarm = null;
       const spawned = g.members.some((m) => m.npc && !m.npc.dead);
       if (spawned) {
@@ -156,7 +226,7 @@ export function createEcosystem(c) {
         const dx = g.waypoint.x - g.pos.x,
           dz = g.waypoint.z - g.pos.z,
           dd = Math.hypot(dx, dz);
-        if (dd < 3) {
+        if (dd < 3 && !g.exit) {
           const a = rng() * TAU,
             r = rng() * 40;
           const w = { x: g.home.x + Math.cos(a) * r, z: g.home.z + Math.sin(a) * r };
@@ -168,6 +238,90 @@ export function createEcosystem(c) {
         if (g.hunger > 0.8 && rng() < dt * 0.02) g.hunger = 0.1;
       }
     }
+    return actions;
+  }
+
+  /* ---- the ecology made visible ------------------------------------------------ */
+  /** An open spot near the island's edge, roughly in the direction of (x, z). */
+  function edgeSpot(x, z) {
+    const a0 = Math.atan2(z, x);
+    for (let tries = 0; tries < 40; tries++) {
+      const a = a0 + (rng() - 0.5) * (0.6 + tries * 0.08),
+        d = 165 - tries * 1.5;
+      const p = { x: Math.cos(a) * d, z: Math.sin(a) * d };
+      if (c.world.isOpen(p.x, p.z, 3)) return p;
+    }
+    return { x: Math.cos(a0) * 120, z: Math.sin(a0) * 120 };
+  }
+  /** Open ground for a home range, away from nests, other groups and (if given) a place to avoid. */
+  function freeHome(awayFrom = null, minAway = 60) {
+    for (let tries = 0; tries < 80; tries++) {
+      const a = rng() * TAU,
+        d = 30 + Math.sqrt(rng()) * 130;
+      const p = { x: Math.cos(a) * d, z: Math.sin(a) * d };
+      if (!c.world.isOpen(p.x, p.z, 5)) continue;
+      if (avoid.some((o) => Math.hypot(o.x - p.x, o.z - p.z) < o.r)) continue;
+      if (groups.some((o) => !eco.groups[o.index]?.gone && Math.hypot(o.home.x - p.x, o.home.z - p.z) < 24)) continue;
+      if (awayFrom && Math.hypot(awayFrom.x - p.x, awayFrom.z - p.z) < minAway) continue;
+      return p;
+    }
+    return null;
+  }
+  /** A group moves its home range somewhere new; its members walk there. */
+  function relocate(g, from) {
+    const home = freeHome(from || g.home);
+    if (!home) return false;
+    g.home = home;
+    g.waypoint = { ...home };
+    return true;
+  }
+  /** Carry out what the ecology decided; the stage shows it (hints, chronicle, the land itself). */
+  function applyAction(a) {
+    const g = groups[a.group];
+    if (a.type === "migrate" && g) {
+      a.ok = relocate(g, c.P.pos);
+    } else if (a.type === "leave" && g) {
+      g.exit = edgeSpot(g.pos.x, g.pos.z);
+      g.target = null;
+      // Those not on screen are simply gone; those you can see walk off.
+      g.members.forEach((m) => !m.npc && (m.alive = false));
+    } else if (a.type === "return" && g) {
+      g.exit = null;
+      const from = edgeSpot(g.home.x, g.home.z);
+      g.pos = { ...from };
+      g.waypoint = { ...g.home };
+    } else if (a.type === "start" && a.arrive) {
+      const ng = arrive(a.arrive);
+      a.newGroup = ng ? ng.index : undefined;
+    } else if (a.type === "start" && a.id === "sickness" && g) {
+      g.sick = true;
+    } else if (a.type === "end" && a.id === "sickness" && g) {
+      g.sick = false;
+    } else if (a.type === "start" && a.id === "clash" && g && groups[a.rival]) {
+      g.rival = groups[a.rival];
+      groups[a.rival].rival = g;
+    } else if (a.type === "end" && a.id === "clash" && g && groups[a.rival]) {
+      // The weaker side gives up the ground.
+      const r = groups[a.rival];
+      g.rival = r.rival = null;
+      const loser = eco.groups[g.index].pop < eco.groups[r.index].pop ? g : r;
+      relocate(loser, loser.home);
+      a.loser = loser.index;
+    }
+  }
+  /** A new group walks into the region from the coast to its new home range. */
+  function arrive(arch) {
+    if (!ARCHETYPES[arch] || groups.length >= 14) return null;
+    const home = freeHome(null);
+    if (!home) return null;
+    const A = ARCHETYPES[arch];
+    const g = makeGroup(arch, c.regionSeed + 9901 + groups.length * 733, home, A.group[1]);
+    addEcoGroup(eco, arch, g.members.length);
+    const from = edgeSpot(home.x, home.z);
+    g.pos = { ...from };
+    g.waypoint = { ...home };
+    arrivals.push(g);
+    return g;
   }
 
   /* ---- one creature's decisions -------------------------------------------- */
@@ -175,9 +329,14 @@ export function createEcosystem(c) {
   function threatTo(n, d) {
     const t = n.traits;
     const P = c.P;
-    // You are frightening if you've been fighting, eat meat, or are much bigger. Timid ones scare easily.
-    const scary = P.aggro > 0 || P.diet === "meat" || P.scale > n.scale * 1.35 || n.wildMember.hurtByYou;
-    const range = (n.wild.A.flee * (0.6 + t.timid * 0.8) + (P.aggro > 0 ? 6 : 0)) * c.noticeScale();
+    // You are frightening if you've been fighting, eat meat, are much bigger, or your kind has a name as
+    // a hunter. Timid ones scare easily; a feared species is spotted and fled from much further off.
+    const fear = c.fear?.() || 0;
+    const att = attitudeOf(n.wild.mem);
+    // A herd that trusts your kind keeps grazing beside you, unless you are actually fighting.
+    const trusted = (att === "warm" || att === "loyal") && P.aggro <= 0;
+    const scary = !trusted && (P.aggro > 0 || P.diet === "meat" || P.scale > n.scale * 1.35 || n.wildMember.hurtByYou || fear > 0.3);
+    const range = (n.wild.A.flee * (0.6 + t.timid * 0.8) + (P.aggro > 0 ? 6 : 0)) * (1 + fear * 0.9) * wariness(n.wild.mem) * c.noticeScale();
     if (scary && d < range) return { x: P.pos.x, z: P.pos.z, who: "you" };
     for (const o of c.npcs) {
       if (o === n || o.dead || !o.wild || !(o.wb.mode === "hunt" || o.wb.mode === "pounce")) continue;
@@ -268,8 +427,51 @@ export function createEcosystem(c) {
       v.wild.alarm = { x: by.pos.x, z: by.pos.z, t: 4 };
     }
   }
+  /**
+   * A wild creature died. The ecology loses one; if you did it, the herd remembers, those nearby react
+   * (prey bolt, fighters come for you), and if it was hunting another herd, that herd owes you one.
+   * @returns {{ rescued: object|null }}
+   */
+  function onKilled(n, byYou) {
+    const g = n.wild;
+    recordKill(eco, g.index, byYou);
+    alarmAround(n.pos.x, n.pos.z, 20, n);
+    if (!byYou) return { rescued: null };
+    remember(g.mem, "kill");
+    let witnessed = false;
+    for (const m of c.npcs) {
+      if (m === n || m.dead || m.wild !== g || Math.hypot(m.pos.x - n.pos.x, m.pos.z - n.pos.z) > 30) continue;
+      witnessed = true;
+      if (g.A.hunt || g.A.lurk || g.A.territory || g.A.defend) m.wildMember.hurtByYou = c.now();
+    }
+    if (witnessed) remember(g.mem, "witnessedKill");
+    // Was it hunting a herd? Then you saved them.
+    const prey = n.wb?.target && n.wb.target !== "you" && n.wb.target.wild ? n.wb.target.wild : null;
+    if (prey && prey !== g && !n.wb.target.dead) {
+      remember(prey.mem, "rescue");
+      return { rescued: prey, saved: n.wb.target };
+    }
+    return { rescued: null };
+  }
+  /** You hurt one: the herd remembers (a little, and not every bite). */
+  function onHurt(n) {
+    const g = n.wild;
+    if (c.now() - g.memHurt < 3) return;
+    g.memHurt = c.now();
+    remember(g.mem, "hurt");
+  }
+  /** A death nearby: prey scatter from the spot (skip `except`). */
+  function alarmAround(x, z, r, except = null) {
+    for (const m of c.npcs) {
+      if (m === except || m.dead || !m.wild || (m.wild.A.hunt || m.wild.A.lurk || m.wild.A.territory || m.wild.A.defend)) continue;
+      if (Math.hypot(m.pos.x - x, m.pos.z - z) > r) continue;
+      m.wild.alarm = { x, z, t: 4 };
+      m.wb.think = 0;
+    }
+  }
   /** A wild creature dies: it leaves a carcass, and in a few minutes the herd has a new member. */
   function die(n, byYou) {
+    onKilled(n, byYou);
     n.dead = true;
     n.hunting = false;
     n.body.die();
@@ -291,8 +493,7 @@ export function createEcosystem(c) {
     const g = n.wild,
       A = g.A,
       w = n.wb,
-      t = n.traits,
-      P = c.P;
+      t = n.traits;
     w.think -= dt;
     w.t -= dt;
     const fresh = w.think <= 0;
@@ -300,12 +501,23 @@ export function createEcosystem(c) {
     const night = c.isNight();
 
     // The stage marks wildMember.hurtByYou when you hurt one: it remembers for half a minute.
-    const angryAtYou = n.wildMember.hurtByYou && c.now() - n.wildMember.hurtByYou < 30;
+    const angryAtYou = (n.wildMember.hurtByYou && c.now() - n.wildMember.hurtByYou < 30) || (attitudeOf(g.mem) === "hostile" && d < 22 * c.noticeScale());
 
     if (fresh) {
       if (A.hunt || A.lurk || A.territory || A.defend) decideFighter(n, g, A, w, t, d, angryAtYou);
       else decidePrey(n, g, A, w, t, d, night);
     }
+    if (g.sick && d < 30 && (w.cough = (w.cough ?? Math.random() * 6) - dt) <= 0) {
+      w.cough = 6 + Math.random() * 6;
+      c.pop(n, "🤢");
+    }
+    const r = act(n, g, A, w, t, d, dt);
+    if (g.sick && r.pace) r.pace *= 0.65;
+    return r;
+  }
+  /** Do what was decided. */
+  function act(n, g, A, w, t, d, dt) {
+    const P = c.P;
 
     // Act on the decision.
     switch (w.mode) {
@@ -367,6 +579,19 @@ export function createEcosystem(c) {
           w.target = "you";
         }
         return { want: null, pace: 0 };
+      case "investigate": {
+        // Something new: walk over, sniff at it, and move on.
+        const p = w.poi;
+        if (!p || w.t <= 0) {
+          n.body.setCrouch(0);
+          w.mode = "wander";
+          return { want: null, pace: 0 };
+        }
+        if (Math.hypot(p.x - n.pos.x, p.z - n.pos.z) > 2.5 + n.scale) return { want: p, pace: A.speed * 0.45 };
+        n.heading = Math.atan2(-(p.z - n.pos.z), p.x - n.pos.x);
+        n.body.setCrouch(1);
+        return { want: null, pace: 0 };
+      }
       case "lurk":
         n.body.setCrouch(1);
         if (Math.hypot(n.pos.x - g.home.x, n.pos.z - g.home.z) > 3) return { want: g.home, pace: A.speed * 0.4 };
@@ -421,7 +646,9 @@ export function createEcosystem(c) {
     }
     const P = c.P;
     if (w.mode === "graze" && w.t > 0) return; // finish the mouthful
-    if (t.curious > 0.6 && d < 16 && P.aggro <= 0 && P.diet !== "meat" && w.mode !== "curious" && Math.random() < t.curious * 0.4) {
+    // A species known to be peaceful draws the curious from further, even if it eats meat.
+    const trust = c.trust?.() || 0;
+    if (t.curious > 0.6 - trust * 0.3 && d < 16 + trust * 10 && P.aggro <= 0 && (P.diet !== "meat" || trust > 0.4) && (c.fear?.() || 0) < 0.3 && w.mode !== "curious" && Math.random() < t.curious * (0.4 + trust * 0.5)) {
       w.mode = "curious";
       w.t = 6;
       if (!w.seen) {
@@ -431,6 +658,17 @@ export function createEcosystem(c) {
       return;
     }
     if (w.mode === "curious" && w.t > 0 && d < 20) return;
+    if (w.mode === "investigate" && w.t > 0) return;
+    // Curious ones go and look at anything new: a fallen meteorite, a fresh carcass.
+    const poi = t.curious > 0.55 ? c.poi?.(n) : null;
+    if (poi && !w.seenPoi?.has(poi.key) && Math.hypot(poi.x - n.pos.x, poi.z - n.pos.z) < 40 && Math.random() < 0.35) {
+      (w.seenPoi ||= new Set()).add(poi.key);
+      w.mode = "investigate";
+      w.poi = poi;
+      w.t = 12;
+      c.pop(n, "❓");
+      return;
+    }
     if (g.hunger > 0.4 && Math.random() < 0.25) {
       w.mode = "graze";
       w.t = 3 + Math.random() * 3;
@@ -464,7 +702,7 @@ export function createEcosystem(c) {
       return;
     }
     // You: hunted if they're hungry and you're within reach, or if you've hurt them.
-    const aggro = (6 + (n.species.level || 1)) * (0.7 + t.aggression * 0.6) * notice;
+    const aggro = (6 + (n.species.level || 1)) * (0.7 + t.aggression * 0.6) * notice * (c.provoke?.() || 1);
     if (angryAtYou && d < 30) return startHunt(n, w, "you", d);
     if (A.lurk) {
       if (d < aggro * 0.9) return startHunt(n, w, "you", d, true);
@@ -486,6 +724,22 @@ export function createEcosystem(c) {
       }
       if (w.mode !== "hunt") w.mode = "wander";
       return;
+    }
+    if (g.rival) {
+      let foe = null,
+        fd = 45;
+      for (const o of c.npcs)
+        if (!o.dead && o.wild === g.rival) {
+          const od = Math.hypot(o.pos.x - n.pos.x, o.pos.z - n.pos.z);
+          if (od < fd) {
+            foe = o;
+            fd = od;
+          }
+        }
+      if (foe) {
+        if (w.mode !== "hunt") c.pop(n, "😠", "bad");
+        return startHunt(n, w, foe, d);
+      }
     }
     if (A.hunt) {
       // A kill nearby comes first: eat before hunting again.
@@ -515,7 +769,21 @@ export function createEcosystem(c) {
     }
   }
 
-  return { groups, stream, simulate, think, relevel, die, hurtWild };
+  /** What to keep in the region save. */
+  function save() {
+    return {
+      groups: groups.slice(0, nativeCount).map((g) => ({ home: { x: Math.round(g.home.x), z: Math.round(g.home.z) }, mem: g.mem })),
+      extra: arrivals.map((g) => ({ arch: g.arch, seed: g.seed, home: { x: Math.round(g.home.x), z: Math.round(g.home.z) }, mem: g.mem })),
+      ecology: saveEcology(eco),
+    };
+  }
+  /** Start an ecological event now (tests, and story moments that call for one). */
+  function force(id) {
+    const a = startEcoEvent(eco, id);
+    applyAction(a);
+    return a;
+  }
+  return { groups, eco, force, stream, simulate, think, relevel, die, hurtWild, onKilled, onHurt, alarmAround, save, arrive, relocate };
 }
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v));

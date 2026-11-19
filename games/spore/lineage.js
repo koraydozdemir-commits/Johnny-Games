@@ -4,6 +4,7 @@
  * and later moved into a per-universe save unchanged.
  */
 import { CREATURE_CARDS, DIET_CARDS, creatureCard } from "./traits.js";
+import { TRIBE_INSTINCT } from "./creature/identity.js";
 
 export const CHRONICLE_KEY = "johnny-spore-chronicle";
 export const CHRONICLE_VERSION = 1;
@@ -37,8 +38,9 @@ export const TRIBE_TRAITS = {
  * The combined legacy the Tribal Stage starts with.
  * @param {string|null} cellCard      herbivore | omnivore | carnivore
  * @param {string|null} creatureCardId predator | charmer | adaptable
+ * @param {string|null} [instinct]   the Creature Stage instinct card (creature/identity.js)
  */
-export function tribeLegacy(cellCard, creatureCardId) {
+export function tribeLegacy(cellCard, creatureCardId, instinct = null) {
   const out = { damage: 1, gift: 1, music: 1, carry: 0, startTool: null, relation: 0, hutLevel: 1, lines: [] };
   const add = (stage, src) => {
     if (!src) return;
@@ -54,6 +56,7 @@ export function tribeLegacy(cellCard, creatureCardId) {
   };
   add("cell", TRIBE_LEGACY.cell[cellCard]);
   add("creature", TRIBE_LEGACY.creature[creatureCardId]);
+  add("creature", TRIBE_INSTINCT[instinct]);
   return out;
 }
 
@@ -105,7 +108,7 @@ export function eventsFromSaves(s) {
   const name = s.regionName || ((id) => id);
   if (s.cell?.cellStageComplete && DIET_CARDS[s.cell.dietCard]) {
     const c = DIET_CARDS[s.cell.dietCard];
-    out.push({ key: "cell:complete", stage: "cell", icon: c.icon, text: "Left the water as a " + c.title.toLowerCase() + ", earning " + c.ability + "." });
+    out.push({ key: "cell:complete", stage: "cell", icon: c.icon, text: "Left the water as " + (/^[aeiou]/i.test(c.title) ? "an " : "a ") + c.title.toLowerCase() + ", earning " + c.ability + "." });
   }
   const cr = s.creature;
   if (cr) {

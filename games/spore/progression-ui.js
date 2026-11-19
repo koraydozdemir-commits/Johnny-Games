@@ -64,6 +64,57 @@ function nextCard() {
   }, 3600);
 }
 
+/* ---- trait card reveal ---- */
+/**
+ * The end-of-stage trait card: it flips over to show what your species became, why, and what it means
+ * from now on. One button closes it. Keyboard: Enter/Escape close; focus stays inside.
+ * @param {{ stage:string, title:string, icon:string, color:string, blurb?:string, ability?:string,
+ *   reasons?:string[], pros?:string[], cons?:string[], later?:{icon:string,text:string}[],
+ *   button?:string, reducedMotion?:boolean, onClose?:()=>void }} d
+ */
+export function showTraitCard(d) {
+  document.querySelector(".traitReveal")?.remove();
+  const el = document.createElement("div");
+  el.className = "traitReveal" + (d.reducedMotion ? " still" : "");
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-modal", "true");
+  el.setAttribute("aria-labelledby", "trTitle");
+  el.style.setProperty("--c", d.color || "#f5c75a");
+  const list = (items, cls, mark) => (items?.length ? '<ul class="' + cls + '">' + items.map((t) => '<li><span aria-hidden="true">' + mark + "</span>" + esc(t) + "</li>").join("") + "</ul>" : "");
+  el.innerHTML =
+    '<div class="trCard"><div class="trInner">' +
+    '<div class="trFace trBack" aria-hidden="true">◈</div>' +
+    '<div class="trFace trFront">' +
+    '<small class="trKind">' + esc(d.stage) + " · trait card</small>" +
+    '<div class="trIcon" aria-hidden="true">' + esc(d.icon) + "</div>" +
+    '<h2 id="trTitle">' + esc(d.title) + "</h2>" +
+    (d.ability ? '<em class="trAbility">' + esc(d.ability) + "</em>" : "") +
+    (d.blurb ? '<p class="trBlurb">' + esc(d.blurb) + "</p>" : "") +
+    (d.reasons?.length ? '<div class="trSection"><b>Earned by</b>' + list(d.reasons, "trReasons", "•") + "</div>" : "") +
+    '<div class="trSection trFx">' + list(d.pros, "trPros", "+") + list(d.cons, "trCons", "−") + "</div>" +
+    (d.later?.length ? '<div class="trSection"><b>Later</b><ul class="trLater">' + d.later.map((l) => '<li><span aria-hidden="true">' + esc(l.icon) + "</span>" + esc(l.text) + "</li>").join("") + "</ul></div>" : "") +
+    '<button class="trGo" type="button">' + esc(d.button || "Continue") + "</button>" +
+    "</div></div></div>";
+  document.body.appendChild(el);
+  const go = el.querySelector(".trGo");
+  const close = () => {
+    el.classList.add("out");
+    setTimeout(() => el.remove(), d.reducedMotion ? 0 : 300);
+    d.onClose?.();
+  };
+  go.onclick = close;
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") close();
+    if (e.key === "Tab") {
+      e.preventDefault();
+      go.focus();
+    }
+  });
+  requestAnimationFrame(() => el.classList.add("in"));
+  setTimeout(() => el.classList.add("flipped"), d.reducedMotion ? 0 : 650);
+  setTimeout(() => go.focus(), d.reducedMotion ? 0 : 900);
+}
+
 /* ---- Species history ---- */
 const dietWord = (d) => (d === "meat" ? "Carnivore" : d === "plant" ? "Herbivore" : "Omnivore");
 /** How you treated a species, in a few words, and the badge colour that goes with it. */
@@ -96,6 +147,24 @@ function libraryHtml(list) {
     .join("");
   return "<h3>SPECIES LIBRARY · " + list.length + " DISCOVERED</h3>" + '<div class="library">' + cards + "</div>";
 }
+/** The species' character: the instinct earned (or forming), the leanings behind it, and why. */
+const AXES = [
+  ["predation", "Hunter"],
+  ["sociality", "Social"],
+  ["caution", "Cautious"],
+  ["dominance", "Dominant"],
+  ["breadth", "Varied diet"],
+  ["care", "Protective"],
+];
+function identityHtml(c) {
+  const bars = AXES.map(([k, label]) => '<div class="idAxis"><span>' + label + '</span><i><b style="width:' + Math.round((c.profile[k] || 0) * 100) + '%"></b></i></div>').join("");
+  const head = c.id
+    ? '<div class="idCard" style="--c:' + c.color + '"><span class="idIcon" aria-hidden="true">' + esc(c.icon) + "</span><div><b>" + (c.earned ? "" : "Becoming: ") + esc(c.title) + "</b><p>" + esc(c.blurb) + "</p>" +
+      (c.reasons.length ? '<p class="idWhy">' + c.reasons.map(esc).join(" · ") + "</p>" : "") +
+      '<p class="idFx"><span class="pro">+ ' + c.pros.map(esc).join("</span> <span class=pro>+ ") + '</span> <span class="con">− ' + c.cons.map(esc).join("</span> <span class=con>− ") + "</span></p></div></div>"
+    : '<p style="color:#9fb8c2">No character yet. It forms from what your species does.</p>';
+  return "<h3>CHARACTER" + (c.earned ? "" : " · FORMING") + "</h3>" + head + '<div class="idAxes">' + bars + "</div>";
+}
 /**
  * Spore-style species history: the evolution track (one consequence card per stage) and the
  * lineage of every generation's design.
@@ -114,7 +183,9 @@ export function openHistoryScreen(d) {
     } else if (st.id === "creature" && d.creature) {
       const card = d.creature.card ? CREATURE_CARDS[d.creature.card] : null;
       face = card
-        ? '<div class="tcSlot earned" style="--c:' + card.color + '"><span>' + card.icon + "</span><b>" + card.title + "</b><small>" + card.ability + "</small></div>"
+        ? d.identity?.earned
+          ? '<div class="tcSlot earned" style="--c:' + d.identity.color + '"><span>' + d.identity.icon + "</span><b>" + esc(d.identity.title) + "</b><small>" + card.title + " · " + card.ability + "</small></div>"
+          : '<div class="tcSlot earned" style="--c:' + card.color + '"><span>' + card.icon + "</span><b>" + card.title + "</b><small>" + card.ability + "</small></div>"
         : '<div class="tcSlot pending" style="--c:#f5c75a"><span>🧠</span><b>Brain ' + d.creature.brain + ' / 5</b><small>' + d.creature.alliances + " allied · " + d.creature.extinctions + " extinct</small></div>";
     } else if (st.id === "tribe" && d.tribe) {
       const t = d.tribe;
@@ -159,16 +230,17 @@ export function openHistoryScreen(d) {
   const chronicle = d.chronicle?.length
     ? "<h3>CHRONICLE · " + d.chronicle.length + " MOMENT" + (d.chronicle.length === 1 ? "" : "S") + '</h3><ol class="chronicle">' +
       d.chronicle
-        .map((e) => '<li class="chr ' + esc(e.stage) + '"><span class="chrStage" title="' + esc(e.stage) + ' stage">' + STAGE_ICON[e.stage] + '</span><span class="chrIcon" aria-hidden="true">' + esc(e.icon) + "</span><span>" + esc(e.text) + "</span></li>")
+        .map((e) => '<li class="chr ' + esc(e.stage) + (/^(leaning|milestone|creature:card|cell:complete|tribe:won|first:)/.test(e.key) ? " key" : "") + '"><span class="chrStage" title="' + esc(e.stage) + ' stage">' + STAGE_ICON[e.stage] + '</span><span class="chrIcon" aria-hidden="true">' + esc(e.icon) + "</span><span>" + esc(e.text) + "</span></li>")
         .join("") +
       "</ol>"
     : "";
+  const identity = d.identity ? identityHtml(d.identity) : "";
   const legacy = d.legacy?.length
     ? '<h3>LEGACY IN THE TRIBAL STAGE</h3><ul class="legacyList">' + d.legacy.map((l) => "<li>" + esc(l.icon) + " <b>" + esc(l.name) + "</b> " + esc(l.text) + "</li>").join("") + "</ul>"
     : "";
   $("#pathPanel").innerHTML =
     '<button class="close" id="pathClose">Close</button><h2 id="pathTitle">' + esc(d.name) + " · Species history</h2>" +
-    '<div style="color:#9fb8c2;font-size:13px">Every stage ends with a consequence trait: <b style="color:#ef4b48">red</b> for carnivores, <b style="color:#3fc26e">green</b> for herbivores, <b style="color:#3f9cf0">blue</b> for omnivores. Each one becomes an ability later on.</div>' +
+    '<div style="color:#9fb8c2;font-size:13px">Each stage ends with a trait card earned by how your species behaved: <b style="color:#ef4b48">red</b> aggressive, <b style="color:#3fc26e">green</b> peaceful, <b style="color:#3f9cf0">blue</b> balanced.</div>' +
     "<h3>EVOLUTION TRACK</h3>" +
     '<div class="evoTrack">' + track + "</div>" +
     "<h3>CELL STAGE DIET</h3>" +
@@ -176,6 +248,7 @@ export function openHistoryScreen(d) {
     (DIET_THRESHOLDS.carnivore - DIET_THRESHOLDS.herbivore) * 100 + '"></i><i class="dpZone carn" style="flex:' + (1 - DIET_THRESHOLDS.carnivore) * 100 +
     '"></i><i class="dpMark" style="left:' + lean * 100 + '%"></i></div>' +
     '<div class="dpCounts" style="margin-top:6px"><span>🌿 ' + d.plants + " plants</span><span>" + d.meat + " meat 🥩</span></div>" +
+    identity +
     legacy +
     chronicle +
     "<h3>LINEAGE · " + d.history.length + " GENERATION" + (d.history.length === 1 ? "" : "S") + "</h3>" +

@@ -9,6 +9,7 @@
  */
 import * as THREE from "three";
 import { ISLAND, createIsland, heightAt } from "../creature/world.js";
+import { CUTSCENES, ease, mix, span } from "../cinematics.js";
 import { steerAround } from "../creature/world.js";
 import { generateSpecies } from "../creature/species.js";
 import { buildDesignMesh, designMaterials } from "../creations/mesh.js";
@@ -102,7 +103,7 @@ export function createCivStage(o) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 900);
   const save = o.save || null;
-  const world = createIsland(scene, o.quality, o.regionId || "coast");
+  const world = createIsland(scene, o.quality, o.regionId || "coast", { fossils: false });
   scene.fog.near = 180;
   scene.fog.far = 520;
   const legacy = civLegacy(o.legacy || {});
@@ -899,6 +900,14 @@ export function createCivStage(o) {
   /* ---- camera and input ----------------------------------------------------------------------------- */
   const cam = { x: HOME.x, z: HOME.z - 20, dist: 115, sx: HOME.x, sz: HOME.z - 20, sd: 115 };
   const PITCH = { up: 0.78, back: 0.62 };
+  /* Arriving from the Tribal Stage's dawn: the camera comes down out of the bright sky onto your city. */
+  let arrive = o.intro === "arrive" && o.frame ? { t: 0, k: o.reducedMotion?.() ? 1 / 0.6 : 1, frame: o.frame, titled: false } : null;
+  if (!arrive) o.frame?.remove();
+  else {
+    o.frame.title(false);
+    o.frame.setSkip?.(() => arrive && (arrive.t = CUTSCENES.civArrive.end));
+    hud.classList.add("cine"); // the city labels and buttons come in once the camera has landed
+  }
   function placeCamera(dt) {
     const k = 1 - Math.exp(-dt * 10);
     cam.sx += (cam.x - cam.sx) * k;
@@ -907,6 +916,25 @@ export function createCivStage(o) {
     const gy = groundY(cam.sx, cam.sz);
     camera.position.set(cam.sx, gy + cam.sd * PITCH.up, cam.sz + cam.sd * PITCH.back);
     camera.lookAt(cam.sx, gy, cam.sz);
+    if (!arrive) return;
+    const a = arrive;
+    a.t += dt * a.k;
+    const T = CUTSCENES.civArrive.end;
+    if (a.t > 0.15) a.frame.flash(false);
+    if (a.t > 0.8 && !a.titled) {
+      a.titled = true;
+      a.frame.title(true, o.name || "Your nation", "Civilization Stage");
+    }
+    if (a.t > T - 0.9) a.frame.title(false);
+    const e = ease(span(a.t, 0, T));
+    camera.position.set(cam.sx, mix(gy + 320, camera.position.y, e), mix(cam.sz + 40, camera.position.z, e));
+    camera.lookAt(cam.sx, gy, cam.sz);
+    if (a.t >= T) {
+      a.frame.remove();
+      arrive = null;
+      hud.classList.remove("cine");
+      a.after?.();
+    }
   }
   function clampCam() {
     const d = Math.hypot(cam.x, cam.z),
@@ -1553,7 +1581,9 @@ export function createCivStage(o) {
     spawnVehicle(YOU, T.startType + ":land", T.cities[0]);
     T.nations.forEach((n) => citiesOf(n.id).slice(0, 1).forEach((c) => spawnVehicle(n.id, c.type + ":land", c)));
     chronicle({ key: "civ:start", stage: "civ", icon: "🏛", text: `Founded the ${CITY_TYPES[T.startType].name.toLowerCase()} city of ${o.name}.` });
-    setTimeout(() => openSheet("help"), 600);
+    // After the arrival from the Tribal Stage, if there is one: the help would cover it.
+    if (arrive) arrive.after = () => openSheet("help");
+    else setTimeout(() => openSheet("help"), 600);
   }
   if (!yourCities().length) T.lost = true;
   updateHUD();
@@ -1626,6 +1656,7 @@ export function createCivStage(o) {
       o.renderer.render(scene, camera);
     },
     dispose() {
+      arrive?.frame.remove(false);
       canvas.removeEventListener("pointerdown", onDown);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);

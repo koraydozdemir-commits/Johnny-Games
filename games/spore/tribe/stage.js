@@ -20,6 +20,7 @@ import { dietOfParts } from "../creature/parts.js";
 import { RELATION_INFO } from "../creature/relations.js";
 import { generateSpecies } from "../creature/species.js";
 import { ISLAND, createIsland, heightAt } from "../creature/world.js";
+import { CUTSCENES, beatClock, ease, mix, openFrame, span } from "../cinematics.js";
 import {
   HUT_LEVELS,
   HUT_STYLES,
@@ -107,7 +108,8 @@ export function createTribeStage(o) {
   const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 600);
   const save = o.save || null;
   const regionId = save?.region || o.regionId || "coast";
-  const world = createIsland(scene, o.quality, regionId);
+  // No fossils in the Tribal Stage: the creature-era bones stay in the past.
+  const world = createIsland(scene, o.quality, regionId, { fossils: false });
   const legacy = o.legacy || { damage: 1, gift: 1, music: 1, carry: 0, startTool: null, relation: 0, hutLevel: 1, lines: [] };
   const chronicle = (ev) => o.onChronicle?.(ev);
   scene.fog.near = 110;
@@ -923,7 +925,7 @@ export function createTribeStage(o) {
   $h("#trMenu").addEventListener("click", () => ($h("#trCivGo").hidden = !(T.won && o.onCivilization)));
   $h("#trCivGo").onclick = () => {
     saveState();
-    o.onCivilization?.();
+    playCivRise();
   };
   $h("#trHelp").onclick = () => {
     $h("#trMenuPanel").hidden = true;
@@ -1154,7 +1156,8 @@ export function createTribeStage(o) {
     on("#tsKeep", closeSheet);
     on("#tsCiv", () => {
       saveState();
-      o.onCivilization();
+      closeSheet();
+      playCivRise();
     });
     on("#tsBack", () => {
       saveState();
@@ -1402,10 +1405,197 @@ export function createTribeStage(o) {
     o.sfx("hatch");
   }
 
+  /* ---- cutscenes ------------------------------------------------------------------------
+     Arrival (from the Creature Stage): the stick the creature threw falls out of the sky into the
+     tribe's first fire, with the whole tribe gathered round it. Departure (to the Civilization Stage):
+     night falls on the village, its huts rise in stone behind a new wall, and dawn comes up over a city.
+     Both hold the camera, show a letterbox, and can be skipped. */
+  let cine = null,
+    disposed = false,
+    helpAfterIntro = false;
+  const v3 = new THREE.Vector3();
+  /** Everyone of yours round the fire, facing it. */
+  function gatherAtFire() {
+    const ring = mine();
+    ring.forEach((u, i) => {
+      const a = (i / Math.max(1, ring.length)) * TAU + 0.4,
+        r = 3.3 + (i % 2) * 1.1 + (u.chief ? 0 : 0.3);
+      const at = world.resolve(FIRE.x + Math.cos(a) * r, FIRE.z + Math.sin(a) * r, 0.7);
+      u.pos.set(at.x, heightAt(at.x, at.z), at.z);
+      u.heading = Math.atan2(-(FIRE.z - at.z), FIRE.x - at.x);
+      u.speed = 0;
+      u.task = null;
+      u.body.root.position.copy(u.pos);
+      u.body.root.rotation.y = u.heading;
+    });
+    return ring;
+  }
+  function startCampfire() {
+    const reduced = !!o.reducedMotion?.();
+    gatherAtFire();
+    const gy = heightAt(FIRE.x, FIRE.z);
+    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 1.8, 7), new THREE.MeshStandardMaterial({ color: 0x7a5434, roughness: 0.9, flatShading: true }));
+    disposables.push(stick.geometry, stick.material);
+    stick.position.set(FIRE.x, gy + 34, FIRE.z);
+    scene.add(stick);
+    const frame = o.frame || openFrame({ flash: "#fff3d6", onSkip: () => {} });
+    frame.flash(true);
+    frame.title(false);
+    frame.setSkip(() => cine && (cine.t = Math.max(cine.t, CUTSCENES.campfire.end)));
+    stick.scale.setScalar(1.8);
+    cine = { kind: "campfire", t: 0, k: reduced ? 1 / 0.6 : 1, T: CUTSCENES.campfire, stick, gy, frame, beats: beatClock({ clear: 0.15, land: CUTSCENES.campfire.land, title: 2.2, untitle: 4.9 }) };
+    hud.classList.add("cine");
+  }
+  function playCivRise() {
+    if (cine) return;
+    if (!o.onCivilization) return;
+    const reduced = !!o.reducedMotion?.();
+    const ring = gatherAtFire();
+    const stone = new THREE.MeshStandardMaterial({ color: 0xc9c1b2, roughness: 0.85, flatShading: true });
+    const banner = new THREE.MeshStandardMaterial({ color: look.color, roughness: 0.6, side: THREE.DoubleSide });
+    const extras = [];
+    // A wall round the village, and a tower with the tribe's banner where the fire burns.
+    const wallGeo = new THREE.BoxGeometry(5.2, 2.4, 0.9);
+    const towerGeo = new THREE.CylinderGeometry(1.1, 1.4, 6, 8);
+    const flagGeo = new THREE.PlaneGeometry(2.2, 1.3);
+    disposables.push(stone, banner, wallGeo, towerGeo, flagGeo);
+    const R = 19;
+    for (let i = 0; i < 22; i++) {
+      const a = (i / 22) * TAU;
+      const x = HOME.x + Math.cos(a) * R,
+        z = HOME.z + Math.sin(a) * R;
+      if (heightAt(x, z) < -0.2) continue; // no wall out in the water
+      const m = new THREE.Mesh(i % 5 === 0 ? towerGeo : wallGeo, stone);
+      m.position.set(x, heightAt(x, z) - 3.4, z);
+      m.rotation.y = -a + Math.PI / 2;
+      m.userData.rest = heightAt(x, z) + (i % 5 === 0 ? 3 : 1.2);
+      scene.add(m);
+      extras.push(m);
+    }
+    const tower = new THREE.Mesh(towerGeo, stone);
+    tower.scale.set(0.7, 1.6, 0.7);
+    tower.position.set(FIRE.x - 2.5, heightAt(FIRE.x, FIRE.z) - 9, FIRE.z - 2.5);
+    tower.userData.rest = heightAt(FIRE.x, FIRE.z) + 4.8;
+    const flag = new THREE.Mesh(flagGeo, banner);
+    flag.position.set(1.1, 4.4, 0);
+    tower.add(flag);
+    scene.add(tower);
+    extras.push(tower);
+    // The village's own buildings rise up and turn to stone, one after another.
+    const village = [myHut.group, ...Object.values(shackMeshes), ...structureMeshes.values()].filter(Boolean);
+    village.forEach((g, i) => {
+      g.userData.sy = g.scale.y;
+      g.userData.delay = (i % 8) * 0.28;
+      g.traverse((m) => {
+        if (!m.material?.color || m.userData.civ) return;
+        m.material = m.material.clone();
+        m.userData.civ = m.material.color.clone();
+        disposables.push(m.material);
+      });
+    });
+    const frame = openFrame({ kicker: "Tribal Stage complete", title: "Civilization", onSkip: () => (cine ? (cine.t = Math.max(cine.t, CUTSCENES.civRise.flash)) : null), flash: "#eaf4ff" });
+    frame.el.classList.add("dusk");
+    cine = { kind: "civ", t: 0, k: reduced ? 1 / 0.6 : 1, T: CUTSCENES.civRise, frame, ring, extras, village, stoneColor: new THREE.Color(0xd2cabc), beats: beatClock({ night: 0.2, rise: CUTSCENES.civRise.rise, dawn: CUTSCENES.civRise.dawn, flash: CUTSCENES.civRise.flash }) };
+    hud.classList.add("cine");
+    closeSheet();
+    o.sfx("growth");
+  }
+  function updateCine(dt) {
+    const c = cine;
+    c.t += dt * c.k;
+    const t = c.t,
+      T = c.T;
+    const flame = fires[0]?.flame;
+    if (c.kind === "campfire") {
+      for (const b of c.beats.crossed(t)) {
+        if (b === "clear") c.frame.flash(false);
+        if (b === "land") {
+          o.sfx("hatch");
+          pop(FIRE.x, FIRE.z, "🔥");
+          mine().forEach((u) => u.body.playAbility?.("dance"));
+        }
+        if (b === "title") c.frame.title(true, look.name, "Tribal Stage");
+        if (b === "untitle") c.frame.title(false);
+      }
+      // The stick falls out of the sky, tumbling, and lands across the fire as a new log.
+      const fall = span(t, 0, T.land);
+      const s = c.stick;
+      if (fall < 1) {
+        s.position.y = mix(c.gy + 34, c.gy + 0.5, fall * fall);
+        s.rotation.set(t * 5, t * 2, t * 3.5);
+      } else {
+        s.position.y = c.gy + 0.35;
+        s.rotation.set(Math.PI / 2, 0.6, 0);
+      }
+      // The fire flares as it lands.
+      if (flame) flame.scale.setScalar(1 + 1.4 * Math.max(0, 1 - Math.abs(t - T.land - 0.25) * 2));
+      // Camera: looking up at the falling stick, down onto the fire, round the gathered tribe,
+      // then settling into the usual view of the village.
+      const orbit = ease(span(t, T.land, T.gathered));
+      const ang = 0.4 + orbit * 1.1;
+      const shot = v3.set(FIRE.x + Math.cos(ang) * mix(9, 13, orbit), c.gy + mix(3, 5, orbit), FIRE.z + Math.sin(ang) * mix(9, 13, orbit));
+      const settle = ease(span(t, T.gathered, T.end));
+      const gy = Math.max(0, heightAt(cam.sx, cam.sz));
+      camera.position.set(mix(shot.x, cam.sx, settle), mix(shot.y, gy + cam.sd * PITCH.up, settle), mix(shot.z, cam.sz + cam.sd * PITCH.back, settle));
+      const lookY = fall < 1 ? mix(s.position.y, c.gy, ease(fall)) : c.gy + 1;
+      camera.lookAt(mix(FIRE.x, cam.sx, settle), mix(lookY, gy, settle), mix(FIRE.z, cam.sz, settle));
+      if (t >= T.end) endCine();
+      return;
+    }
+    // Tribal → Civilization.
+    for (const b of c.beats.crossed(t)) {
+      if (b === "night") c.frame.el.classList.add("night");
+      if (b === "rise") o.sfx("growth");
+      if (b === "dawn") {
+        c.frame.el.classList.remove("night");
+        c.frame.el.classList.add("dawn");
+        c.frame.title(true);
+        o.sfx("unlock");
+        c.ring.forEach((u) => !u.dead && u.body.playAbility?.("dance"));
+      }
+      if (b === "flash") c.frame.flash(true);
+    }
+    const rise = span(t, T.rise, T.risen);
+    for (const m of c.extras) m.position.y = mix(m.userData.rest - (m === c.extras.at(-1) ? 13.8 : 3.4), m.userData.rest, ease(rise));
+    for (const g of c.village) {
+      const k = ease(span(t, T.rise + g.userData.delay, T.rise + g.userData.delay + 1.6));
+      g.scale.y = g.userData.sy * (1 + 0.85 * k);
+      g.traverse((m) => m.userData.civ && m.material.color.copy(m.userData.civ).lerp(c.stoneColor, k * 0.75));
+    }
+    if (flame) flame.scale.setScalar(1 + 0.6 * Math.sin(t * 9) * 0.2 + span(t, T.dawn - 1, T.dawn) * 1.2);
+    // Camera: a slow circle round the village at dusk, then a crane up to see the city at dawn.
+    const gy = heightAt(HOME.x, HOME.z);
+    const ang = 0.3 + t * 0.16;
+    const up = ease(span(t, T.crane, T.flash));
+    const r = mix(26, 46, up);
+    camera.position.set(HOME.x + Math.cos(ang) * r, gy + mix(8, 58, up), HOME.z + Math.sin(ang) * r);
+    camera.lookAt(HOME.x, gy + mix(2, 0, up), HOME.z);
+    if (t >= T.end) {
+      const frame = c.frame;
+      cine = null; // the Civilization Stage lifts the frame
+      frame.setSkip(null);
+      o.onCivilization({ frame });
+    }
+  }
+  function endCine() {
+    const c = cine;
+    cine = null;
+    c.frame.title(false);
+    c.frame.remove();
+    hud.classList.remove("cine");
+    if (fires[0]?.flame) fires[0].flame.scale.setScalar(1);
+    saveState();
+    if (helpAfterIntro) {
+      helpAfterIntro = false;
+      setTimeout(showHelp, 300);
+    }
+  }
+
   /* ---- camera and input --------------------------------------------------------------- */
   const cam = { x: HOME.x, z: HOME.z, dist: 42, sx: HOME.x, sz: HOME.z, sd: 42 };
   const PITCH = { up: 0.68, back: 0.74 }; // the view looks down and inland, like Spore's tribe camera
   function placeCamera(dt) {
+    if (cine) return; // a cutscene owns the camera
     const k = 1 - Math.exp(-dt * 10);
     cam.sx += (cam.x - cam.sx) * k;
     cam.sz += (cam.z - cam.sz) * k;
@@ -2907,6 +3097,13 @@ export function createTribeStage(o) {
   /* ---- frame ------------------------------------------------------------------------------ */
   function update(dt) {
     if (paused) return;
+    if (cine) {
+      updateCine(dt);
+      if (disposed) return; // handed over to the Civilization Stage
+      world.update(dt, { x: FIRE.x, z: FIRE.z });
+      for (const u of T.units) if (!u.dead) u.body.update(dt, u.speed || 0);
+      return;
+    }
     T.time += dt;
     // Keyboard panning.
     const pan = cam.sd * dt * 0.9;
@@ -3042,9 +3239,15 @@ export function createTribeStage(o) {
   placeCamera(1);
   updateHUD();
   if (!save) {
-    setTimeout(showHelp, 400);
+    // After the campfire arrival, if there is one: the help would cover it.
+    if (o.intro !== "campfire") setTimeout(showHelp, 400);
+    else helpAfterIntro = true;
     chronicle({ key: "tribe:start", stage: "tribe", icon: "🛖", text: "Founded the " + look.name + " tribe in the " + world.region.name + "." });
   }
+
+  // Arriving from the Creature Stage's stick throw: the campfire scene.
+  if (o.intro === "campfire") startCampfire();
+  else o.frame?.remove();
 
   return {
     record,
@@ -3067,6 +3270,10 @@ export function createTribeStage(o) {
     },
     save: saveState,
     debug: {
+      playCivRise,
+      get cine() {
+        return cine;
+      },
       T,
       cam,
       tap,
@@ -3106,6 +3313,9 @@ export function createTribeStage(o) {
       },
     },
     dispose() {
+      disposed = true;
+      cine?.frame?.remove(false);
+      cine?.extras?.forEach((m) => scene.remove(m));
       canvas.removeEventListener("pointerdown", onDown);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
