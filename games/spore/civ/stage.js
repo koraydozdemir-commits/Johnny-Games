@@ -18,6 +18,7 @@ import { createPlanetFlora } from "./planet-flora.js";
 import { createCityArt, createSpiceArt } from "./city-view.js";
 import { CITY, STYLE_IDS, chooseStyles, describeCulture, makeCulture, roadLinks, traitsOf } from "./culture.js";
 import { createMinimap } from "./minimap.js";
+import { stripIcons, withIcons } from "./icons.js";
 import { ALLIANCE_COST, DEAL_COST, accepts, alliesOf, allied, atWar, canAlly, canDeal, cannotDeclare, createDiplomacy, dealIncomeOf, declareWar, endAlliance, endDeal, hasDeal, joiners, makeAlliance, makeDeal, makeOffer, makePeace, pairKey, react, rel as relOf, relationWord as dipWord, setRel, settle, soureAlliances, tributeDemand, buyoutOffer, bump } from "./diplomacy.js";
 import { PERSONALITY } from "./diplomacy.js";
 import { planNation, strengthOf } from "./ai.js";
@@ -484,7 +485,7 @@ export function createCivStage(o) {
   /* ---- HUD ------------------------------------------------------------------------------------------ */
   const hud = document.createElement("div");
   hud.className = "tribeHUD civHUD";
-  hud.innerHTML = `
+  hud.innerHTML = withIcons(`
     <div class="trTop">
       <div class="trBox">
         <b class="trName" id="cvName"></b>
@@ -523,12 +524,11 @@ export function createCivStage(o) {
     </div>
     <div class="trMenuPanel" id="cvMenuPanel" hidden>
       <button id="cvResume" class="primary">Resume</button>
-      <button id="cvDesignsMenu">🎨 Designs</button>
       <button id="cvHistory">📜 Species history</button>
       <button id="cvSettings">⚙ Settings</button>
       <button id="cvHelp">How to play</button>
       <button id="cvExit">Back to the Tribal Stage</button>
-    </div>`;
+    </div>`);
   document.body.appendChild(hud);
   const $h = (q) => hud.querySelector(q);
   $h("#cvName").textContent = o.name;
@@ -544,7 +544,7 @@ export function createCivStage(o) {
   let toastT = 0;
   function toast(text, seconds = 3) {
     const el = $h("#cvToast");
-    el.textContent = text;
+    el.textContent = stripIcons(text);
     el.classList.add("show");
     toastT = seconds;
   }
@@ -565,7 +565,7 @@ export function createCivStage(o) {
     if (!p.on) return;
     const el = document.createElement("div");
     el.className = "trPop " + cls;
-    el.textContent = text;
+    el.innerHTML = withIcons(esc(text));
     el.style.left = p.x + "px";
     el.style.top = p.y + "px";
     $h("#cvMarks").appendChild(el);
@@ -625,7 +625,7 @@ export function createCivStage(o) {
     // Live refreshes skip identical content, so a finger mid-tap never loses its button.
     if (!force && html === sheetHtml) return;
     sheetHtml = html;
-    el.innerHTML = html;
+    el.innerHTML = withIcons(html);
     el.querySelector(".tsClose")?.addEventListener("click", closeSheet);
     bindSheet(el);
   }
@@ -1573,11 +1573,11 @@ export function createCivStage(o) {
     let info;
     if (sel.length === 1) {
       const v = sel[0];
-      info = `<div class="cvSelHead"><span class="noPic">${MODE_ICON[v.mode]}</span><div><b>${esc(vehicleDesign(YOU, v.key).name)}</b><small>${CITY_TYPES[v.role].name} · ${MODE_NAME[v.mode]} · ${orderText(v)}</small></div><em>${Math.ceil(v.hp)}/${v.unit.hp}</em></div>${bar(v.hp / v.unit.hp, v.hp / v.unit.hp < 0.35 ? "foe" : "")}<small class="cvStats">${statLine(v.unit)}</small>`;
+      info = `<div class="cvSelHead"><span class="noPic">${MODE_ICON[v.mode]}</span><div><b>${esc(vehicleDesign(YOU, v.key).name)}</b><small>${CITY_TYPES[v.role].name} · ${MODE_NAME[v.mode]} · ${orderText(v)}</small></div><em>${Math.ceil(v.hp)}/${v.unit.hp}</em></div>${bar(v.hp / v.unit.hp, v.hp / v.unit.hp < 0.35 ? "foe" : "hp")}<small class="cvStats">${statLine(v.unit)}</small>`;
     } else {
       const roles = TYPE_IDS.map((r) => [r, sel.filter((v) => v.role === r).length]).filter(([, n]) => n);
       const hp = sel.reduce((a, v) => a + v.hp, 0) / sel.reduce((a, v) => a + v.unit.hp, 0);
-      info = `<div class="cvSelHead"><div><b>${sel.length} vehicles</b><small>${roles.map(([r, n]) => `${n} ${CITY_TYPES[r].name.toLowerCase()}`).join(" · ")}</small></div><em>${Math.round(hp * 100)}%</em></div>${bar(hp, hp < 0.35 ? "foe" : "")}<small class="cvStats">Slowest: speed ${Math.min(...sel.map((v) => v.unit.speed))}</small>`;
+      info = `<div class="cvSelHead"><div><b>${sel.length} vehicles</b><small>${roles.map(([r, n]) => `${n} ${CITY_TYPES[r].name.toLowerCase()}`).join(" · ")}</small></div><em>${Math.round(hp * 100)}%</em></div>${bar(hp, hp < 0.35 ? "foe" : "hp")}<small class="cvStats">Slowest: speed ${Math.min(...sel.map((v) => v.unit.speed))}</small>`;
     }
     const cmds = availableCommands(sel)
       .map((c) => `<button data-cmd="${c.id}" class="${command === c.id ? "on" : ""}" aria-pressed="${command === c.id}" aria-disabled="${!c.enabled}" title="${esc(c.enabled ? c.hint : c.why)}" aria-label="${esc(c.label)}: ${esc(c.enabled ? c.hint : c.why)}"><svg viewBox="0 0 24 24" aria-hidden="true">${CMD_ICON[c.id]}</svg><small>${esc(c.label)}</small></button>`)
@@ -1585,7 +1585,7 @@ export function createCivStage(o) {
     const html = info + "|" + cmds;
     if (html === cmdHtml) return;
     cmdHtml = html;
-    $h("#cvSelInfo").innerHTML = info;
+    $h("#cvSelInfo").innerHTML = withIcons(info);
     const row = $h("#cvCmdRow");
     row.innerHTML = cmds;
     row.querySelectorAll("[data-cmd]").forEach((b) => {
@@ -2159,7 +2159,7 @@ export function createCivStage(o) {
     // Rivals' feelings toward each other settle; sour alliances end; a nation you fought its way up the world draws wary looks.
     settle(T.dip, T.nations.filter((x) => x.alive), dt);
     for (const [a, b] of soureAlliances(T.dip)) if (a === YOU || b === YOU) toast(`Your alliance with the ${nationOf(a === YOU ? b : a).name} nation has broken down.`, 4);
-    const world = aiWorld();
+    let world = null;
     for (const n of T.nations) {
       if (!n.alive) continue;
       const mine = citiesOf(n.id);
@@ -2178,6 +2178,7 @@ export function createCivStage(o) {
       if ((n.clock -= dt) > 0) continue;
       n.clock = 4;
       const fleet = vehiclesOf(n.id);
+      world ||= aiWorld();
       const me = { id: n.id, type: n.type, money: n.money, vehicles: fleet.length + queuedFor(n.id), cap: vehicleCap(n.id), cities: world.cities.filter((c) => c.owner === n.id) };
       const intents = planNation(me, world);
       for (const it of intents.slice(0, 9)) applyIntent(n, it, fleet, mine, world);
@@ -2289,7 +2290,7 @@ export function createCivStage(o) {
       const progress = c.owner === YOU ? Math.max(0, ...Object.entries(c.conv).filter(([k]) => k !== YOU).map(([, v]) => v)) / 100 : Math.max(c.trade[YOU] || 0, c.conv[YOU] || 0) / 100;
       const damaged = c.hallHp < 1 || (c.turrets && c.turretHp < 1);
       const html = `${CITY_TYPES[c.type].icon} ${esc(c.name)}${damaged ? `<i><b style="width:${Math.round(c.hallHp * 100)}%;background:#ef4b48"></b></i>` : progress > 0 ? `<i><b style="width:${Math.round(progress * 100)}%;background:${c.owner === YOU ? "#c9b5ff" : "#ffd24a"}"></b></i>` : ""}`;
-      if (m._html !== html) m.innerHTML = m._html = html;
+      if (m._html !== html) m.innerHTML = withIcons((m._html = html));
     }
     // Spice: a small diamond in the owner's colour on every geyser, so they can be found from any height.
     for (const g of T.geysers) {
@@ -2351,21 +2352,21 @@ export function createCivStage(o) {
     const left = T.cities.length - yourCities().length;
     const dom = dominanceNow();
     $h("#cvGoal").textContent = T.won ? `${CIV_CARDS[T.card]?.icon || "✦"} The planet is united` : left ? `Unite the planet: ${dom.yours}/${dom.need} cities${dom.holdouts ? ` · ${dom.holdouts} rival${dom.holdouts === 1 ? "" : "s"} to subdue or ally` : " · all rivals allied or fallen"}` : "";
-    $h("#cvNations").innerHTML = T.nations
+    $h("#cvNations").innerHTML = withIcons(T.nations
       .map((n) => {
         const ally = allied(T.dip, YOU, n.id),
           deal = hasDeal(T.dip, YOU, n.id);
         const col = n.war ? "#ef4b48" : ally ? "#3fc26e" : n.relation >= 20 ? "#8fd18f" : n.relation > -20 ? "#b9c3c9" : "#f0a04b";
         return `<button class="trTribe cvNation ${ally ? "ally" : deal ? "deal" : ""}" role="listitem" data-nation="${n.id}" style="--rel:${col}" aria-label="${esc(n.name)} nation, ${dipWord(T.dip, YOU, n.id)}${n.alive ? "" : ", fallen"}" ${n.alive ? "" : 'aria-disabled="true"'}><span>${n.alive ? CITY_TYPES[n.type].icon : "🏳"}</span></button>`;
       })
-      .join("");
+      .join(""));
     $h("#cvNations")
       .querySelectorAll("[data-nation]")
       .forEach((b) => (b.onclick = () => openSheet("nation", { nation: nationOf(b.dataset.nation) })));
     const mineV = vehiclesOf(YOU);
-    $h("#cvUnits").innerHTML = mineV
+    $h("#cvUnits").innerHTML = withIcons(mineV
       .map((v) => `<button class="trUnit cvUnit ${T.selected.has(v) ? "sel" : ""} ${v.hp / v.unit.hp < 0.35 ? "low" : ""}" role="listitem" data-veh="${v.id}" aria-label="${CITY_TYPES[v.role].name} ${MODE_NAME[v.mode].toLowerCase()} vehicle${T.selected.has(v) ? ", selected" : ""}" aria-pressed="${T.selected.has(v)}"><span class="noPic">${MODE_ICON[v.mode]}</span><em>${CITY_TYPES[v.role].icon}</em><i><b style="width:${Math.round((v.hp / v.unit.hp) * 100)}%"></b></i></button>`)
-      .join("");
+      .join(""));
     $h("#cvUnits")
       .querySelectorAll("[data-veh]")
       .forEach(
@@ -2382,7 +2383,7 @@ export function createCivStage(o) {
     renderCmd();
     const s = superState();
     const sb = $h("#cvSuper");
-    sb.innerHTML = `<span>${s.def.icon}</span><small>${s.unlocked ? (T.superCool > 0 ? Math.ceil(T.superCool) + "s" : "§" + SUPER_COST) : "Locked"}</small>`;
+    sb.innerHTML = withIcons(`<span>${s.def.icon}</span><small>${s.unlocked ? (T.superCool > 0 ? Math.ceil(T.superCool) + "s" : "§" + SUPER_COST) : "Locked"}</small>`);
     sb.setAttribute("aria-label", `${s.def.name}: ${s.def.desc}${s.unlocked ? "" : " Locked until you hold half the cities."}`);
     sb.setAttribute("aria-disabled", String(!s.ready));
   }
@@ -2406,7 +2407,6 @@ export function createCivStage(o) {
   };
   const openDesigns = () => openSheet("designs");
   $h("#cvDesigns").onclick = openDesigns;
-  $h("#cvDesignsMenu").onclick = openDesigns;
   $h("#cvSuper").onclick = startTargeting;
   $h("#cvMenu").onclick = () => ($h("#cvMenuPanel").hidden = !$h("#cvMenuPanel").hidden);
   $h("#cvResume").onclick = () => ($h("#cvMenuPanel").hidden = true);
@@ -2572,7 +2572,8 @@ export function createCivStage(o) {
       planetView.setSun(rig.sunDir(sunVec));
       planetView.update(camera);
       const focus = rig.focusMap();
-      flora.update(camera, focus, rig.distance);
+      // One heavy job a frame: a terrain patch built this frame means the plants wait for the next.
+      flora.update(camera, focus, rig.distance, { maxNew: planetView.stats.heavy ? 0 : 2 });
       updateDetail();
       $h("#cvNeedle").setAttribute("transform", `rotate(${((-rig.heading() * 180) / Math.PI).toFixed(1)} 12 12)`);
       if (regionT > 0 && (regionT -= dt) <= 0) closeRegion();

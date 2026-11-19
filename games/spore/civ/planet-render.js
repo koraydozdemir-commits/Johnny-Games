@@ -219,7 +219,7 @@ export function createPlanetView(scene, map, { quality = "medium" } = {}) {
   let verts = 0,
     frame = 0,
     builds = 0;
-  const stats = { chunksVisible: 0, tris: 0, verts: 0, builds: 0, built: [0, 0, 0, 0] };
+  const stats = { chunksVisible: 0, tris: 0, verts: 0, builds: 0, built: [0, 0, 0, 0], heavy: false };
   const BUDGET = quality === "low" ? 90000 : quality === "high" ? 260000 : 160000;
 
   function build(chunk, level) {
@@ -346,11 +346,13 @@ export function createPlanetView(scene, map, { quality = "medium" } = {}) {
       }
       // Build the nearest missing levels first, within a time slice.
       const t0 = performance.now();
+      stats.heavy = false;
       want.sort((a, b) => a[2] - b[2]);
       for (const [c, level] of want) {
         if (c.levels[level]) continue;
         if (performance.now() - t0 > budgetMs && level > 0) break;
         build(c, level);
+        if (level > 1) stats.heavy = true; // the frame has done its big job: the scenery waits for the next one
         if (level > 1 && !all) break; // at most one big patch a frame
       }
       for (const [c, level] of want) {

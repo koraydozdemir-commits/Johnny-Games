@@ -12,7 +12,9 @@ import { DENSITIES } from "../ecolib/schema.js";
 import { createLibrary } from "../ecolib/library.js";
 import { createEcoInstancer } from "../ecolib/instancer.js";
 import { mix } from "../ecolib/color.js";
-import { TERRAIN, mapToLonLat, inBounds } from "./planet-map.js";
+import { PLANET, TERRAIN, lonLatToMap, mapToLonLat, inBounds } from "./planet-map.js";
+
+const { R } = PLANET;
 import { frameQuat, worldAt } from "./planet-render.js";
 
 const CELL = 36;
@@ -80,6 +82,14 @@ export function growCell(map, seed, ci, cj, { density, quality, poolFor, keepCle
       // Each attempt is a chance, scaled by what the biome grows here, so patches blend at biome borders.
       if (r() > (baseCount / attempts) * 1.6 * k) continue;
       if (h > TERRAIN.snow + 2 && layer.id !== "rocks") continue;
+      // Nothing but rock stands on a steep slope: a tree there would float on one side and sink on the other.
+      if (layer.id !== "rocks") {
+        const e = 1.6;
+        const ll = lonLatToMap(lon + e / (R * Math.max(0.2, Math.cos(lat))), lat);
+        const ln = lonLatToMap(lon, lat + e / R);
+        const slope = Math.max(Math.abs(map.heightAt(ll.x, ll.z) - h), Math.abs(map.heightAt(ln.x, ln.z) - h)) / e;
+        if (slope > 0.55) continue;
+      }
       if (h > TERRAIN.peak && (layer.id === "trees" || layer.id === "smallTrees")) continue;
       if (keepClear(x, z)) continue;
       const pool = poolFor(layer, info);
@@ -93,7 +103,7 @@ export function growCell(map, seed, ci, cj, { density, quality, poolFor, keepCle
           md = m === 0 ? 0 : Math.sqrt(r()) * spread;
         const px = x + Math.cos(ma) * md,
           pz = z + Math.sin(ma) * md;
-        if (m && keepClear(px, pz)) continue;
+        if (m && (keepClear(px, pz) || map.heightAt(px, pz) < TERRAIN.shore)) continue; // cluster members stay on land too
         const size = asset.size.min + (asset.size.max - asset.size.min) * (0.15 + 0.85 * Math.pow(r(), 0.8));
         const rad = layer.spacing * size * SCALE[layer.id] * 0.35;
         if (rad > 0.5 && crowded(px, pz, rad)) continue;

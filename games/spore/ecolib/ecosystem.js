@@ -166,6 +166,7 @@ export function populate(profile, seed, o) {
   const layerWeight = LAYERS.map((l) => l.share * (FLORA_KEY[l.id] ? Math.max(0.02, profile.flora[FLORA_KEY[l.id]]) : 1));
   for (const layer of LAYERS) {
     const usedLayer = new Set();
+    const layerUsed = new Map();
     const layerCap = Math.max(3, Math.round((speciesCap * layerWeight[LAYERS.indexOf(layer)]) / total));
     const w = layer.share * (FLORA_KEY[layer.id] ? Math.max(0.02, profile.flora[FLORA_KEY[layer.id]]) : 1);
     const want = Math.round((budget * w) / total);
@@ -196,8 +197,9 @@ export function populate(profile, seed, o) {
           for (let k = 0; k < 8 && !usedLayer.has(cand.id); k++) cand = pickAsset(e, r(), { categories: layer.cats }) || cand;
           if (!usedLayer.has(cand.id)) continue;
         }
-        const share = (used.get(cand.id) || 0) / Math.max(1, made + 8);
-        if (share > 0.32 && t < 3) continue;
+        // No one species may take a layer over: past a third (two fifths for sparse layers) the picker looks elsewhere.
+        const share = (layerUsed.get(cand.id) || 0) / Math.max(1, made + 8);
+        if (share > 0.34 && t < 3) continue;
         asset = cand;
       }
       if (!asset) continue;
@@ -214,6 +216,7 @@ export function populate(profile, seed, o) {
         const rad = layer.spacing * size * 0.35;
         if (rad > 0.5 && crowded(px, pz, rad)) continue;
         usedLayer.add(asset.id);
+        layerUsed.set(asset.id, (layerUsed.get(asset.id) || 0) + 1);
         const p = { id: asset.id, x: px, z: pz, yaw: r() * TAU, size: Math.round(size * 100) / 100, variant: Math.floor(r() * Math.min(asset.variants, maxVariants)), biome: env.biome, layer: layer.id };
         // Small natural differences in brightness so no two look stamped.
         p.shade = Math.round((0.88 + r() * 0.22) * 100) / 100;

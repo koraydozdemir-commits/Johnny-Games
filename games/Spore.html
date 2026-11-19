@@ -943,7 +943,7 @@ html body.tribeMode.creatureMode .mobileControls,html body.tribeMode.creatureMod
 .civHUD .cvDefence{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;align-items:center;margin:8px 0;font-size:11px;color:#bcd3db}
 .civHUD .cvDefence .tsRel{margin:0}
 .civHUD .cvBar.foe b{background:#ef4b48}.civHUD .cvBar.trade b{background:#ffd24a}.civHUD .cvBar.faith b{background:#c9b5ff}
-.civHUD .cvBar:not(.foe):not(.trade):not(.faith) b{background:linear-gradient(90deg,#ef4b48,#b9c3c9,#3fc26e)}
+.civHUD .cvBar:not(.foe):not(.trade):not(.faith):not(.hp) b{background:linear-gradient(90deg,#ef4b48,#b9c3c9,#3fc26e)}
 .civHUD .cvCityStats b{font-size:17px}
 .civHUD .trSheet{max-height:calc(100dvh - 230px);overflow:auto;overscroll-behavior:contain}
 .civHUD .cvDesigns{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
@@ -1505,6 +1505,19 @@ body.galaxyStart>:not(#scene):not(.gs):not(.uv):not(.settingsScreen):not(.homeAr
 .civHUD .cvEcon li.cost b{color:#f4a07a}.civHUD .cvEcon small{color:#a9c0c9}
 .civHUD .cvNation.ally{box-shadow:0 0 0 3px #3fc26e88}.civHUD .cvNation.deal{box-shadow:0 0 0 2px #ffd24a77}
 .civHUD .trStats{cursor:pointer;pointer-events:auto}.civHUD .trStats:focus-visible{outline:2px solid #8ff0a8;outline-offset:3px;border-radius:8px}
+
+/* ---- one icon language (see civ/icons.js) ---- */
+.civHUD .ic{width:1.2em;height:1.2em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.22em;flex:none}
+.civHUD .noPic .ic,.civHUD .cvPlot .ic{width:22px;height:22px}
+.civHUD .cvUnit em .ic{width:13px;height:13px}
+.civHUD .trIcon .ic{width:22px;height:22px}
+.civHUD .trActions button span .ic{width:24px;height:24px}
+.civHUD .cvNation span .ic{width:22px;height:22px}
+.civHUD .trTribe span .ic,.civHUD .trUnit span .ic{width:22px;height:22px}
+.civHUD .trStats .ic{width:1.1em;height:1.1em}
+.civHUD .cvBar.hp b{background:#3fc26e}
+.civHUD .trSheet{bottom:calc(var(--cvB,150px) + var(--cvC,0px) + 6px);max-height:calc(100dvh - var(--cvB,150px) - var(--cvC,0px) - 176px)}
+@media (max-height:520px){.civHUD .trSheet{max-height:calc(100dvh - var(--cvB,84px) - var(--cvC,0px) - 90px)}}
 </style>
 </head>
 <body class="galaxyStart">
@@ -1551,7 +1564,7 @@ body.galaxyStart>:not(#scene):not(.gs):not(.uv):not(.settingsScreen):not(.homeAr
 <div class="worldToast" id="toast"></div><div id="worldWaypoint" aria-hidden="true"><span class="waypointArrow">➤</span><span class="waypointText"><b id="waypointTitle">METEOR</b><small id="waypointSubtitle">DNA FRAGMENT</small></span></div><div class="controlHint" id="controlHint"><span id="controlHintText">STEER · EAT · EVOLVE</span><button id="dismissControlHint" aria-label="Dismiss controls hint">×</button></div>
 <div class="overlay" id="intro"><div class="dialog"><h1>PRIMORDIAL SOUP</h1><p>A meteor brings life to the soup. Build your first cell, then eat to grow, find new parts in meteor shards and fallen cells, and choose your path: plants, meat, or both.</p><p><b>Swim:</b> WASD / arrows · <b>Jet:</b> Space · <b>Call mate:</b> M · <b>Editor:</b> Tab<br>On mobile, use the virtual joystick and the Boost / Mate / Pause buttons. In the editor, drag the spine and radius handles directly.</p><div class="options"><button id="begin" class="primary">Begin life</button></div><nav class="uvLinks" id="uvLinks" aria-label="Universe"><button data-open="universes"><span aria-hidden="true">🪐</span><b id="uvActiveName">Universe</b><small>Saves</small></button><button data-open="galaxy"><span aria-hidden="true">🌌</span><b>Galaxy</b><small>Explore</small></button><button data-open="pedia"><span aria-hidden="true">📖</span><b>Sporepedia</b><small>Collection</small></button></nav></div></div>
 <div id="hatchCinematic" aria-label="Meteor impact and life beginning"><div class="hatchStarfield"></div><div class="hatchOrbit hatchOrbitOne"></div><div class="hatchOrbit hatchOrbitTwo"></div><div class="hatchMeteorTrail"></div><div class="hatchMeteor"></div><div class="hatchRipple"></div><div class="hatchEgg" id="hatchEgg"></div><div class="hatchCaption"><small>PRIMORDIAL SOUP</small><b id="hatchTitle">LIFE BEGINS</b><span>ONE CELL. ONE CHANCE.</span></div><button id="skipHatch">SKIP ›</button></div><div class="overlay" id="dialogOverlay" style="display:none"><div class="dialog"><h1 id="dialogTitle"></h1><p id="dialogText"></p><div class="options" id="dialogOptions"></div></div></div>
-<!-- TEMPORARY: stage switcher for playtesting. Remove before release. -->
+<!-- Stage switcher for playtesting: removed at start-up unless the page is opened with ?debug. -->
 <div id="devStages" class="devStages" data-temporary>
 <button id="devStagesToggle" class="devStagesToggle" aria-expanded="false" aria-controls="devStagesMenu" aria-label="Temporary stage switcher">DEV</button>
 <div id="devStagesMenu" class="devStagesMenu" role="group" aria-label="Jump to stage" hidden>

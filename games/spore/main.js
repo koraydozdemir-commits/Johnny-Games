@@ -4658,12 +4658,17 @@ function bindUI() {
   $("#skipHatch").onclick = skipHatch;
   bindStageSwitcher();
   /*
-   * TEMPORARY stage switcher for playtesting: jumps straight to any stage. Saves are kept, so a jump
+   * Stage switcher for playtesting (only with ?debug): jumps straight to any stage. Saves are kept, so a jump
    * resumes a stage where it was left; a stage never reached starts fresh from the current cell.
    */
   function bindStageSwitcher() {
     const root = $("#devStages");
     if (!root) return;
+    // Playtesting aid only: players never see it. It is there when the page is opened with ?debug.
+    if (!new URLSearchParams(location.search).has("debug")) {
+      root.remove();
+      return;
+    }
     const toggle = $("#devStagesToggle"),
       menu = $("#devStagesMenu");
     const currentStage = () => (civStage ? "civ" : tribeStage ? "tribe" : creatureStage ? "creature" : "cell");
