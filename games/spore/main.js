@@ -1794,7 +1794,7 @@ function makeNPC(options = {}) {
   healthGroup.add(bar);
   g.add(healthGroup);
   const initialAngle = Math.random() * Math.PI * 2;
-  const maxHealth = alpha ? 24 : 6 + size * 4;
+  const maxHealth = alpha ? 24 : (6 + size * 4) * (species?.soft ?? 1); // easy prey is soft-bodied
   g.userData = {
     alive: true,
     size: size,
@@ -1908,7 +1908,7 @@ function killNPC(e, playerKill = true) {
   const elite = e.userData.alpha || e.userData.epic;
   spawnBurst(e.position.x, e.position.y, e.userData.color || 0xff9c9c, elite ? 34 : 20);
   if (elite) spawnBurst(e.position.x, e.position.y, 0xffda83, 18);
-  dropMeat(e.position.x, e.position.y, elite ? 6 : Math.max(2, Math.min(5, Math.round(1 + (e.userData.size / stageScale(state.tier)) * 2))));
+  dropMeat(e.position.x, e.position.y, elite ? 6 : Math.max(2, Math.min(5, Math.round(1 + (e.userData.size / stageScale(state.tier)) * 2))) + (SPECIES[e.userData.species]?.meaty || 0));
   dropPartOrb(e);
   if (playerKill) {
     progress.kills++;
@@ -3384,7 +3384,7 @@ function updateAI(dt, time) {
     e.rotation.z = steerHeading(u.velocity, e.rotation.z, desire.x, desire.y, dt, { turnRate, stroke: strokePulse(u.stroke) });
     u.velocity.multiplyScalar(Math.max(0, 1 - 1.05 * dt));
     // Bigger cells are faster in absolute terms, and hunters put on a burst when they chase.
-    const cap = (u.alpha ? 3.1 : 2.35) * (0.8 + 0.3 * u.size) * (u.state === "hunt" ? 1.18 : 1);
+    const cap = (u.alpha ? 3.1 : 2.35) * (0.8 + 0.3 * u.size) * (u.state === "hunt" ? 1.18 : 1) * (SPECIES[u.species]?.slow ?? 1);
     u.velocity.clampLength(0, cap);
     e.position.x += u.velocity.x * dt;
     e.position.y += u.velocity.y * dt;
@@ -3812,6 +3812,9 @@ function regionSpecies(x, y) {
     const plants = shuffled(residents.plant),
       hunters = shuffled(residents.meat);
     const chosen = [plants[0], ...(rng() < 0.7 && plants[1] ? [plants[1]] : []), hunters[0], ...(rng() < 0.65 && hunters[1] ? [hunters[1]] : [])];
+    // Every area also holds this stage's easy prey, so a carnivore always has something to catch.
+    const easy = residents.plant.find((id) => SPECIES[id]?.easy);
+    if (easy && !chosen.includes(easy)) chosen.push(easy);
     regionCache.set(key, chosen.filter(Boolean));
   }
   return regionCache.get(key);
