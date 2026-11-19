@@ -1151,6 +1151,66 @@ body.cellEditorMode #partsPanel .catalog{overflow-y:auto;overflow-x:hidden;min-h
 
 .ceBudget{font-size:10px;font-weight:700;opacity:.75;margin-left:3px}.ceBudget.full{color:#ffb35c;opacity:1}
 .ceStat em{font-style:normal;font-weight:700;font-size:11px;color:#ffe2a8}
+/* ---- Ecosystem Library ---- */
+.ecl{position:fixed;inset:0;z-index:120;display:flex;align-items:stretch;justify-content:center;background:#050d17e6;opacity:0;transition:opacity .2s;color:#fff;font-family:inherit;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.ecl.show{opacity:1}
+.ecl button,.ecl input,.ecl select{font:inherit}
+.ecl button:focus-visible,.ecl input:focus-visible,.ecl select:focus-visible{outline:3px solid #ffd98a;outline-offset:2px}
+.eclPanel{width:min(1200px,100%);display:flex;flex-direction:column;padding:max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));gap:8px;min-height:0}
+.eclTop,.eclBar,.eclTabs,.eclSub{flex:none}
+.eclThumb img:not([src]){visibility:hidden}
+.eclTop{display:flex;align-items:center;gap:12px}.eclTop>div{flex:1}.eclTop small{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#9fd8e2}.eclTop h2{margin:0;font-size:22px}
+.eclCount{font-size:12px;color:#a9c0c9}
+.eclBtn{min-height:44px;padding:0 16px;border-radius:12px;border:1px solid #ffffff33;background:#ffffff14;color:#fff;font-weight:700;cursor:pointer}
+.eclBar{display:flex;gap:8px;flex-wrap:wrap}
+.eclBar label{display:block}.eclSearch{flex:1 1 240px}
+.eclBar input,.eclBar select{width:100%;min-height:44px;border-radius:12px;border:1px solid #ffffff2e;background:#0d2232;color:#fff;padding:0 12px;font-size:16px}
+.eclSr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.eclTabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}.eclTabs::-webkit-scrollbar{display:none}
+.eclTabs button{flex:none;min-height:44px;padding:0 14px;border-radius:12px;border:1px solid #ffffff26;background:#ffffff10;color:#cfe3ea;font-weight:800;display:flex;align-items:center;gap:8px;cursor:pointer}
+.eclTabs button small{font-size:11px;opacity:.7;font-weight:600}
+.eclTabs button[aria-selected=true]{background:linear-gradient(#ffe08a,#f2b93b);color:#132532;border-color:#ffe9a8}
+.eclSub{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}.eclSub::-webkit-scrollbar{display:none}
+.eclSub button{flex:none;min-height:36px;padding:0 12px;border-radius:18px;border:1px solid #ffffff26;background:transparent;color:#cfe3ea;font-size:12.5px;font-weight:700;cursor:pointer}
+.eclSub button[aria-pressed=true]{background:#ffffff22;color:#fff;border-color:#ffffff66}
+.eclBody{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,420px);gap:12px}
+.eclGrid{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px;align-content:start;padding:2px 4px 14px 2px;touch-action:pan-y}
+.eclTile{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px 8px;border-radius:14px;border:1px solid #ffffff22;background:radial-gradient(circle at 50% 30%,#2c5a70,#10283a);color:#fff;cursor:pointer;text-align:center;min-height:132px}
+.eclTile b{font-size:12px;line-height:1.15}.eclTile small{font-size:10.5px;color:#9fb8c2}
+.eclTile.sel{border-color:#f5c75a;box-shadow:0 0 0 2px #f5c75a}
+.eclTile.r-rare{border-color:#8ab8ff88}.eclTile.r-unique{border-color:#d88aff99}
+.eclThumb{display:grid;place-items:center;width:96px;height:96px}.eclThumb img{width:96px;height:96px;object-fit:contain;filter:drop-shadow(0 3px 3px #0008)}
+.eclNoThumb{font-size:28px;font-weight:800;color:#6c8a99}
+.eclEmpty{grid-column:1/-1;color:#a9c0c9;padding:24px 8px}
+.eclDetail{overflow-y:auto;overscroll-behavior:contain;background:linear-gradient(#ffffff12,#ffffff07);border:1px solid #ffffff22;border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:8px;-webkit-overflow-scrolling:touch}
+.eclDetail[hidden]{display:none}
+.eclBack{display:none;align-self:flex-start}
+.eclPrevHost{position:relative;flex:none;height:min(34vh,280px);border-radius:12px;background:radial-gradient(circle at 50% 35%,#2f6178,#10283a);overflow:hidden}
+.eclPrevHost canvas,.eclPrevHost img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.eclHead{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.eclHead h3{margin:0;font-size:19px;flex:1 1 100%}
+.eclTag{font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;background:#ffffff1f;color:#dbeaf0}
+.eclTag.rar.r-uncommon{background:#2f6a4a}.eclTag.rar.r-rare{background:#2a5aa8}.eclTag.rar.r-unique{background:#7a3aa8}
+.eclDesc{margin:0;color:#d6e6ec;line-height:1.4;font-size:13.5px}
+.eclVariants{display:flex;gap:6px;flex-wrap:wrap}.eclVariants button{min-height:40px;padding:0 12px;border-radius:10px;border:1px solid #ffffff2e;background:#ffffff10;color:#fff;font-weight:700;font-size:12.5px;cursor:pointer}.eclVariants button[aria-pressed=true]{background:#f5c75a;color:#132532;border-color:#f5c75a}
+.eclFacts{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;margin:0;font-size:12.5px}.eclFacts dt{color:#9fb8c2}.eclFacts dd{margin:0;color:#fff}
+.eclChip{display:inline-block;margin:0 4px 3px 0;padding:2px 8px;border-radius:999px;background:#ffffff1c;font-size:11.5px}
+.eclTemp{display:inline-flex;gap:2px}.eclTemp i{width:44px;height:14px;border-radius:4px;background:#ffffff14;position:relative}.eclTemp i.on{background:linear-gradient(90deg,#4aa3ff,#f5c75a,#ff6a3a)}.eclTemp i.pref{outline:2px solid #fff}.eclTemp i span{position:absolute;left:0;right:0;top:16px;font-size:8.5px;text-align:center;color:#9fb8c2}
+.eclFacts dd:has(.eclTemp){padding-bottom:12px}
+.eclDetail h4{margin:6px 0 2px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#9fd8e2}
+.eclBiomes{list-style:none;margin:0;padding:0;display:grid;gap:3px}
+.eclBiomes li{display:grid;grid-template-columns:120px 1fr 52px;gap:8px;align-items:center;font-size:11.5px;color:#9fb8c2}.eclBiomes li i{display:block;height:6px;border-radius:3px;background:#ffffff33}.eclBiomes li em{font-style:normal;text-align:right}
+.eclBiomes li.native{color:#fff;font-weight:700}.eclBiomes li.native i{background:linear-gradient(90deg,#d9a52c,#ffe39a)}
+@media (max-width:899px){
+  .eclBody{grid-template-columns:1fr}
+  .eclDetail{position:absolute;inset:0;z-index:2;border-radius:0;border:0;background:#0b1d2b;padding:max(12px,env(safe-area-inset-top)) 14px max(14px,env(safe-area-inset-bottom));display:none}
+  .ecl.hasDetail .eclDetail:not([hidden]){display:flex}
+  .eclBack{display:block;position:sticky;top:0;z-index:3;background:#0b1d2b}
+  .ecl.hasDetail .eclTop{display:none}
+  .eclPrevHost{height:min(40vh,320px)}
+  .eclGrid{grid-template-columns:repeat(auto-fill,minmax(98px,1fr))}
+  .eclTop h2{font-size:19px}
+}
+@media (prefers-reduced-motion:reduce){.ecl{transition:none}}
 /* ---- Creature editor catalogue (scoped to .ceCat so the modular editor keeps its own look) ---- */
 .crEditor.ceCat{--ce-sheet:min(52vh,440px);--ce-top:62px;--ce-side:clamp(300px,34vw,400px);--ce-line:#ffffff24;--ce-gold:#f5c75a;--ce-dim:#a9c0c9;--ce-plant:#3a9a5c;--ce-meat:#c0483f;--ce-omni:#c8962f;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .ceCat svg{width:1em;height:1em;flex:none;vertical-align:-.12em}

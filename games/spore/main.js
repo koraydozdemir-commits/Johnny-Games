@@ -33,6 +33,7 @@ import { openUniverses } from "./universe/ui.js";
 import { openGalaxy } from "./galaxy/ui.js";
 import { createGalaxyStart } from "./galaxy/start.js";
 import { openPedia } from "./pedia/ui.js";
+import { openEcoLibrary } from "./ecolib/ui.js";
 import { asPedia, listGlobal, putGlobal, updateGlobal } from "./universe/global.js";
 import { readCreation } from "./creations/format.js";
 import { openModularEditor } from "./creations/editor.js";
@@ -5718,6 +5719,8 @@ function openUniverseScreen(screen, arg) {
         ui.close();
         setTimeout(() => openUniverseScreen("galaxy", focus), 220);
       },
+      // The shared library opens over the Sporepedia and gives it back when closed.
+      onLibrary: () => openEcoLibrary({ renderer, reducedMotion: settings.reducedMotion, sfx: playSfx }),
       onClose: done,
     });
   }
@@ -6017,6 +6020,7 @@ if (new URLSearchParams(location.search).has("debug")) {
       return universe;
     },
     openUniverseScreen,
+    openEcoLibrary: (o2) => openEcoLibrary({ renderer, reducedMotion: settings.reducedMotion, sfx: playSfx, ...o2 }),
     syncPedia,
     editCreation,
     state,
