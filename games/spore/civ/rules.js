@@ -47,25 +47,87 @@ export const designFactor = (strength) => 0.7 + Math.max(1, Math.min(10, strengt
  */
 export function cityEconomy(city, owner = {}) {
   const k = (role) => designFactor(owner.strengths?.[role]);
-  const count = (role) => city.plots.filter((p) => p === role).length;
-  const houses = count("house"),
-    factories = count("factory"),
-    fun = count("fun"),
-    temples = count("temple");
-  const pop = Math.round(2 + houses * 3 * k("house"));
-  // Factories make money but people don't like living next to them; entertainment and temples help.
-  const happiness = Math.max(-5, Math.min(5, Math.round((1 + fun * 2 * k("fun") + temples * 0.5 - factories + (owner.happyBonus || 0) - (city.unrest || 0)) * 10) / 10));
+  const lvl = (k0) => levelFactor(city.levels?.[k0]);
+  // Buildings count by how well they have been improved.
+  const weight = (role) => city.plots.reduce((sum, p, i) => sum + (p === role ? lvl(i) : 0), 0);
+  const houses = weight("house"),
+    factories = weight("factory"),
+    fun = weight("fun"),
+    temples = weight("temple");
+  const adj = adjacency(city.plots);
+  const hall = Math.max(1, Math.min(HALL_MAX, city.hall || 1));
+  const pop = Math.round((2 + houses * 3 * k("house")) * (1 + 0.25 * (hall - 1)));
+  // Factories make money but people don't like living next to them; entertainment and temples help. What stands
+  // next to what matters too (see adjacency).
+  const happiness = Math.max(-5, Math.min(5, Math.round((1 + fun * 2 * k("fun") + temples * 0.5 - factories + adj.happiness + (owner.happyBonus || 0) - (city.unrest || 0)) * 10) / 10));
   const riot = happiness < 0;
-  const base = 1.5 + factories * 1.2 * k("factory") + pop * 0.2;
+  const base = 1.5 + factories * 1.2 * k("factory") + pop * 0.2 + adj.income * k("factory");
   const income = Math.round(base * (riot ? 0.25 : 1) * (1 + (owner.incomeBonus || 0)) * 100) / 100;
-  const faith = Math.round((2 + temples * 2 * k("temple") + (city.type === "religious" ? 1 : 0)) * 100) / 100;
-  return { pop, happiness, income, faith, riot };
+  const faith = Math.round((2 + temples * 2 * k("temple") + adj.faith + (city.type === "religious" ? 1 : 0) + (city.devout ? 1 : 0)) * 100) / 100;
+  return { pop, happiness, income, faith, riot, upkeep: upkeepOf(city) };
+}
+
+/* ---- the city planner: improving, expanding and arranging ------------------------------------- */
+export const HALL_MAX = 3;
+export const MAX_LEVEL = 3;
+/** How much better a building does its work at level 1, 2 and 3. */
+export const levelFactor = (level) => 1 + 0.35 * (Math.max(1, Math.min(MAX_LEVEL, level || 1)) - 1);
+/** Turret sites grow with the city hall: 3, 4 and 5. */
+export const turretSlots = (hall = 1) => MAX_TURRETS + Math.max(0, Math.min(HALL_MAX, hall || 1) - 1);
+/** Vehicles a city supports grow with its hall too. */
+export const vehicleCapOf = (hall = 1) => VEHICLES_PER_CITY + Math.max(0, Math.min(HALL_MAX, hall || 1) - 1);
+/** Cost to improve a building from `level` to the next. */
+export const improveCost = (role, level) => Math.round(BUILD_COST[role] * (0.9 + level * 0.55));
+/** Cost to expand the city hall from `level` to the next (more people, turret sites and vehicles, tougher walls). */
+export const hallCost = (level) => (level <= 1 ? 160 : 340);
+/** Money a city's buildings cost to keep every second: bigger and better cities are dearer. */
+export function upkeepOf(city) {
+  const b = city.plots.reduce((sum, p, i) => sum + (p ? 0.05 * levelFactor(city.levels?.[i]) : 0), 0);
+  return Math.round((b + (city.turrets || 0) * 0.1 + ((city.hall || 1) - 1) * 0.12) * 100) / 100;
+}
+/** Upkeep for each vehicle you field. */
+export const VEHICLE_UPKEEP = 0.08;
+
+/**
+ * Plots sit in a ring, so each building has two neighbours. What it stands next to changes how it works:
+ * factories side by side feed each other, houses by an amusement park are happier and by a factory are not,
+ * temples beside houses carry the faith to the people. Returns the total effect and a note for each plot.
+ * @param {(string|null)[]} plots
+ */
+export function adjacency(plots) {
+  const n = plots.length;
+  const out = { happiness: 0, income: 0, faith: 0, notes: plots.map(() => []) };
+  const note = (i, text, good) => out.notes[i].push({ text, good });
+  for (let i = 0; i < n; i++) {
+    const role = plots[i];
+    if (!role) continue;
+    for (const j of [(i + 1) % n, (i + n - 1) % n]) {
+      const other = plots[j];
+      if (!other) continue;
+      if (role === "factory" && other === "factory") {
+        out.income += 0.18;
+        note(i, "Beside another factory: +output", true);
+      } else if (role === "house" && other === "fun") {
+        out.happiness += 0.3;
+        note(i, "Beside entertainment: happier", true);
+      } else if (role === "house" && other === "factory") {
+        out.happiness -= 0.3;
+        note(i, "Beside a factory: smoke and noise", false);
+      } else if (role === "temple" && other === "house") {
+        out.faith += 0.4;
+        note(i, "Beside houses: the faith spreads", true);
+      }
+    }
+  }
+  for (const k of ["happiness", "income", "faith"]) out[k] = Math.round(out[k] * 100) / 100;
+  return out;
 }
 
 /** Maximum hit points of a city's turrets together, and of its hall. */
 export function cityDefence(city, strengths = {}) {
   const k = designFactor(strengths.turret);
-  return { turretHp: city.turrets * TURRET_HP * k, hallHp: HALL_HP + city.plots.filter(Boolean).length * 10, dps: city.turrets * (4 + (strengths.turret || 5) * 0.6) };
+  const walls = 1 + 0.25 * ((city.hall || 1) - 1);
+  return { turretHp: city.turrets * TURRET_HP * k * walls, hallHp: (HALL_HP + city.plots.filter(Boolean).length * 10) * walls, dps: city.turrets * (4 + (strengths.turret || 5) * 0.6) };
 }
 
 /** Money it takes to buy a city outright, once its trade with you is complete. */
@@ -107,8 +169,14 @@ export function deliverTrade(city, by, amount) {
   city.trade[by] = Math.min(100, before + amount);
   return { newRoute: before === 0, complete: city.trade[by] >= 100 };
 }
-/** Hand a city to a new owner: defences rebuilt, conversion and trade progress cleared, a little unrest. */
-export function transferCity(city, owner, method) {
+/**
+ * Hand a city to a new owner. What is left depends on how it was won:
+ *  - by force: the hall is half wrecked, two buildings are destroyed, improvements are lost, the people are restless;
+ *  - by conversion: everything is intact and the faithful are devout (they resist being converted away);
+ *  - by purchase: everything is intact and calm, and the sale leaves the city's trade with others in place.
+ * @param {() => number} [rand]
+ */
+export function transferCity(city, owner, method, rand = Math.random) {
   city.owner = owner;
   city.turretHp = 1;
   city.hallHp = method === "military" ? 0.5 : 1;
@@ -116,6 +184,17 @@ export function transferCity(city, owner, method) {
   city.trade = Object.fromEntries(Object.entries(city.trade || {}).filter(([k]) => k !== owner));
   city.unrest = method === "military" ? 2 : 0;
   city.calm = 0;
+  city.devout = method === "religious";
+  city.queue = [];
+  if (method === "military") {
+    const filled = city.plots.map((p, i) => (p ? i : -1)).filter((i) => i >= 0);
+    for (let n = 0; n < 2 && filled.length; n++) {
+      const i = filled.splice(Math.floor(rand() * filled.length), 1)[0];
+      city.plots[i] = null;
+    }
+    city.levels = city.plots.map(() => 1);
+    city.hall = Math.max(1, (city.hall || 1) - 1);
+  }
   return city;
 }
 /** Unrest after a conquest fades over a few minutes. */
@@ -298,6 +377,18 @@ export const CIV_CARDS = {
   religious: { name: "Religious", icon: "🕊", color: "#b58cf0", text: "Your nation united the world in one faith. Its message will travel between stars." },
 };
 export const civWon = (cities) => cities.length > 0 && cities.every((c) => c.owner === YOU);
+/** Planetary domination: hold this share of the planet's cities... */
+export const DOMINATION = 0.75;
+/**
+ * How close you are to uniting the planet. You win by holding every city, or by holding three quarters of
+ * them with no rival left that is neither fallen nor your ally: by force, faith, trade or friendship.
+ * @param {{ total:number, yours:number, rivals:Array<{alive:boolean, allied:boolean}> }} s
+ */
+export function dominance({ total, yours, rivals }) {
+  const need = Math.ceil(total * DOMINATION);
+  const holdouts = rivals.filter((r) => r.alive && !r.allied).length;
+  return { need, yours, total, holdouts, won: total > 0 && (yours >= total || (yours >= need && holdouts === 0)), byAlliance: yours < total && yours >= need && holdouts === 0 };
+}
 export function civArchetype(captures, startType) {
   const id = dominantMethod(captures, startType);
   return { id, ...CIV_CARDS[id] };
@@ -345,17 +436,22 @@ export function readCivSave(raw) {
     owner: ownerOk(c?.owner ?? null, ids),
     type: TYPE_IDS.includes(c?.type) ? c.type : "economic",
     plots: Array.from({ length: PLOTS }, (_, k) => (PLOT_ROLES.includes(c?.plots?.[k]) ? c.plots[k] : null)),
-    turrets: Math.round(num(c?.turrets, 0, MAX_TURRETS, 0)),
+    turrets: Math.round(num(c?.turrets, 0, MAX_TURRETS + HALL_MAX - 1, 0)),
     turretHp: num(c?.turretHp, 0, 1, 1),
     hallHp: num(c?.hallHp, 0, 1, 1),
     trade: Object.fromEntries(Object.entries(c?.trade && typeof c.trade === "object" ? c.trade : {}).filter(([k]) => k === YOU || ids.includes(k)).map(([k, v]) => [k, num(v, 0, 100, 0)])),
     conv: Object.fromEntries(Object.entries(c?.conv && typeof c.conv === "object" ? c.conv : {}).filter(([k]) => k === YOU || ids.includes(k)).map(([k, v]) => [k, num(v, 0, 100, 0)])),
     unrest: num(c?.unrest, 0, 5, 0),
+    levels: Array.from({ length: PLOTS }, (_, k) => Math.round(num(c?.levels?.[k], 1, MAX_LEVEL, 1))),
+    hall: Math.round(num(c?.hall, 1, HALL_MAX, 1)),
+    devout: !!c?.devout,
     queue: (Array.isArray(c?.queue) ? c.queue : [])
       .slice(0, 3)
       .map((i) => ({ key: typeof i?.key === "string" && /^(military|economic|religious):(land|sea|air)$/.test(i.key) ? i.key : null, cost: num(i?.cost, 0, 5000, 100), total: num(i?.total, 1, 600, 20), t: num(i?.t, 0, 600, 0) }))
       .filter((i) => i.key),
   }));
+  // A city can only hold as many turrets as its hall allows.
+  for (const c of cities) c.turrets = Math.min(c.turrets, turretSlots(c.hall));
   if (!cities.some((c) => c.owner === YOU)) return null;
   const designs = d.designs && typeof d.designs === "object" ? d.designs : {};
   return {

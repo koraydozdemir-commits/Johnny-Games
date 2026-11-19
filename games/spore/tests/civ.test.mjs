@@ -14,6 +14,15 @@ import {
   civArchetype,
   civLegacy,
   civWon,
+  dominance,
+  adjacency,
+  hallCost,
+  improveCost,
+  levelFactor,
+  turretSlots,
+  upkeepOf,
+  vehicleCapOf,
+  HALL_MAX,
   damageCity,
   deliverTrade,
   dominantMethod,
@@ -188,4 +197,62 @@ test("saves are read safely", () => {
   assert.equal(s.vehicles[0].x, 900);
   assert.deepEqual(s.captures, { military: 2, economic: 0, religious: 0 });
   assert.equal(s.card, "religious");
+});
+
+test("planetary domination: every city, or three quarters with no rival left standing", () => {
+  const rivals = (list) => list.map(([alive, allied]) => ({ alive, allied }));
+  assert.equal(dominance({ total: 12, yours: 12, rivals: rivals([[true, false]]) }).won, true, "every city is always a win");
+  const r = dominance({ total: 12, yours: 9, rivals: rivals([[true, true], [false, false], [true, true]]) });
+  assert.ok(r.won && r.byAlliance && r.need === 9, "nine of twelve, the rest allied or fallen");
+  assert.equal(dominance({ total: 12, yours: 9, rivals: rivals([[true, false]]) }).won, false, "a hostile rival still stands");
+  assert.equal(dominance({ total: 12, yours: 8, rivals: rivals([[false, false]]) }).won, false, "not enough cities");
+});
+
+test("the city planner: improving, expanding and arranging buildings has real effects", () => {
+  const plain = city(["house", null, "fun"]);
+  const better = { ...plain, levels: [3, 1, 3, 1, 1, 1] };
+  assert.ok(cityEconomy(better).pop > cityEconomy(plain).pop, "improved houses hold more people");
+  assert.ok(cityEconomy(better).happiness > cityEconomy(plain).happiness, "an improved amusement park is happier");
+  assert.ok(levelFactor(3) > levelFactor(2) && levelFactor(2) > levelFactor(1) && levelFactor(9) === levelFactor(3));
+  assert.ok(improveCost("factory", 2) > improveCost("factory", 1), "each level costs more");
+  // Expanding the hall: more people, turrets, vehicles and tougher walls, at a cost.
+  const hall2 = { ...city(["house", "house"]), hall: 2 };
+  assert.ok(cityEconomy(hall2).pop > cityEconomy(city(["house", "house"])).pop);
+  assert.equal(turretSlots(1), 3);
+  assert.equal(turretSlots(HALL_MAX), 5);
+  assert.equal(vehicleCapOf(3), vehicleCapOf(1) + 2);
+  assert.ok(hallCost(2) > hallCost(1));
+  assert.ok(cityDefence({ ...city([], { turrets: 2 }), hall: 3 }).turretHp > cityDefence(city([], { turrets: 2 })).turretHp, "a bigger hall has tougher walls");
+  // Upkeep: bigger, better cities cost more to keep.
+  assert.ok(upkeepOf(better) > upkeepOf(plain));
+  assert.ok(upkeepOf({ ...plain, turrets: 3 }) > upkeepOf(plain));
+});
+
+test("adjacency: what stands next to what changes how it works", () => {
+  const ring = (a) => Array.from({ length: 6 }, (_, i) => a[i] || null);
+  assert.ok(adjacency(ring(["factory", "factory"])).income > 0, "factories side by side feed each other");
+  assert.equal(adjacency(ring(["factory", null, "factory"])).income, 0, "not when apart");
+  assert.ok(adjacency(ring(["house", "fun"])).happiness > 0, "houses by entertainment are happier");
+  assert.ok(adjacency(ring(["house", "factory"])).happiness < 0, "houses by factories are not");
+  assert.ok(adjacency(ring(["temple", "house"])).faith > 0, "temples beside houses spread the faith");
+  assert.ok(adjacency(ring(["house", null, null, null, null, "fun"])).happiness > 0, "the ring wraps round");
+  const notes = adjacency(ring(["house", "factory"])).notes;
+  assert.ok(notes[0].some((n) => !n.good) && notes[1].length === 0, "each plot says why");
+  // Arrangement shows in the economy: the same buildings, placed well, do better.
+  const apart = cityEconomy(city(["house", "factory", "house", "factory", "house", "factory"]));
+  const grouped = cityEconomy(city(["factory", "factory", "factory", "house", "house", "house"]));
+  assert.ok(grouped.income > apart.income, "grouped factories earn more");
+});
+
+test("how a city was won decides what is left of it", () => {
+  const rich = () => city(["house", "factory", "fun", "temple", "house", "factory"], { hallHp: 0.1, levels: [3, 3, 3, 3, 3, 3], hall: 3 });
+  const force = transferCity(rich(), "n0", "military", () => 0.1);
+  assert.equal(force.plots.filter(Boolean).length, 4, "two buildings destroyed");
+  assert.ok(force.levels.every((l) => l === 1) && force.hall === 2 && force.hallHp === 0.5 && force.unrest === 2 && !force.devout);
+  const faith = transferCity(rich(), "n2", "religious");
+  assert.equal(faith.plots.filter(Boolean).length, 6, "conversion leaves everything standing");
+  assert.ok(faith.devout && faith.unrest === 0 && faith.hall === 3 && faith.levels[0] === 3);
+  assert.ok(cityEconomy(faith).faith > cityEconomy({ ...faith, devout: false }).faith, "the devout resist");
+  const bought = transferCity(rich(), "n1", "economic");
+  assert.ok(bought.plots.filter(Boolean).length === 6 && bought.unrest === 0 && !bought.devout && bought.hallHp === 1);
 });
