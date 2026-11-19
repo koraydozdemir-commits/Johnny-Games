@@ -1693,6 +1693,10 @@ export function createCivStage(o) {
     spice: T.geysers,
     links: links.map(([a, b]) => [T.cities[a], T.cities[b]]),
   });
+  // Build the ground around the first view now, so the stage opens at full detail rather than filling in.
+  rig.update(0.016);
+  planetView.update(camera, { all: true, budgetMs: 1e9 });
+  flora.update(camera, rig.focusMap(), rig.distance, { maxNew: 1e9 });
   const mini = createMinimap(map, { onPick: (x, z) => rig.flyTo(x, z, Math.min(Math.max(rig.target.dist, ZOOM.city + 40), 260)) });
   hud.appendChild(mini.el);
   // Distant vehicles are drawn as coloured dots instead of full models.

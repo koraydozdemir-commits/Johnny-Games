@@ -7,7 +7,7 @@
  */
 import * as THREE from "three";
 import { hashSeed, rng32 } from "../galaxy/names.js";
-import { candidatesFor, pickAsset } from "../ecolib/catalog.js";
+import { candidatesFor } from "../ecolib/catalog.js";
 import { DENSITIES } from "../ecolib/schema.js";
 import { createLibrary } from "../ecolib/library.js";
 import { createEcoInstancer } from "../ecolib/instancer.js";
@@ -131,15 +131,23 @@ export function createPlanetFlora(parent, map, { quality = "medium", cities = []
     if (pool) return pool;
     const env = { biome: info.biome, temperature: profile.temperature.band, terrain: info.terrain };
     const r = rng32(hashSeed(seed, "pool", key));
+    // One scan of the library for this place, then a weighted draw without replacement.
+    const cands = candidatesFor(env, { categories: layer.cats, minWeight: 0.004 });
     pool = [];
     const want = Math.max(1, Math.round(layer.pool * poolCap));
-    for (let t = 0; t < 24 && pool.length < want; t++) {
-      const a = pickAsset(env, r(), { categories: layer.cats });
-      if (a && !pool.includes(a)) pool.push(a);
-    }
-    if (!pool.length) {
-      const c = candidatesFor(env, { categories: layer.cats, minWeight: 0.001 })[0];
-      if (c) pool.push(c.asset);
+    const left = cands.slice();
+    while (pool.length < want && left.length) {
+      const total = left.reduce((sum, c) => sum + c.weight, 0);
+      let x = r() * total,
+        at = 0;
+      for (let i = 0; i < left.length; i++) {
+        x -= left[i].weight;
+        if (x <= 0) {
+          at = i;
+          break;
+        }
+      }
+      pool.push(left.splice(at, 1)[0].asset);
     }
     pools.set(key, pool);
     return pool;
@@ -166,7 +174,7 @@ export function createPlanetFlora(parent, map, { quality = "medium", cities = []
   };
 
   const cells = new Map();
-  const cellOf = (ci, cj) => {
+  const make = (ci, cj) => {
     const key = ci + "," + cj;
     let c = cells.get(key);
     if (!c) {
@@ -195,24 +203,27 @@ export function createPlanetFlora(parent, map, { quality = "medium", cities = []
 
   let frame = 0,
     lastKey = "",
-    active = 0;
+    active = 0,
+    pending = false;
   const stats = { cells: 0, placements: 0, species: 0 };
   return {
     instancer,
     stats,
     /**
      * Keep the cells near the focus alive. `dist` is the camera's zoom distance: far out nothing is drawn.
+     * New cells are grown a few a frame (`maxNew`), so sweeping across the planet never stalls a frame.
      */
-    update(camera, focus, dist) {
+    update(camera, focus, dist, { maxNew = 2 } = {}) {
       frame++;
       const near = dist < 260;
       const radius = clamp(dist * 1.5, 90, 210);
       const ci = Math.floor(focus.x / CELL),
         cj = Math.floor(focus.z / CELL);
       const key = near ? ci + "," + cj + "," + Math.round(radius / 30) : "off";
-      if (key !== lastKey) {
-        lastKey = key;
+      if (key !== lastKey || pending) {
         const list = [];
+        let fresh = 0;
+        pending = false;
         if (near) {
           const n = Math.ceil(radius / CELL);
           const want = [];
@@ -223,12 +234,19 @@ export function createPlanetFlora(parent, map, { quality = "medium", cities = []
             }
           want.sort((a, b) => a[2] - b[2]);
           for (const [a, b] of want) {
-            const c = cellOf(a, b);
+            const known = cells.has(a + "," + b);
+            if (!known && fresh >= maxNew) {
+              pending = true; // grown on a later frame
+              continue;
+            }
+            if (!known) fresh++;
+            const c = make(a, b);
             c.used = frame;
             if (list.length + c.list.length > budget) break;
             for (const p of c.list) list.push(p);
           }
         }
+        lastKey = key;
         instancer.set(list);
         instancer.update(camera, { force: true }); // clears what is no longer wanted
         active = list.length;

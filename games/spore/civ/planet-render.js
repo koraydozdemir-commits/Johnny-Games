@@ -15,7 +15,7 @@ import { PLANET, mapToLonLat, unitVector } from "./planet-map.js";
 const { R } = PLANET;
 const LON_N = 18,
   LAT_N = 9;
-const LEVELS = [10, 20, 32, 44];
+const LEVELS = [10, 20, 30, 40];
 /** Camera distances (to a patch) under which each level is wanted: level 3 below 150, 2 below 260, 1 below 460. */
 const LEVEL_AT = [Infinity, 460, 260, 150];
 const SKIRT = 5;
@@ -311,9 +311,9 @@ export function createPlanetView(scene, map, { quality = "medium" } = {}) {
     },
     /**
      * Choose each patch's level of detail and visibility for this camera, and build what is wanted
-     * (a little each frame). Call every frame.
+     * (a little each frame). Call every frame. `all` builds everything wanted at once (when the stage opens).
      */
-    update(camera, { budgetMs = 7 } = {}) {
+    update(camera, { budgetMs = 7, all = false } = {}) {
       frame++;
       const cp = camera.position;
       stars.position.copy(cp);
@@ -351,7 +351,7 @@ export function createPlanetView(scene, map, { quality = "medium" } = {}) {
         if (c.levels[level]) continue;
         if (performance.now() - t0 > budgetMs && level > 0) break;
         build(c, level);
-        if (level > 1) break; // at most one big patch a frame
+        if (level > 1 && !all) break; // at most one big patch a frame
       }
       for (const [c, level] of want) {
         // Show the wanted level if it exists, otherwise the nearest one built.
