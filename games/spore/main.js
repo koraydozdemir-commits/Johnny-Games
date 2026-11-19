@@ -1582,7 +1582,7 @@ function setEditor(on) {
   }
   state.editor = on;
   editorStage.visible = on;
-  [sceneryGroup, foodGroup, npcGroup, hazardGroup, meteorGroup, currentGroup].forEach((g) => (g.visible = !on));
+  [sceneryGroup, foodGroup, npcGroup, hazardGroup, meteorGroup, currentGroup, deepGroup].forEach((g) => (g.visible = !on));
   $("#partsPanel").style.display = on ? "flex" : "none";
   $("#editorPanel").style.display = "none";
   $("#gameHUD").style.display = on ? "none" : "flex";
@@ -1794,7 +1794,7 @@ function makeNPC(options = {}) {
   healthGroup.add(bar);
   g.add(healthGroup);
   const initialAngle = Math.random() * Math.PI * 2;
-  const maxHealth = alpha ? 24 : 6 + size * 4;
+  const maxHealth = alpha ? 24 : (6 + size * 4) * (species?.soft ?? 1); // easy prey is soft-bodied
   g.userData = {
     alive: true,
     size: size,
@@ -1908,7 +1908,7 @@ function killNPC(e, playerKill = true) {
   const elite = e.userData.alpha || e.userData.epic;
   spawnBurst(e.position.x, e.position.y, e.userData.color || 0xff9c9c, elite ? 34 : 20);
   if (elite) spawnBurst(e.position.x, e.position.y, 0xffda83, 18);
-  dropMeat(e.position.x, e.position.y, elite ? 6 : Math.max(2, Math.min(5, Math.round(1 + (e.userData.size / stageScale(state.tier)) * 2))));
+  dropMeat(e.position.x, e.position.y, elite ? 6 : Math.max(2, Math.min(5, Math.round(1 + (e.userData.size / stageScale(state.tier)) * 2))) + (SPECIES[e.userData.species]?.meaty || 0));
   dropPartOrb(e);
   if (playerKill) {
     progress.kills++;
@@ -2755,12 +2755,20 @@ function advanceTier() {
   state.eliteTimer = 28 + Math.random() * 20;
   worldSize *= 1.4;
   regionCache.clear(); // each area's residents are chosen per stage
-  // Who is big and who is small, now that you have grown.
+  // Who is big and who is small, now that you have grown. Giants of the stage you grew into shrink
+  // from their towering size down to your own during the growth.
   enemies.forEach((e) => {
-    const native = SPECIES[e.userData.species]?.tier || state.tier;
-    e.userData.giant = native > state.tier;
-    e.userData.prey = native < state.tier;
+    const u = e.userData;
+    const native = SPECIES[u.species]?.tier || state.tier;
+    if (u.giant && native <= state.tier && u.giantBoost) {
+      u.shrinkFrom = u.size;
+      u.shrinkTo = u.size / u.giantBoost;
+      u.giantBoost = 0;
+    }
+    u.giant = native > state.tier;
+    u.prey = native < state.tier;
   });
+  buildDeepCells(); // the deep holds bigger things now
   // The deeper soup of a bigger stage: top up its currents, clouds and meteors.
   for (let n = currents.length; n < WORLD_TUNING.currents[tierIndex()]; n++) createCurrent();
   for (let n = hazards.length; n < WORLD_TUNING.clouds[tierIndex()]; n++) createToxicCloud();
@@ -3376,7 +3384,7 @@ function updateAI(dt, time) {
     e.rotation.z = steerHeading(u.velocity, e.rotation.z, desire.x, desire.y, dt, { turnRate, stroke: strokePulse(u.stroke) });
     u.velocity.multiplyScalar(Math.max(0, 1 - 1.05 * dt));
     // Bigger cells are faster in absolute terms, and hunters put on a burst when they chase.
-    const cap = (u.alpha ? 3.1 : 2.35) * (0.8 + 0.3 * u.size) * (u.state === "hunt" ? 1.18 : 1);
+    const cap = (u.alpha ? 3.1 : 2.35) * (0.8 + 0.3 * u.size) * (u.state === "hunt" ? 1.18 : 1) * (SPECIES[u.species]?.slow ?? 1);
     u.velocity.clampLength(0, cap);
     e.position.x += u.velocity.x * dt;
     e.position.y += u.velocity.y * dt;
@@ -3804,6 +3812,9 @@ function regionSpecies(x, y) {
     const plants = shuffled(residents.plant),
       hunters = shuffled(residents.meat);
     const chosen = [plants[0], ...(rng() < 0.7 && plants[1] ? [plants[1]] : []), hunters[0], ...(rng() < 0.65 && hunters[1] ? [hunters[1]] : [])];
+    // Every area also holds this stage's easy prey, so a carnivore always has something to catch.
+    const easy = residents.plant.find((id) => SPECIES[id]?.easy);
+    if (easy && !chosen.includes(easy)) chosen.push(easy);
     regionCache.set(key, chosen.filter(Boolean));
   }
   return regionCache.get(key);
@@ -3898,6 +3909,7 @@ function respawnFood(f, delay) {
  * Most arrivals are local residents. Some are last stage's species, now small prey, and once in a
  * while one of the next stage's giants drifts through.
  */
+const GIANT_BOOST = 2.3;
 function spawnRegionNPC(spot, pack = null) {
   const roll = pack ? 1 : Math.random(),
     prey = preyFor(state.tier),
@@ -3917,6 +3929,12 @@ function spawnRegionNPC(spot, pack = null) {
   const native = SPECIES[species]?.tier || state.tier;
   e.userData.giant = native > state.tier;
   e.userData.prey = native < state.tier;
+  if (e.userData.giant) {
+    // Next stage's cells tower over you, as in Spore (they come down to size when you grow into their stage).
+    e.userData.giantBoost = GIANT_BOOST;
+    e.userData.size *= GIANT_BOOST;
+    e.scale.setScalar(e.userData.size);
+  }
   // Local hunters often travel in small packs.
   if (!pack && SPECIES[species]?.diet === "meat" && native === state.tier && Math.random() < 0.18) {
     const extra = 1 + (Math.random() < 0.4 ? 1 : 0);
@@ -4024,6 +4042,7 @@ function spawnWorld() {
   for (let n = 0; n < WORLD_TUNING.clouds[tierIndex()]; n++) createToxicCloud();
   for (let n = 0; n < WORLD_TUNING.meteors[tierIndex()]; n++) spawnMeteor();
   state.eliteTimer = Math.min(state.eliteTimer, 28 + Math.random() * 14);
+  buildDeepCells();
   updateVisibility();
 }
 
@@ -4201,7 +4220,7 @@ let growth = null;
 function startGrowthPullback(tier, fromScale = state.scale, toScale = state.scale, toZoom = cameraZoomTarget) {
   if (growth) return;
   const reduced = settings.reducedMotion;
-  growth = { t: 0, dur: reduced ? 1.6 : 3.8, from: cameraZoom, to: toZoom, peak: reduced ? 0.25 : 0.8, zoom: cameraZoom, fromScale, toScale };
+  growth = { t: 0, dur: reduced ? 1.8 : 4.2, from: cameraZoom, to: toZoom, zoom: cameraZoom, fromScale, toScale };
   cameraZoomTarget = toZoom;
   state.damageCooldown = Math.max(state.damageCooldown, growth.dur); // nothing bites mid-growth
   velocity.set(0, 0);
@@ -4218,14 +4237,31 @@ function updateGrowthPullback(dt) {
   const g = growth;
   g.t += dt;
   const k = Math.min(1, g.t / g.dur);
-  const ease = k * k * (3 - 2 * k);
-  const bell = Math.pow(Math.sin(Math.PI * k), 1.4); // out and back again
-  g.zoom = (g.from + (g.to - g.from) * ease) * (1 + g.peak * bell);
-  // The cell grows over the first two thirds, a little ahead of the camera, so it visibly swells first.
-  const gk = Math.min(1, k / 0.66),
-    grow = gk * gk * (3 - 2 * gk);
-  state.scale = g.fromScale + (g.toScale - g.fromScale) * grow;
+  /*
+   * Spore's growth, in two beats. First the cell swells on screen while the camera holds still and
+   * the world slows: you are visibly bigger than everything around you. Then the camera draws back
+   * until you are your usual size on screen again, so everything else shrinks away round you, and
+   * the giants of your new stage shrink down to your size (see advanceTier).
+   */
+  const SWELL = 0.42;
+  const a = Math.min(1, k / SWELL),
+    b = Math.max(0, (k - SWELL) / (1 - SWELL));
+  // Swell with a little overshoot, like a breath in.
+  const swell = a < 1 ? 1 + 2.4 * Math.pow(a - 1, 3) + 1.4 * Math.pow(a - 1, 2) : 1;
+  const ratio = g.toScale / g.fromScale;
+  const settle = b * b * (3 - 2 * b);
+  const peak = ratio * 1.12; // at the top of the swell you look this much bigger on screen
+  state.scale = g.fromScale * (b > 0 ? peak + (ratio - peak) * settle : 1 + (peak - 1) * swell);
+  g.zoom = g.from + (g.to - g.from) * settle;
   player.scale.setScalar(state.scale);
+  // Former giants shrink down to your new size while the camera draws back.
+  for (const e of enemies) {
+    const u = e.userData;
+    if (u.shrinkTo === undefined) continue;
+    u.size = u.shrinkFrom + (u.shrinkTo - u.shrinkFrom) * settle;
+    e.scale.setScalar(u.size);
+    if (k >= 1) delete u.shrinkTo;
+  }
   if (k >= 1) {
     growth = null;
     cameraZoom = g.to;
@@ -4235,7 +4271,7 @@ function updateGrowthPullback(dt) {
     g.after?.();
     saveGame(true);
   }
-  return dt * (1 - 0.7 * bell);
+  return dt * (k < SWELL ? 0.3 : 0.3 + 0.7 * settle); // the world holds its breath while you swell
 }
 
 /* ---- Epic cells -------------------------------------------------------------
@@ -4425,7 +4461,66 @@ function animateCell(time, dt) {
   );
   playerBody?.rig.update(dt, time, { speed });
 }
+/* ---- the deep: enormous cells drifting far below, blurred and out of reach (as in Spore) ----------
+   Bodies of bigger species, faint and tinted by the depth, moving with parallax behind the play layer.
+   Not part of the world: nothing there can touch you, and you can't reach it. */
+const deepGroup = new THREE.Group();
+scene.add(deepGroup);
+let deepCells = [];
+const DEEP_TINT = new THREE.Color(0x182a66);
+function buildDeepCells() {
+  deepCells.forEach((d) => disposeTree(d.g));
+  deepCells = [];
+  const ahead = Object.keys(SPECIES).filter((id) => (SPECIES[id].tier || 1) >= Math.min(LAST_TIER, state.tier + 1));
+  const pool = ahead.length ? ahead : Object.keys(SPECIES);
+  const count = getQuality() === "low" ? 2 : 3;
+  for (let i = 0; i < count; i++) {
+    const id = pool[Math.floor(Math.random() * pool.length)];
+    const record = snapPartsToSurface(speciesRecord(id, Math.random), { faceOutward: true });
+    const body = buildCellBody(record, { role: "npc", seed: 1 + i, shadow: false });
+    body.root.traverse((m) => {
+      if (!m.material) return;
+      m.material = m.material.clone(); // faint and blue with depth (the clone drops the wobble shader: they are far off)
+      m.material.transparent = true;
+      m.material.opacity = 0.3 + Math.random() * 0.1;
+      m.material.depthWrite = false;
+      m.material.color?.lerp(DEEP_TINT, 0.7);
+      if (m.material.emissive) m.material.emissive.set(0x000000);
+      m.renderOrder = -95;
+    });
+    const g = new THREE.Group();
+    g.add(body.root);
+    g.scale.setScalar(stageScale(state.tier) * (7 + Math.random() * 5));
+    deepGroup.add(g);
+    const span = cameraZoom * 1.6;
+    deepCells.push({ g, rig: body.rig, x: (Math.random() - 0.5) * span * 2, y: (Math.random() - 0.5) * span * 2, heading: Math.random() * TAU, speed: 0.35 + Math.random() * 0.3, phase: Math.random() * TAU });
+  }
+}
+function updateDeepCells(dt, time) {
+  const cx = camera.position.x,
+    cy = camera.position.y,
+    span = cameraZoom * 1.7;
+  for (const d of deepCells) {
+    d.heading += Math.sin(time * 0.13 + d.phase) * 0.12 * dt;
+    d.x += Math.cos(d.heading) * d.speed * dt;
+    d.y += Math.sin(d.heading) * d.speed * dt;
+    // Parallax: the deep moves past slower than the water you swim in.
+    let px = cx * 0.55 + d.x,
+      py = cy * 0.55 + d.y;
+    // Keep them passing through the view: one that drifts far off comes round on the other side.
+    if (px - cx > span) d.x -= span * 2;
+    if (px - cx < -span) d.x += span * 2;
+    if (py - cy > span) d.y -= span * 2;
+    if (py - cy < -span) d.y += span * 2;
+    px = cx * 0.55 + d.x;
+    py = cy * 0.55 + d.y;
+    d.g.position.set(px, py, -12);
+    d.g.rotation.z = d.heading;
+    d.rig?.update?.(dt, time, { speed: d.speed });
+  }
+}
 function updateGame(dt, time) {
+  updateDeepCells(dt, time);
   if (
     state.editor ||
     state.paused ||
