@@ -42,15 +42,21 @@ export const abilityIcon = (k) => ABILITY_INFO[k]?.icon || STAT_INFO[k]?.icon ||
  * hand = end of an arm (each arm pair has its own; a foot can go on an arm too, as in Spore).
  */
 export const CREATURE_PARTS = [
-  // Mouths decide diet.
+  // Mouths decide diet (and bite, meals and small talk: see mouths.js). Order is progression order.
   { id: "beak", name: "Grazing Beak", slot: "mouth", diet: "plant", cost: 0, abilities: { sing: 1, bite: 1 }, desc: "A flat beak for fruit and leaves." },
-  { id: "jaws", name: "Hunter Jaws", slot: "mouth", diet: "meat", cost: 0, abilities: { bite: 2 }, desc: "Sharp jaws for tearing meat." },
-  { id: "snout", name: "Rooting Snout", slot: "mouth", diet: "omni", cost: 0, abilities: { bite: 1, sing: 1 }, desc: "Eats anything, does a bit of everything." },
+  { id: "grinder", name: "Grinder Plates", slot: "mouth", diet: "plant", cost: 10, abilities: { bite: 1, health: 1 }, desc: "Broad molars that get every last bit out of a leaf." },
+  { id: "shears", name: "Leaf Shears", slot: "mouth", diet: "plant", cost: 18, abilities: { bite: 2, sing: 1 }, desc: "Scissoring blades: quick snips for feeding and for defence." },
   { id: "fluteBeak", name: "Flute Beak", slot: "mouth", diet: "plant", cost: 15, abilities: { sing: 3, bite: 1 }, desc: "A long hollow beak that carries a melody." },
   { id: "trunk", name: "Curling Trunk", slot: "mouth", diet: "plant", cost: 24, abilities: { sing: 4, charm: 2, bite: 1 }, desc: "A trumpeting trunk that strips branches bare." },
+  { id: "jaws", name: "Hunter Jaws", slot: "mouth", diet: "meat", cost: 0, abilities: { bite: 2 }, desc: "Sharp jaws for tearing meat." },
+  { id: "fangs", name: "Needle Fangs", slot: "mouth", diet: "meat", cost: 10, abilities: { bite: 2 }, desc: "Long fangs that bite fast and let go faster." },
+  { id: "snapper", name: "Snapper Beak", slot: "mouth", diet: "meat", cost: 22, abilities: { bite: 3, strike: 1 }, desc: "A hooked beak that clamps down like a vice. Slow, and it hurts." },
   { id: "tuskMaw", name: "Tusk Maw", slot: "mouth", diet: "meat", cost: 20, abilities: { bite: 4 }, desc: "Heavy tusks. Few things survive a second bite." },
   { id: "mandibles", name: "Mandibles", slot: "mouth", diet: "meat", cost: 26, abilities: { bite: 5, strike: 1 }, desc: "Insect pincer-jaws that scissor shut." },
+  { id: "snout", name: "Rooting Snout", slot: "mouth", diet: "omni", cost: 0, abilities: { bite: 1, sing: 1 }, desc: "Eats anything, does a bit of everything." },
+  { id: "bill", name: "Gleaner Bill", slot: "mouth", diet: "omni", cost: 10, abilities: { bite: 1, sing: 2, charm: 1 }, desc: "A broad bill that sifts seeds, grubs and gossip alike." },
   { id: "crusher", name: "Crusher Snout", slot: "mouth", diet: "omni", cost: 18, abilities: { bite: 3, sing: 2 }, desc: "A broad snout with grinding plates." },
+  { id: "tongue", name: "Whip Tongue", slot: "mouth", diet: "omni", cost: 20, abilities: { bite: 1, sing: 1, charm: 2, sneak: 1 }, desc: "A long, quick tongue that snatches food from a distance." },
   { id: "sawBeak", name: "Saw Beak", slot: "mouth", diet: "omni", cost: 24, abilities: { bite: 3, spit: 2, sing: 2 }, desc: "A serrated beak that can hawk up a glob." },
   // Senses.
   { id: "eyes", name: "Round Eyes", slot: "eye", cost: 0, abilities: { sight: 1 }, desc: "Simple eyes." },
@@ -97,26 +103,31 @@ export const CREATURE_PARTS = [
   { id: "stompers", name: "Stompers", slot: "foot", cost: 20, abilities: { charge: 3, health: 2 }, desc: "Pillar feet that shake the ground." },
 ];
 /**
- * The editor's part sections, in Spore's order. "limbs" also holds the leg- and arm-pair cards the
- * editor adds; "graspers" are hands, which go on the ends of arms.
+ * The editor's part categories, in Spore's order. "limbs" also holds the leg- and arm-pair cards the
+ * editor adds; "graspers" are hands, which go on the ends of arms. Weapons are split into offence
+ * and defence, and details into movement and decoration, so each category stays short enough to browse.
  */
 export const PART_SECTIONS = [
   ["mouth", "Mouths"],
-  ["senses", "Eyes & Senses"],
-  ["limbs", "Limbs"],
-  ["graspers", "Graspers"],
+  ["senses", "Eyes"],
+  ["limbs", "Arms & Legs"],
+  ["graspers", "Hands"],
   ["feet", "Feet"],
-  ["weapons", "Weapons"],
-  ["details", "Details"],
+  ["movement", "Movement"],
+  ["offence", "Offensive"],
+  ["defence", "Defensive"],
+  ["details", "Decorative"],
 ];
 const SECTION_OF = {
-  mouth: ["beak", "jaws", "snout", "fluteBeak", "trunk", "tuskMaw", "mandibles", "crusher", "sawBeak"],
+  mouth: ["beak", "grinder", "shears", "fluteBeak", "trunk", "jaws", "fangs", "snapper", "tuskMaw", "mandibles", "snout", "bill", "crusher", "tongue", "sawBeak"],
   senses: ["eyes", "stalkEyes", "bugEyes", "doeEyes", "antennae", "ears"],
-  limbs: ["wings", "fanFins", "tentacles"],
+  limbs: [],
   graspers: ["paw", "graspers", "claws", "pincers", "bladeArms"],
   feet: ["pads", "hooves", "talons", "webbed", "stompers"],
-  weapons: ["venomSac", "acidGland", "horns", "antlers", "spines", "quills", "stinger"],
-  details: ["frill", "sail", "crest", "glowOrbs", "shell", "plates", "knobs", "tailClub", "plumeTail", "fanTail", "rattleTail"],
+  movement: ["wings", "fanFins", "tentacles"],
+  offence: ["venomSac", "acidGland", "horns", "antlers", "stinger", "tailClub"],
+  defence: ["spines", "quills", "shell", "plates"],
+  details: ["frill", "sail", "crest", "glowOrbs", "knobs", "plumeTail", "fanTail", "rattleTail"],
 };
 for (const [section, ids] of Object.entries(SECTION_OF)) for (const id of ids) CREATURE_PARTS.find((p) => p.id === id).section = section;
 export const creaturePart = (id) => CREATURE_PARTS.find((p) => p.id === id) || null;
@@ -258,6 +269,80 @@ const MODELS = {
     pieces.push(sphere(0.07, 0x9be36b, { x: 0.02, y: -0.16, sx: 1.3 }));
     return pieces;
   },
+  grinder: (c) => [
+    // A wide, blunt muzzle with two rows of broad flat molars showing at the front.
+    { geometry: lathe([[0.22, 0.42], [0.26, 0.3], [0.28, 0.1], [0.27, 0]]), color: shade(c, 0.9), matrix: matrixOf({ sy: 0.8, sz: 1.2 }) },
+    { geometry: lathe([[0.2, 0.42], [0.2, 0.46]]), color: shade(c, 0.9), matrix: matrixOf({ sy: 0.8, sz: 1.2 }) },
+    ...[-2, -1, 0, 1, 2].flatMap((i) => [
+      { geometry: new THREE.BoxGeometry(0.07, 0.05, 0.075), color: 0xe9e0c8, matrix: matrixOf({ x: 0.42, y: 0.04, z: i * 0.085 }) },
+      { geometry: new THREE.BoxGeometry(0.07, 0.05, 0.075), color: 0xd8cdb0, matrix: matrixOf({ x: 0.42, y: -0.07, z: i * 0.085 }) },
+    ]),
+    sphere(0.06, 0x2a1d16, { x: 0.38, y: 0.12, z: 0.14 }, 8),
+    sphere(0.06, 0x2a1d16, { x: 0.38, y: 0.12, z: -0.14 }, 8),
+    socket(c, 0.24),
+  ],
+  shears: (c) => {
+    // Two thin leaf-cutting blades that cross like scissors, on a small beak base.
+    const blade = (sign) => {
+      const shape = new THREE.Shape();
+      shape.moveTo(0, 0.0);
+      shape.quadraticCurveTo(0.26, sign * 0.2, 0.66, sign * 0.03);
+      shape.quadraticCurveTo(0.34, sign * -0.04, 0, sign * -0.09);
+      return { geometry: flat(shape, 0.05).rotateX(-Math.PI / 2), colorAt: gradX(0x8fc25a, 0xf4fbe0, 0, 0.66), matrix: matrixOf({ y: sign * 0.07, rz: sign * -0.14 }) };
+    };
+    return [
+      sphere(0.17, shade(c, 0.9), { x: 0.06, sx: 1.1, sy: 0.8 }),
+      blade(1),
+      blade(-1),
+      { geometry: new THREE.CylinderGeometry(0.03, 0.03, 0.16, 8).rotateX(Math.PI / 2), color: 0x4a5a30, matrix: matrixOf({ x: 0.2 }) },
+      socket(c, 0.22),
+    ];
+  },
+  fangs: (c) => [
+    // A narrow pointed muzzle with two long needle fangs hanging from the upper lip.
+    { geometry: lathe([[0, 0.55], [0.07, 0.42], [0.14, 0.2], [0.17, 0]]), colorAt: gradX(shade(c, 0.8), 0x7a3a46, 0, 0.55), matrix: matrixOf({ y: 0.05, sy: 0.7 }) },
+    { geometry: lathe([[0, 0.42], [0.06, 0.3], [0.1, 0.1], [0.11, 0]]), colorAt: gradX(shade(c, 0.65), 0x5a2a36, 0, 0.42), matrix: matrixOf({ y: -0.09, sy: 0.45 }) },
+    ...[-1, 1].map((z) => curved([[0.3, -0.02, z * 0.09], [0.38, -0.12, z * 0.1], [0.42, -0.3, z * 0.1], [0.4, -0.46, z * 0.09]], 0.035, 0.004, 0xf4ecd6, 0xffffff)),
+    ...[-1, 1].map((z) => curved([[0.4, -0.1, z * 0.06], [0.46, -0.16, z * 0.07], [0.5, -0.24, z * 0.07]], 0.014, 0.003, 0xf4ecd6, 0xffffff)),
+    socket(c, 0.2),
+  ],
+  snapper: (c) => [
+    // A heavy hooked beak, like a snapping turtle's, with a deep hook that bites down over the lower jaw.
+    { ...curved([[0, 0.02], [0.2, 0.06], [0.4, 0.04], [0.52, -0.08], [0.5, -0.24]], 0.2, 0.02, shade(c, 0.7), 0x3a2e20, { radial: 14, segments: 18 }) },
+    { geometry: lathe([[0.04, 0.36], [0.13, 0.28], [0.17, 0.1], [0.17, 0]]), colorAt: gradX(shade(c, 0.6), 0x4a3a28, 0, 0.36), matrix: matrixOf({ y: -0.13, sy: 0.55 }) },
+    ...[-1, 1].map((z) => sphere(0.035, 0x1a140e, { x: 0.28, y: 0.14, z: z * 0.07 }, 8)),
+    { geometry: new THREE.TorusGeometry(0.2, 0.03, 8, 18, Math.PI).rotateY(Math.PI / 2), color: shade(c, 0.55), matrix: matrixOf({ x: 0.0, y: 0.1, rx: Math.PI / 2 }) },
+    socket(c, 0.27),
+  ],
+  bill: (c) => [
+    // A broad, flat spatula bill with a ridge down the top and two nostril dots.
+    { geometry: lathe([[0.18, 0.5], [0.24, 0.38], [0.3, 0.14], [0.26, 0]]), colorAt: gradX(0xe8a24a, 0xffd27a, 0, 0.5), matrix: matrixOf({ y: 0.04, sy: 0.26, sz: 1.5 }) },
+    { geometry: lathe([[0.15, 0.44], [0.21, 0.33], [0.26, 0.1], [0.23, 0]]), colorAt: gradX(0xcc8430, 0xf2bd62, 0, 0.44), matrix: matrixOf({ y: -0.06, sy: 0.22, sz: 1.5 }) },
+    { geometry: new THREE.CylinderGeometry(0.012, 0.03, 0.4, 8).rotateZ(Math.PI / 2), color: 0xb87a2a, matrix: matrixOf({ x: 0.22, y: 0.1 }) },
+    ...[-1, 1].map((z) => sphere(0.022, 0x4a2a10, { x: 0.12, y: 0.11, z: z * 0.07 }, 8)),
+    socket(c, 0.22),
+  ],
+  tongue: (c) => [
+    // Small lips with a long, quick tongue curling out of them, bulbed at the tip.
+    { geometry: lathe([[0.12, 0.26], [0.17, 0.16], [0.2, 0.04], [0.19, 0]]), color: shade(c, 0.9), matrix: matrixOf({ sy: 0.8 }) },
+    sphere(0.06, 0x7a2a32, { x: 0.26, y: -0.02, sx: 0.5 }, 10),
+    curved([[0.22, -0.02], [0.5, -0.06], [0.78, -0.02], [0.96, 0.12], [0.98, 0.3]], 0.05, 0.034, 0xd9607a, 0xff9aae, { segments: 22, radial: 10 }),
+    sphere(0.06, 0xff7a96, { x: 0.98, y: 0.34 }, 10),
+    ...[-1, 1].map((z) => sphere(0.03, 0x2a1a1a, { x: 0.18, y: 0.1, z: z * 0.08 }, 8)),
+    socket(c, 0.2),
+  ],
+  /* Limb cards for the editor's catalogue: a leg and an arm pair as little pictures. */
+  __leg: (c) => [
+    curved([[0, 0.25, 0], [0.08, 0.1, 0], [0.2, -0.08, 0], [0.12, -0.26, 0], [0.2, -0.44, 0]], 0.09, 0.05, shade(c, 1.0), shade(c, 0.85), { segments: 22, radial: 12 }),
+    sphere(0.06, shade(c, 0.9), { x: 0.2, y: 0.0 }, 10),
+    { geometry: new THREE.SphereGeometry(0.09, 12, 9), color: shade(c, 0.8), matrix: matrixOf({ x: 0.27, y: -0.46, sx: 1.6, sy: 0.55 }) },
+  ],
+  __arm: (c) => [
+    curved([[0, 0.2, 0], [0.16, 0.1, 0], [0.32, 0.12, 0], [0.42, -0.02, 0], [0.5, -0.14, 0]], 0.07, 0.04, shade(c, 1.05), shade(c, 0.9), { segments: 22, radial: 12 }),
+    sphere(0.045, shade(c, 0.95), { x: 0.34, y: 0.12 }, 10),
+    sphere(0.07, shade(c, 1.1), { x: 0.52, y: -0.16, sx: 1.2, sy: 0.8 }, 10),
+    ...[-1, 0, 1].map((i) => sphere(0.03, shade(c, 1.15), { x: 0.58, y: -0.2, z: i * 0.05 }, 8)),
+  ],
   /* Eyes */
   eyes: (c) => [...eyeball(0.16, 0x5f9a3c), lid(c, 0.16)],
   stalkEyes: (c) => [

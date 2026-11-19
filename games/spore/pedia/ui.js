@@ -51,7 +51,7 @@ export function openPedia(o) {
   el.setAttribute("aria-labelledby", "pdTitle");
   el.innerHTML = `
     <div class="pdPanel">
-      <div class="pdTop"><div><small id="pdScopeName">${esc(S.meta.name)}</small><h2 id="pdTitle">Sporepedia</h2></div>${o.global ? `<div class="pdScope" role="radiogroup" aria-label="Collection"><button role="radio" aria-checked="true" data-scope="local">This universe</button><button role="radio" aria-checked="false" data-scope="global">All universes</button></div>` : ""}<button class="pdBtn" id="pdClose" aria-label="Close the Sporepedia">✕</button></div>
+      <div class="pdTop"><div><small id="pdScopeName">${esc(S.meta.name)}</small><h2 id="pdTitle">Sporepedia</h2></div>${o.global ? `<div class="pdScope" role="radiogroup" aria-label="Collection"><button role="radio" aria-checked="true" data-scope="local">This universe</button><button role="radio" aria-checked="false" data-scope="global">All universes</button></div>` : ""}${o.onLibrary ? `<button class="pdBtn sm" id="pdLibrary" title="Browse every plant, rock and creature planets are built from">Ecosystem Library</button>` : ""}<button class="pdBtn" id="pdClose" aria-label="Close the Sporepedia">✕</button></div>
       <div class="pdBar">
         <label class="pdSearch"><span class="sr">Search</span><input type="search" id="pdQ" placeholder="Search names, planets, diets…" autocomplete="off" spellcheck="false"></label>
         <label><span class="sr">Sort by</span><select id="pdSort"><option value="recent">Newest</option><option value="oldest">Oldest</option><option value="name">Name</option><option value="rarity">Rarity</option><option value="danger">Danger</option></select></label>
@@ -448,6 +448,7 @@ export function openPedia(o) {
   };
   document.addEventListener("keydown", onKey, true);
   $("#pdClose").onclick = close;
+  if (o.onLibrary) $("#pdLibrary").onclick = () => o.onLibrary();
   el.addEventListener("click", (e) => e.target === el && close());
   function close() {
     turntable?.dispose();

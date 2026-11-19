@@ -33,11 +33,15 @@ import { openUniverses } from "./universe/ui.js";
 import { openGalaxy } from "./galaxy/ui.js";
 import { createGalaxyStart } from "./galaxy/start.js";
 import { openPedia } from "./pedia/ui.js";
+import { openEcoLibrary } from "./ecolib/ui.js";
+import { setHomeworld } from "./ecolib/homeworld.js";
 import { asPedia, listGlobal, putGlobal, updateGlobal } from "./universe/global.js";
 import { readCreation } from "./creations/format.js";
 import { openModularEditor } from "./creations/editor.js";
 import { STARTER_DESIGNS } from "./creations/modular.js";
 import { CREATURE_PARTS } from "./creature/parts.js";
+import { STARTER_MOUTHS, earnedMouths, progressOf } from "./creature/mouths.js";
+import { partThumb } from "./creature/part-thumbs.js";
 import { timeUniform } from "./gfx/materials.js";
 import { renderCellSnapshot, renderPartThumbnails } from "./gfx/thumbs.js";
 import { SPECIES, chooseSpecies, speciesRecord } from "./species.js";
@@ -2125,7 +2129,7 @@ function startCreatureStage(resume = false, intro = false) {
       popCard({ kind: "Creature card · " + card.trait + " consequence trait", title: card.title + ": " + card.ability, text: card.text, icon: card.icon, color: card.color });
       saveGame(true);
     },
-    onUnlock: (part, source) => popCard({ kind: "New part · " + source, title: part.name, text: part.desc, icon: "🦴", color: "#f5c75a" }),
+    onUnlock: (part, source) => popCard({ kind: "New part · " + source, title: part.name, text: part.desc, img: partThumb(renderer, part.id), icon: "🦴", color: "#f5c75a" }),
     onHistory: openPath,
     onSettings: openGameSettings,
     onTribe: () => startTribeStage(),
@@ -2147,8 +2151,7 @@ function startCreatureStage(resume = false, intro = false) {
   });
   // Arrival: design the first land generation before setting off (after the crawl-out, if any).
   const arrive = () => {
-    const s = creatureStage.debug.P;
-    openCreatureEditorFor({ record: s.record, unlocked: new Set([...creaturePartIds(s.record), "paw"]), dna: s.dna }, true);
+    openCreatureEditorFor(creatureStage.editorState(), true);
   };
   if (fresh && intro) document.body.classList.add("cinematic");
   if (fresh && !intro) arrive();
@@ -2162,6 +2165,8 @@ function openCreatureEditorFor(d, arrival) {
     renderer,
     record: d.record,
     unlocked: d.unlocked,
+    seen: d.seen,
+    progress: d.progress,
     dna: d.dna,
     // The part budget grows with the brain (never below what the creature already has).
     maxParts: partsLimit(creatureStage?.debug?.P?.brain || 1),
@@ -5481,6 +5486,10 @@ async function initUniverse() {
       },
     });
     universe = { store, meta, session };
+    // Every stage is built on the homeworld: hand its environment to all of them before any starts.
+    const profile = session.homeProfile();
+    setHomeworld(profile);
+    background.setPlanet(profile);
     // The home world and its star are known from the start: this is where the species began.
     const home = session.home();
     const planet = session.planet(home.planetId);
@@ -5715,6 +5724,8 @@ function openUniverseScreen(screen, arg) {
         ui.close();
         setTimeout(() => openUniverseScreen("galaxy", focus), 220);
       },
+      // The shared library opens over the Sporepedia and gives it back when closed.
+      onLibrary: () => openEcoLibrary({ renderer, reducedMotion: settings.reducedMotion, sfx: playSfx }),
       onClose: done,
     });
   }
@@ -5729,7 +5740,8 @@ function editCreation(entry) {
   const resume = holdGame();
   document.body.classList.add("creatureEditing");
   const saved = loadCreatureSave();
-  const unlocked = new Set([...(Array.isArray(saved?.unlocked) ? saved.unlocked : []), ...creaturePartIds(entry.record)].filter((id) => CREATURE_PARTS.some((p) => p.id === id)));
+  const progress = progressOf(saved || {});
+  const unlocked = new Set([...(Array.isArray(saved?.unlocked) ? saved.unlocked : []), ...creaturePartIds(entry.record), ...STARTER_MOUTHS, ...earnedMouths(progress)].filter((id) => CREATURE_PARTS.some((p) => p.id === id)));
   const finish = () => {
     creatureEditor = null;
     document.body.classList.remove("creatureEditing");
@@ -5739,6 +5751,7 @@ function editCreation(entry) {
     renderer,
     record: JSON.parse(JSON.stringify(entry.record)),
     unlocked,
+    progress,
     dna: 9999,
     maxParts: partsLimit(saved?.brain || 5),
     quality: getQuality(),
@@ -6011,7 +6024,9 @@ if (new URLSearchParams(location.search).has("debug")) {
     get universe() {
       return universe;
     },
+    background,
     openUniverseScreen,
+    openEcoLibrary: (o2) => openEcoLibrary({ renderer, reducedMotion: settings.reducedMotion, sfx: playSfx, ...o2 }),
     syncPedia,
     editCreation,
     state,

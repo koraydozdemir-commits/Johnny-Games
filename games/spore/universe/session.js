@@ -6,6 +6,7 @@
 import { findHomeWorld, makeEcosystem, makeGalaxy, makeSystem, PLANET_TYPES, STAR_KINDS } from "../galaxy/gen.js";
 import { discover, emptyPedia, logEvent, milestone, nameOf, setPlanetStatus, upsert } from "../pedia/model.js";
 import { pedia as pediaStore } from "./pedia-store.js";
+import { planetProfile } from "../ecolib/planet-profile.js";
 
 /**
  * @param {{ store:object, meta:object, onEvent?:(ev:object)=>void, onSaveState?:(state:string)=>void, onOwned?:(entry:object)=>void }} o
@@ -69,6 +70,24 @@ export async function createSession(o) {
         save();
       }
       return pedia.home;
+    },
+    /**
+     * The home world's environment profile: generated the first time it is needed and then stored with the
+     * universe, so the same world keeps its colours, biomes and ecosystem for good.
+     */
+    homeProfile() {
+      const home = S.home();
+      if (!home.profile) {
+        const planet = S.planet(home.planetId);
+        if (!planet) return null;
+        home.profile = planetProfile(planet, { star: S.galaxy().stars[home.starId], seed: meta.seed });
+        save();
+      }
+      return home.profile;
+    },
+    /** Any planet's profile (deterministic from the universe seed; only the home world's is stored). */
+    planetProfile(planet) {
+      return planetProfile(planet, { star: S.galaxy().stars[planet.starId], seed: meta.seed });
     },
     on(fn) {
       listeners.add(fn);

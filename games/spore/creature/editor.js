@@ -2,15 +2,22 @@
  * Creature editor: shape the spine, add legs, drop parts on the body, paint, test drive.
  *
  * Opens over the game with its own scene and orbit camera. The spine is edited in the side profile
- * (the body is always mirrored left/right, like Spore). Parts are dragged from the strip onto the
- * body; flank parts mirror automatically. New parts and leg pairs cost DNA.
+ * (the body is always mirrored left/right, like Spore). Parts live in a catalogue: category icons
+ * across the top, a grid of thumbnails, and a detail card with stats and a comparison against what
+ * is equipped. Tap a part to select (and preview) it, then Equip, or drag it onto the body; flank
+ * parts mirror automatically. New parts and leg pairs cost DNA. On wide screens the catalogue is a
+ * panel on the left of a large preview; on narrow ones it is a sheet under it.
  */
 import * as THREE from "three";
 import { createEditorBackdrop } from "./backdrop.js";
 import { buildCreatureBody } from "./body3d.js";
 import { ARM_ANGLE, LIMITS, armPairsOf, creaturePartIds, validateCreature } from "./format.js";
-import { ABILITY_INFO, ARM_ABILITIES, COMBAT, CREATURE_PARTS, PART_SECTIONS, SOCIAL, STAT_INFO, abilitiesOf, abilityIcon, creaturePart, dietOfParts, fitsArm, partGeometry } from "./parts.js";
+import { ABILITY_INFO, ARM_ABILITIES, COMBAT, CREATURE_PARTS, PART_SECTIONS, SOCIAL, STAT_INFO, abilitiesOf, creaturePart, fitsArm } from "./parts.js";
+import { DIET_NAME, MOUTH_DIETS, mouthDiet, mouthsOfDiet } from "./mouths.js";
 import { movementOf, rate } from "./anatomy.js";
+import { ICONS, SECTION_ICON } from "./editor-icons.js";
+import { esc, infoHtml, mouthPanelHtml, shownName, tileHtml } from "./editor-catalogue.js";
+import { bakePartThumbs } from "./part-thumbs.js";
 
 const LEG_COST = 8;
 const ARM_COST = 8;
@@ -32,7 +39,6 @@ const cardDef = (id) => (id === LEG_CARD.id ? LEG_CARD : id === ARM_CARD.id ? AR
 const ARM_SPOT = { t: 0.76, angle: 1.7 };
 /** Where a part goes when it is tapped instead of dragged. */
 const DEFAULT_SPOT = { mouth: [1, 0], eye: [0.92, 0.62], side: [0.62, 1.45], back: [0.5, 0], tail: [0, 0] };
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const hex = (n) => "#" + n.toString(16).padStart(6, "0");
 
 /** DNA cost of turning `from` into `to`: new parts and hands, leg and arm pairs, and vertebrae; removing is free. */
@@ -55,6 +61,8 @@ export function designCost(from, to) {
  * @param {THREE.WebGLRenderer} o.renderer
  * @param {object} o.record     current design
  * @param {Set<string>} o.unlocked  part ids the player may use
+ * @param {Set<string>} [o.seen]    part ids the player has seen on a creature (locked parts show their name only if seen)
+ * @param {object} [o.progress]     what the player has achieved (see mouths.js progressOf), for unlock requirements
  * @param {number} o.dna
  * @param {string} o.quality
  * @param {(kind:string) => void} o.sfx
@@ -79,29 +87,31 @@ export function openCreatureEditor(o) {
 
   /* ---- DOM -------------------------------------------------------------- */
   const root = document.createElement("div");
-  root.className = "crEditor";
+  root.className = "crEditor ceCat";
   root.setAttribute("role", "dialog");
   root.setAttribute("aria-label", "Creature editor");
+  const railButton = (cat, label, icon, selected) => `<button role="tab" data-cat="${cat}" aria-selected="${selected}" aria-label="${label}" title="${label}">${icon}</button>`;
   root.innerHTML = `
     <div class="ceTop">
       <input id="ceName" maxlength="22" aria-label="Species name" autocomplete="off" spellcheck="false">
       <span class="ceDna" id="ceDna" aria-live="polite"></span>
       <div class="ceTopBtns">
-        <button id="ceUndo" aria-label="Undo" title="Undo (Ctrl+Z)">↶</button>
-        <button id="ceRedo" aria-label="Redo" title="Redo (Ctrl+Y)">↷</button>
-        <button id="ceTest" aria-pressed="false">▶ Test</button>
+        <button id="ceUndo" aria-label="Undo" title="Undo (Ctrl+Z)">${ICONS.undo}</button>
+        <button id="ceRedo" aria-label="Redo" title="Redo (Ctrl+Y)">${ICONS.redo}</button>
+        <button id="ceReset" aria-label="Undo all changes" title="Undo all changes">${ICONS.reset}<span>Reset</span></button>
+        <button id="ceTest" aria-pressed="false" title="Walk your creature around">${ICONS.play}<span>Test</span></button>
         <button id="ceCancel">Cancel</button>
-        <button id="ceDone" class="primary">Done</button>
+        <button id="ceDone" class="primary" title="Save this design">Save</button>
       </div>
     </div>
     <p class="ceHint" id="ceHint" aria-live="polite"></p>
-    <aside class="ceStats" id="ceStats" aria-label="Abilities"></aside>
+    <aside class="ceStats" id="ceStats" aria-label="Creature statistics"></aside>
     <div class="ceTestBar" id="ceTestBar" hidden></div>
     <section class="cePanel" aria-label="Editor tools">
-      <nav class="ceTabs" role="tablist">
-        <button role="tab" data-tab="body" aria-selected="true">Body</button>
-        <button role="tab" data-tab="parts" aria-selected="false">Parts <small class="ceBudget" id="ceBudget"></small></button>
-        <button role="tab" data-tab="paint" aria-selected="false">Paint</button>
+      <nav class="ceRail" role="tablist" aria-label="Categories">
+        ${railButton("body", "Body", ICONS.body, true)}
+        ${PART_SECTIONS.map(([id, title]) => railButton(id, title, SECTION_ICON[id], false)).join("")}
+        ${railButton("paint", "Paint", ICONS.paint, false)}
       </nav>
       <div class="ceTab" data-pane="body"></div>
       <div class="ceTab" data-pane="parts" hidden></div>
@@ -141,7 +151,7 @@ export function openCreatureEditor(o) {
   function rebuild() {
     if (creature) creature.dispose();
     rec = validateCreature(rec);
-    creature = buildCreatureBody(rec, { quality: o.quality === "low" ? "medium" : "high" });
+    creature = buildCreatureBody(view(), { quality: o.quality === "low" ? "medium" : "high" });
     creature.root.position.y = FLOOR;
     scene.add(creature.root);
     centre.set((creature.extent.minX + creature.extent.maxX) / 2, creature.extent.lift + FLOOR, 0);
@@ -160,12 +170,18 @@ export function openCreatureEditor(o) {
     });
     handles.visible = !testing;
     creature.update(0, 0); // settle into the rest pose so the joint handles sit on the joints
+    creature.root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(creature.root);
+    bounds = { w: Math.max(2, box.max.x - box.min.x, box.max.z - box.min.z), h: Math.max(1.5, box.max.y - box.min.y) };
     updatePartHalo();
     renderGrips();
     renderStats();
     renderDna();
   }
   const centre = new THREE.Vector3();
+  /** World size of the creature as built, for framing it in the free part of the screen. */
+  let bounds = { w: 4, h: 3 };
+  let framing = 0;
   const coarse = matchMedia("(pointer: coarse)").matches;
   function commit() {
     undoStack.push(JSON.stringify(rec));
@@ -179,10 +195,23 @@ export function openCreatureEditor(o) {
     nameInput.value = rec.name;
     selectedNode = Math.min(selectedNode, rec.spine.length - 1);
     selectedPart = -1;
+    previewId = null;
     rebuild();
-    renderBodyTab();
+    setTab(tab);
     o.sfx("click");
   }
+  $("#ceReset").onclick = () => {
+    if (JSON.stringify(rec) === JSON.stringify(original)) return;
+    commit();
+    rec = JSON.parse(JSON.stringify(original));
+    nameInput.value = rec.name;
+    selectedNode = selectedPart = -1;
+    previewId = null;
+    rebuild();
+    setTab(tab);
+    hint("Back to the design you opened with. Undo brings your changes back.");
+    o.sfx("click");
+  };
   $("#ceUndo").onclick = () => restore(undoStack, redoStack);
   $("#ceRedo").onclick = () => restore(redoStack, undoStack);
 
@@ -197,13 +226,14 @@ export function openCreatureEditor(o) {
   };
   function renderDna() {
     const c = cost();
-    $("#ceDna").innerHTML = `🧬 <b>${o.dna - c}</b> left${c ? ` <small>(−${c})</small>` : ""}`;
+    $("#ceDna").innerHTML = `${ICONS.dna}<b>${o.dna - c}</b> DNA${c ? ` <small>(−${c})</small>` : ""}`;
     $("#ceDna").classList.toggle("over", c > o.dna);
     const issues = problems();
     $("#ceDone").disabled = issues.length > 0;
-    $("#ceDone").title = issues.join(". ");
+    $("#ceDone").title = issues.length ? issues.join(". ") : "Save this design";
     $("#ceUndo").disabled = !undoStack.length;
     $("#ceRedo").disabled = !redoStack.length;
+    $("#ceReset").disabled = JSON.stringify(rec) === JSON.stringify(original);
   }
   function renderStats() {
     // The part budget: how many parts this brain can manage.
@@ -212,28 +242,56 @@ export function openCreatureEditor(o) {
       budget.textContent = rec.parts.length + "/" + maxParts;
       budget.classList.toggle("full", rec.parts.length >= maxParts);
     }
-    const ab = abilitiesOf(creaturePartIds(rec), rec.legs.length, armPairsOf(rec));
-    const diet = dietOfParts(rec.parts.map((p) => p.id));
+    const shown = view();
+    const ab = abilitiesOf(creaturePartIds(shown), shown.legs.length, armPairsOf(shown));
+    const mouthId = mouthOf(shown);
+    const diet = mouthId ? mouthDiet(mouthId) : "omni";
     const bar = (v) => `<i>${[1, 2, 3, 4, 5].map((n) => `<b class="${n <= v ? "on" : ""}"></b>`).join("")}</i>`;
-    const row = (k, name, icon) => `<div class="ceStat"><span>${icon} ${name}</span>${bar(ab[k])}</div>`;
+    const row = (k, name) => `<div class="ceStat"><span>${name}</span>${bar(ab[k])}</div>`;
     // How the body moves: plan, legs, bulk, tail and fins (see anatomy.js). Trade-offs, not upgrades.
-    const mv = movementOf(rec, ab);
-    const mrow = (icon, name, v, tip) => `<div class="ceStat" title="${tip}"><span>${icon} ${name}</span>${bar(v)}</div>`;
+    const mv = movementOf(shown, ab);
+    const mrow = (name, v, tip) => `<div class="ceStat" title="${tip}"><span>${name}</span>${bar(v)}</div>`;
     const bulk = mv.bulk < 0.85 ? "Light" : mv.bulk < 1.35 ? "Medium" : "Heavy";
+    // While another mouth is being previewed, its numbers carry a comparison with the one you have equipped.
+    const equippedMouth = mouthOf(rec);
     $("#ceStats").innerHTML =
-      `<h3>${diet === "meat" ? "Carnivore" : diet === "plant" ? "Herbivore" : "Omnivore"} · ${mv.planName}</h3>` +
+      `<h3>${DIET_NAME[diet]} · ${mv.planName}</h3>` +
+      (previewId && mouthId !== equippedMouth ? '<p class="cePrevNote">Previewing, not equipped yet</p>' : "") +
+      mouthPanelHtml(mouthId, previewId && mouthId !== equippedMouth ? equippedMouth : null) +
       '<h4>Movement</h4>' +
-      mrow("💨", "Top speed", rate(mv.top, 3, 9), `${mv.top.toFixed(1)} m/s. Longer legs and fast feet help; bulk slows you.`) +
-      mrow("↻", "Agility", rate(mv.turn * mv.accel, 8, 36), "How quickly you turn and get going. More legs and a tail help; bulk hurts.") +
-      mrow("🌊", "Swimming", rate(mv.swim, 0.55, 1.35), "Fins, webbed feet and tentacles swim faster.") +
-      `<div class="ceStat" title="Heavy bodies hit harder in a charge but are spotted from further away."><span>⚖ Build</span><em>${bulk}</em></div>` +
+      mrow("Top speed", rate(mv.top, 3, 9), `${mv.top.toFixed(1)} m/s. Longer legs and fast feet help; bulk slows you.`) +
+      mrow("Agility", rate(mv.turn * mv.accel, 8, 36), "How quickly you turn and get going. More legs and a tail help; bulk hurts.") +
+      mrow("Swimming", rate(mv.swim, 0.55, 1.35), "Fins, webbed feet and tentacles swim faster.") +
+      `<div class="ceStat" title="Heavy bodies hit harder in a charge but are spotted from further away."><span>Build</span><em>${bulk}</em></div>` +
       '<h4>Combat</h4>' +
-      COMBAT.map((k) => row(k, ABILITY_INFO[k].name, ABILITY_INFO[k].icon)).join("") +
+      COMBAT.map((k) => row(k, ABILITY_INFO[k].name)).join("") +
       '<h4>Social</h4>' +
-      SOCIAL.map((k) => row(k, ABILITY_INFO[k].name, ABILITY_INFO[k].icon)).join("") +
+      SOCIAL.map((k) => row(k, ABILITY_INFO[k].name)).join("") +
       '<h4>Body</h4>' +
-      ["health", "sight", "hearing", "sneak", "jump", "glide"].map((k) => row(k, STAT_INFO[k].name, STAT_INFO[k].icon)).join("");
+      ["health", "sight", "hearing", "sneak", "jump", "glide"].map((k) => row(k, STAT_INFO[k].name)).join("");
   }
+  /** The mouth part id on a design. */
+  const mouthOf = (r) => r.parts.find((p) => creaturePart(p.id)?.slot === "mouth")?.id || null;
+  /** The design as shown: with the previewed part swapped in (mouth, tail or foot), otherwise as built. */
+  function view() {
+    if (!previewId) return rec;
+    const def = creaturePart(previewId);
+    if (!def || !["mouth", "tail", "foot"].includes(def.slot)) return rec;
+    return withPart(rec, previewId);
+  }
+  /** A copy of the design with an exclusive part (mouth, tail, foot) swapped in, keeping the old one's size and place. */
+  function withPart(r, id) {
+    const def = creaturePart(id);
+    const copy = JSON.parse(JSON.stringify(r));
+    if (def.slot === "foot") copy.foot = id;
+    else {
+      const old = copy.parts.find((p) => creaturePart(p.id)?.slot === def.slot);
+      copy.parts = copy.parts.filter((p) => creaturePart(p.id)?.slot !== def.slot);
+      copy.parts.push({ scale: 1, ...(old || {}), id, ...(old ? {} : DEFAULT_SPOT[def.slot] ? { t: DEFAULT_SPOT[def.slot][0], angle: DEFAULT_SPOT[def.slot][1] } : {}) });
+    }
+    return validateCreature(copy);
+  }
+  let previewId = null;
 
   /* ---- Body tab --------------------------------------------------------------- */
   function renderBodyTab() {
@@ -242,7 +300,7 @@ export function openCreatureEditor(o) {
       <div class="ceGroup">
         <h4>Spine <small>${rec.spine.length} / ${LIMITS.maxNodes}</small></h4>
         <div class="ceRow">
-          <button id="ceAddNode" ${rec.spine.length >= LIMITS.maxNodes ? "disabled" : ""}>+ Vertebra <small>${NODE_COST}🧬</small></button>
+          <button id="ceAddNode" ${rec.spine.length >= LIMITS.maxNodes ? "disabled" : ""}>+ Vertebra <small>${NODE_COST} DNA</small></button>
           <button id="ceDelNode" ${node && rec.spine.length > LIMITS.minNodes ? "" : "disabled"}>− Remove selected</button>
         </div>
         <label class="ceSlider ${node ? "" : "off"}">Girth${node ? "" : " <small>(select a handle)</small>"}
@@ -262,7 +320,7 @@ export function openCreatureEditor(o) {
             </div>`,
           )
           .join("")}
-        <button id="ceAddLeg" ${rec.legs.length >= LIMITS.maxLegPairs ? "disabled" : ""}>+ Leg pair <small>${LEG_COST}🧬</small></button>
+        <button id="ceAddLeg" ${rec.legs.length >= LIMITS.maxLegPairs ? "disabled" : ""}>+ Leg pair <small>${LEG_COST} DNA</small></button>
       </div>
       <div class="ceGroup">
         <h4>Arms <small>${rec.arms.length} / ${LIMITS.maxArmPairs} pairs</small></h4>
@@ -277,7 +335,7 @@ export function openCreatureEditor(o) {
             </div>`,
           )
           .join("")}
-        <button id="ceAddArm" ${rec.arms.length >= LIMITS.maxArmPairs ? "disabled" : ""}>+ Arm pair <small>${ARM_COST}🧬</small></button>
+        <button id="ceAddArm" ${rec.arms.length >= LIMITS.maxArmPairs ? "disabled" : ""}>+ Arm pair <small>${ARM_COST} DNA</small></button>
       </div>`;
     const p = $('[data-pane="body"]');
     p.querySelector("#ceAddNode").onclick = () => {
@@ -354,11 +412,30 @@ export function openCreatureEditor(o) {
   }
 
   /* ---- Parts tab ---------------------------------------------------------------- */
-  const thumbCache = new Map();
+  let thumbs = new Map();
+  let partSection = PART_SECTIONS[0][0];
+  /** The catalogue card shown in the detail panel. */
+  let focusId = null;
+  const seenPart = (id) => !o.seen || o.seen.has(id) || id === LEG_CARD.id || id === ARM_CARD.id;
+  const equippedNow = (def) =>
+    def.slot === "foot" ? rec.foot === def.id || rec.arms.some((a) => a.hand === def.id) : def.slot === "hand" ? rec.arms.some((a) => a.hand === def.id) : def.slot === "leg" || def.slot === "arm" ? false : rec.parts.some((p) => p.id === def.id);
+  /** One at a time: choosing it replaces what is there. */
+  const isExclusive = (def) => ["mouth", "tail", "foot", "hand"].includes(def.slot);
+  const PREVIEWABLE = ["mouth", "tail", "foot"];
+  const defsOf = (section) => {
+    const defs = CREATURE_PARTS.filter((p) => p.section === section);
+    if (section === "limbs") defs.unshift(LEG_CARD, ARM_CARD);
+    return defs;
+  };
   function renderPartsTab() {
     const pane = $('[data-pane="parts"]');
     const sel = rec.parts[selectedPart];
     const selDef = sel && creaturePart(sel.id);
+    const title = PART_SECTIONS.find(([id]) => id === partSection)[1];
+    const defs = defsOf(partSection);
+    if (!focusId || !defs.some((d) => d.id === focusId)) focusId = (defs.find((d) => equippedNow(d)) || defs[0])?.id || null;
+    const tile = (def) =>
+      tileHtml(def, { thumb: thumbs.get(def.id === LEG_CARD.id ? "__leg" : def.id === ARM_CARD.id ? "__arm" : def.id), unlocked: isUnlocked(def.id), seen: seenPart(def.id), inUse: equippedNow(def), focused: def.id === focusId });
     let html = "";
     if (selDef) {
       html += `<div class="ceSelected"><b>${esc(selDef.name)}</b>
@@ -366,53 +443,24 @@ export function openCreatureEditor(o) {
         <label>Turn <input type="range" data-partk="roll" min="-3.14" max="3.14" step="0.05" value="${sel.roll || 0}"></label>
         <button id="cePartDel">Remove</button></div>`;
     }
-    // Spore's layout: a row of section tabs, and one sideways strip of parts for the chosen section.
-    html += '<div class="ceChips" role="tablist" aria-label="Part sections">';
-    for (const [section, title] of PART_SECTIONS) html += `<button role="tab" data-sec="${section}" aria-selected="${section === partSection}">${title}</button>`;
-    html += '</div><div class="ceStrip" id="ceStrip">';
-    {
-      const section = partSection;
-      html += `<div class="ceSlot"><div class="ceCards">`;
-      const defs = CREATURE_PARTS.filter((p) => p.section === section);
-      if (section === "limbs") defs.unshift(LEG_CARD, ARM_CARD);
-      for (const def of defs) {
-        const unlocked = isUnlocked(def.id);
-        const onArm = rec.arms.some((a) => a.hand === def.id);
-        const inUse = def.slot === "foot" ? rec.foot === def.id || onArm : def.slot === "hand" ? onArm : def.slot === "leg" || def.slot === "arm" ? false : rec.parts.some((p) => p.id === def.id);
-        const abilities = Object.entries(def.abilities)
-          .map(([k, v]) => abilityIcon(k) + v)
-          .join(" ");
-        html += `<button class="cePart ${unlocked ? "" : "locked"} ${inUse ? "inUse" : ""}" data-part="${def.id}" ${unlocked ? "" : 'aria-disabled="true"'} aria-label="${esc(def.name)}${unlocked ? ", costs " + def.cost + " DNA" : ", locked"}">
-          <span class="thumb">${def.slot === "leg" ? '<span class="legIc" aria-hidden="true">🦵</span>' : def.slot === "arm" ? '<span class="legIc" aria-hidden="true">💪</span>' : ""}${thumbCache.get(def.id) ? `<img src="${thumbCache.get(def.id)}" alt="" draggable="false">` : ""}${unlocked ? "" : '<span class="lk" aria-hidden="true">🔒</span>'}</span>
-          <b>${esc(def.name)}</b><small>${abilities}</small><em>${unlocked ? (def.cost ? def.cost + "🧬" : "Free") : "Find it"}</em>
-        </button>`;
+    const open = defs.filter((d) => isUnlocked(d.id)).length;
+    html += `<h3 class="ceCatTitle">${title}<small>${open}/${defs.length} unlocked</small><small class="ceBudget" id="ceBudget"></small></h3><div class="ceGrid" id="ceGrid" role="group" aria-label="${title}">`;
+    if (partSection === "mouth") {
+      // Mouths are grouped by what they let you eat.
+      for (const diet of MOUTH_DIETS) {
+        html += `<h4 class="ceDietHead diet-${diet}">${DIET_NAME[diet]}</h4>`;
+        for (const id of mouthsOfDiet(diet)) html += tile(creaturePart(id));
       }
-      html += "</div></div>";
-    }
-    html += "</div>";
-    const keepScroll = pane.querySelector(".ceCards")?.scrollLeft || 0;
-    const sameSection = pane.dataset.section === partSection;
+    } else html += defs.map(tile).join("");
+    html += '</div><div class="ceInfo" id="ceInfo" aria-live="polite"></div>';
+    const grid0 = pane.querySelector(".ceGrid");
+    const keepScroll = pane.dataset.section === partSection && grid0 ? grid0.scrollTop : 0;
+    const keepLeft = pane.dataset.section === partSection && grid0 ? grid0.scrollLeft : 0;
     pane.innerHTML = html;
     pane.dataset.section = partSection;
-    const strip = pane.querySelector(".ceCards");
-    if (sameSection) strip.scrollLeft = keepScroll;
-    // A mouse wheel scrolls the strip sideways.
-    strip.addEventListener(
-      "wheel",
-      (e) => {
-        if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-        e.preventDefault();
-        strip.scrollLeft += e.deltaY;
-      },
-      { passive: false },
-    );
-    pane.querySelectorAll(".ceChips button").forEach((b) => {
-      b.onclick = () => {
-        partSection = b.dataset.sec;
-        renderPartsTab();
-        pane.querySelector(`.ceChips [data-sec="${partSection}"]`)?.focus();
-      };
-    });
+    const grid = pane.querySelector(".ceGrid");
+    grid.scrollTop = keepScroll;
+    grid.scrollLeft = keepLeft;
     if (selDef) {
       pane.querySelectorAll("input[data-partk]").forEach((inp) => {
         inp.onpointerdown = () => commit();
@@ -425,8 +473,91 @@ export function openCreatureEditor(o) {
       pane.querySelector("#cePartDel").onclick = removeSelectedPart;
     }
     pane.querySelectorAll(".cePart").forEach((card) => wireCard(card));
+    grid.onkeydown = gridKeys;
+    sizeTiles();
+    renderInfo();
+    renderStats(); // refreshes the part budget in the title
   }
-  let partSection = PART_SECTIONS[0][0];
+  /** In the side panel, tiles are squares that fill four columns exactly (the sheet uses fixed sizes). */
+  function sizeTiles() {
+    const grid = root.querySelector(".ceGrid");
+    if (!grid || !root.classList.contains("side")) return;
+    const cs = window.getComputedStyle(grid);
+    const inner = grid.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const gap = parseFloat(cs.columnGap) || 8;
+    if (inner > 0) root.style.setProperty("--tile", Math.floor((inner - gap * 3) / 4) + "px");
+  }
+  /** Arrow keys move between tiles. */
+  function gridKeys(e) {
+    const tiles = [...e.currentTarget.querySelectorAll(".cePart")];
+    const i = tiles.indexOf(document.activeElement);
+    if (i < 0) return;
+    const cols = window.getComputedStyle(e.currentTarget).gridTemplateColumns.split(" ").length || 1;
+    const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    tiles[Math.max(0, Math.min(tiles.length - 1, i + step))].focus();
+  }
+  /** Fill the detail card for the focused part. */
+  function renderInfo() {
+    const box = $("#ceInfo");
+    if (!box) return;
+    const def = focusId && cardDef(focusId);
+    if (!def) {
+      box.innerHTML = '<p class="ceDesc">Select a part to see what it does.</p>';
+      return;
+    }
+    const unlocked = isUnlocked(def.id);
+    const ids = creaturePartIds(rec);
+    const afterIds = isExclusive(def) ? creaturePartIds(withPart(rec, def.id)) : [...ids, def.id];
+    const legs = rec.legs.length + (def.slot === "leg" ? 1 : 0),
+      arms = armPairsOf(rec) + (def.slot === "arm" ? 1 : 0);
+    const now = abilitiesOf(ids, rec.legs.length, armPairsOf(rec));
+    const after = def.slot === "leg" || def.slot === "arm" ? abilitiesOf(ids, legs, arms) : abilitiesOf(afterIds, rec.legs.length, armPairsOf(rec));
+    const inUse = equippedNow(def);
+    const extra = isExclusive(def) && def.slot !== "hand" ? designCost(original, withPart(rec, def.id)) - cost() : def.cost;
+    let blocked = "";
+    if (!inUse || !isExclusive(def)) {
+      if (def.slot === "leg" && rec.legs.length >= LIMITS.maxLegPairs) blocked = "Most legs reached";
+      else if (def.slot === "arm" && rec.arms.length >= LIMITS.maxArmPairs) blocked = "Most arms reached";
+      else if (!["leg", "arm", "foot", "hand"].includes(def.slot) && !isExclusive(def) && rec.parts.length >= maxParts) blocked = "Part limit reached";
+      else if (cost() + Math.max(0, extra) > o.dna) blocked = "Not enough DNA";
+    }
+    $("#ceInfo").innerHTML = infoHtml(def, { unlocked, seen: seenPart(def.id), inUse, previewing: previewId === def.id, progress: o.progress || {}, mouthNow: mouthOf(rec), now, after, exclusive: isExclusive(def), blocked });
+    box.querySelector("[data-act=equip]")?.addEventListener("click", equipFocused);
+  }
+  /** Select a catalogue card: show its details, and (for mouths, tails and feet) preview it on the creature. */
+  function setFocus(id) {
+    const def = cardDef(id);
+    if (!def) return;
+    focusId = id;
+    selectedPart = -1;
+    selectedNode = -1;
+    // A part you have neither unlocked nor seen stays a mystery: no preview, no numbers.
+    previewId = PREVIEWABLE.includes(def.slot) && !equippedNow(def) && (isUnlocked(id) || seenPart(id)) ? id : null;
+    root.querySelectorAll(".cePart").forEach((t) => {
+      const on = t.dataset.part === id;
+      t.classList.toggle("focused", on);
+      t.setAttribute("aria-pressed", String(on));
+    });
+    rebuild();
+    renderInfo();
+    const unlocked = isUnlocked(id);
+    const name = shownName(def, { unlocked, seen: seenPart(id) });
+    hint(previewId ? `Previewing ${name}${unlocked ? ". Equip it to keep it." : " (locked)."}` : unlocked ? `${name}: ${def.desc}` : `${name} is locked.`);
+  }
+  /** Put the focused part on the creature, where its slot goes by default. */
+  function equipFocused() {
+    const def = focusId && cardDef(focusId);
+    if (!def || !isUnlocked(def.id)) return;
+    previewId = null;
+    if (def.slot === "leg" || def.slot === "arm") return placePart(def.id, null, null);
+    const [t, a] = DEFAULT_SPOT[def.slot] || [0.5, 0];
+    // A second copy of a flank part goes further back.
+    const copies = rec.parts.filter((p) => creaturePart(p.id).slot === def.slot).length;
+    placePart(def.id, def.slot === "side" || def.slot === "back" ? Math.max(0.15, t - copies * 0.18) : t, a);
+    renderInfo();
+  }
   function removeSelectedPart() {
     if (selectedPart < 0) return;
     commit();
@@ -435,57 +566,6 @@ export function openCreatureEditor(o) {
     rebuild();
     renderPartsTab();
     o.sfx("click");
-  }
-
-  /** Render one small picture per part, once. */
-  function bakeThumbs() {
-    const r = o.renderer;
-    const size = 96;
-    const target = new THREE.WebGLRenderTarget(size, size);
-    const tScene = new THREE.Scene();
-    tScene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.4));
-    const l = new THREE.DirectionalLight(0xffffff, 1.4);
-    l.position.set(2, 3, 4);
-    tScene.add(l);
-    const cam = new THREE.PerspectiveCamera(30, 1, 0.01, 20);
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = size;
-    const ctx = canvas.getContext("2d");
-    const pixels = new Uint8Array(size * size * 4);
-    const img = ctx.createImageData(size, size);
-    const prevTarget = r.getRenderTarget();
-    const prevClear = r.getClearColor(new THREE.Color()),
-      prevAlpha = r.getClearAlpha();
-    r.setClearColor(0x000000, 0);
-    for (const def of CREATURE_PARTS) {
-      // Feet thumbnails show the foot; everything else shows the part model.
-      const mesh = new THREE.Mesh(
-        partGeometry(def.id, rec.colors.base),
-        new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5 }),
-      );
-      mesh.geometry.computeBoundingSphere();
-      const bs = mesh.geometry.boundingSphere;
-      mesh.position.copy(bs.center).negate();
-      const g = new THREE.Group();
-      g.add(mesh);
-      g.rotation.set(0.35, -0.7, 0);
-      tScene.add(g);
-      cam.position.set(0, 0, bs.radius * 3.8 + 0.01);
-      cam.lookAt(0, 0, 0);
-      r.setRenderTarget(target);
-      r.clear();
-      r.render(tScene, cam);
-      r.readRenderTargetPixels(target, 0, 0, size, size, pixels);
-      for (let y = 0; y < size; y++) img.data.set(pixels.subarray((size - 1 - y) * size * 4, (size - y) * size * 4), y * size * 4);
-      ctx.clearRect(0, 0, size, size);
-      ctx.putImageData(img, 0, 0);
-      thumbCache.set(def.id, canvas.toDataURL("image/png"));
-      tScene.remove(g);
-      mesh.material.dispose(); // the geometry is shared and cached by parts.js
-    }
-    r.setRenderTarget(prevTarget);
-    r.setClearColor(prevClear, prevAlpha);
-    target.dispose();
   }
 
   /* ---- Paint tab -------------------------------------------------------------------- */
@@ -532,15 +612,38 @@ export function openCreatureEditor(o) {
 
   /* ---- tabs ------------------------------------------------------------------- */
   let tab = "body";
+  /** Show a pane (body, parts or paint) and light the matching icon on the rail. */
   function setTab(name) {
     tab = name;
-    root.querySelectorAll("[role=tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+    if (name !== "parts") {
+      if (previewId) {
+        previewId = null;
+        rebuild();
+      }
+    }
+    const cat = name === "parts" ? partSection : name;
+    root.querySelectorAll(".ceRail [role=tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.cat === cat)));
     root.querySelectorAll(".ceTab").forEach((p) => (p.hidden = p.dataset.pane !== name));
     if (name === "body") renderBodyTab();
     else if (name === "parts") renderPartsTab();
     else renderPaintTab();
   }
-  root.querySelectorAll("[role=tab]").forEach((b) => (b.onclick = () => setTab(b.dataset.tab)));
+  root.querySelectorAll(".ceRail [role=tab]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        const cat = b.dataset.cat;
+        if (cat === "body" || cat === "paint") return setTab(cat);
+        if (cat !== partSection || tab !== "parts") {
+          partSection = cat;
+          focusId = null;
+          if (previewId) {
+            previewId = null;
+            rebuild();
+          }
+        }
+        setTab("parts");
+      }),
+  );
 
   /* ---- placing parts -------------------------------------------------------- */
   const canvas = o.renderer.domElement;
@@ -595,17 +698,21 @@ export function openCreatureEditor(o) {
     commit();
     if (def.slot === "foot") rec.foot = id;
     else {
-      if (def.slot === "mouth" || def.slot === "tail") rec.parts = rec.parts.filter((p) => creaturePart(p.id).slot !== def.slot);
+      // Swapping a mouth or tail keeps the old one's size and turn, so it grows from the same place.
+      const old = def.slot === "mouth" || def.slot === "tail" ? rec.parts.find((p) => creaturePart(p.id).slot === def.slot) : null;
+      if (old) rec.parts = rec.parts.filter((p) => p !== old);
       if (rec.parts.length >= maxParts) {
         hint(maxParts < LIMITS.maxParts ? "Your brain can manage " + maxParts + " parts for now. A bigger brain carries more." : "That's the most parts one creature can carry (" + maxParts + ").");
         undoStack.pop();
         return;
       }
-      rec.parts.push({ id, ...snapSpot(def, t, angle), scale: 1 });
+      rec.parts.push({ id, ...snapSpot(def, t, angle), scale: old?.scale || 1, ...(old?.roll ? { roll: old.roll } : {}) });
       selectedPart = rec.parts.length - 1;
     }
     o.sfx("unlock");
     hint(def.name + ": " + def.desc);
+    previewId = null;
+    focusId = def.id;
     rebuild();
     renderPartsTab();
   }
@@ -675,25 +782,32 @@ export function openCreatureEditor(o) {
     rebuild();
     renderPartsTab();
   }
-  /** Drag a card from the strip onto the body. Sideways swipes still scroll the strip. */
+  /**
+   * A catalogue tile: tap to select it (and preview it), or pull it onto the body. The grid scrolls
+   * natively along its own axis (down in the side panel, across in the bottom sheet); a touch that
+   * moves across that axis picks the tile up instead, and a mouse picks it up in any direction.
+   */
   function wireCard(card) {
     const id = card.dataset.part;
     const def = cardDef(id);
     let start = null,
       dragging = false,
-      scrolling = false,
-      holdTimer = 0,
       suppressClick = false;
-    const strip = card.parentElement;
+    const sideLayout = () => root.classList.contains("side");
     const begin = (e) => {
       dragging = true;
       suppressClick = true;
-      clearTimeout(holdTimer);
       card.classList.add("dragging");
       root.classList.add("placing");
-      ghost.style.backgroundImage = thumbCache.get(id) ? `url(${thumbCache.get(id)})` : "";
+      const img = thumbs.get(id === LEG_CARD.id ? "__leg" : id === ARM_CARD.id ? "__arm" : id);
+      ghost.style.backgroundImage = img ? `url(${img})` : "";
       ghost.hidden = false;
       moveGhost(e);
+      try {
+        card.setPointerCapture(e.pointerId);
+      } catch (err) {
+        /* pointer already released */
+      }
       if (navigator.vibrate)
         try {
           navigator.vibrate(8);
@@ -701,52 +815,24 @@ export function openCreatureEditor(o) {
           /* not allowed */
         }
     };
-    /*
-     * Cards take the whole gesture themselves (touch-action: none), so the browser never turns a
-     * drag into a scroll. A finger moving along the strip scrolls it; pulling a card up or down, or
-     * holding it for a moment, picks the part up. A mouse always picks up.
-     */
     card.onpointerdown = (e) => {
       if (e.button > 0) return;
-      start = { x: e.clientX, y: e.clientY, id: e.pointerId, scroll: strip.scrollLeft, lastX: e.clientX, lastT: performance.now(), v: 0 };
+      start = { x: e.clientX, y: e.clientY, id: e.pointerId };
       suppressClick = false;
-      scrolling = false;
-      // Keep receiving moves even if a quick flick leaves the card before the drag starts.
-      try {
-        card.setPointerCapture(e.pointerId);
-      } catch (err) {
-        /* pointer already released */
-      }
-      if (e.pointerType === "mouse" || !isUnlocked(id)) return;
-      holdTimer = setTimeout(() => start && !scrolling && begin(e), 260);
     };
     card.onpointermove = (e) => {
       if (!start || e.pointerId !== start.id) return;
       const dx = e.clientX - start.x,
         dy = e.clientY - start.y;
-      if (scrolling) {
-        e.preventDefault();
-        const now = performance.now();
-        start.v = (e.clientX - start.lastX) / Math.max(1, now - start.lastT);
-        start.lastX = e.clientX;
-        start.lastT = now;
-        strip.scrollLeft = start.scroll - dx;
-        return;
-      }
       if (!dragging) {
         if (Math.hypot(dx, dy) < 8) return;
-        clearTimeout(holdTimer);
-        const touch = e.pointerType !== "mouse";
-        const along = Math.abs(dx) > Math.abs(dy) * 1.2;
-        if (isUnlocked(id) && (!touch || !along)) begin(e);
-        else if (touch) {
-          scrolling = true;
-          suppressClick = true;
-          return;
-        } else {
+        const along = sideLayout() ? Math.abs(dy) > Math.abs(dx) * 1.2 : Math.abs(dx) > Math.abs(dy) * 1.2;
+        // Along the grid's axis a finger is scrolling it: leave that to the browser.
+        if (!isUnlocked(id) || (e.pointerType !== "mouse" && along)) {
           start = null;
           return;
         }
+        begin(e);
       }
       e.preventDefault();
       moveGhost(e);
@@ -757,24 +843,12 @@ export function openCreatureEditor(o) {
       if (end) marker.position.copy(end.point);
       else if (s) marker.position.copy(s.point);
     };
-    /** Let the strip coast after a flick. */
-    const glide = (v) => {
-      let px = v * 16;
-      const step = () => {
-        if (Math.abs(px) < 0.4 || !strip.isConnected) return;
-        strip.scrollLeft -= px;
-        px *= 0.93;
-        requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
-    };
     const end = (e) => {
-      clearTimeout(holdTimer);
-      if (scrolling && start && e.type === "pointerup" && performance.now() - start.lastT < 80) glide(start.v);
       if (dragging && e.type === "pointerup") {
         const s = surfaceAt(e.clientX, e.clientY);
         const overCanvas = document.elementFromPoint(e.clientX, e.clientY) === canvas;
         const armEnd = fitsArm(id) ? armEndAt(e.clientX, e.clientY) : null;
+        previewId = null;
         if (armEnd) setHand(armEnd.pair, id);
         else if (def.slot === "leg") {
           if (overCanvas) placePart(id, s ? s.t : null, 0);
@@ -783,7 +857,6 @@ export function openCreatureEditor(o) {
         else if (overCanvas) hint("Drop it on the body.");
       }
       dragging = false;
-      scrolling = false;
       start = null;
       marker.visible = false;
       ghost.hidden = true;
@@ -796,23 +869,8 @@ export function openCreatureEditor(o) {
     card.oncontextmenu = (e) => e.preventDefault(); // a long press must not open a menu
     card.onclick = (e) => {
       if (suppressClick) return;
-      if (e.detail !== 0 && isUnlocked(id)) {
-        // A pointer tap only picks the card up in your mind: parts go where you drag them.
-        card.classList.remove("nudge");
-        void card.offsetWidth;
-        card.classList.add("nudge");
-        hint("Drag " + def.name + " onto your creature, wherever you want it.");
-        return;
-      }
-      if (!isUnlocked(id)) {
-        hint(def.name + " is locked. Dig it from a fossil, or win it from species you befriend or drive extinct.");
-        return;
-      }
-      if (def.slot === "leg" || def.slot === "arm") return placePart(id, null, null);
-      const [t, a] = DEFAULT_SPOT[def.slot] || [0.5, 0];
-      // Tapping a second copy of a flank part puts it further back.
-      const copies = rec.parts.filter((p) => creaturePart(p.id).slot === def.slot).length;
-      placePart(id, def.slot === "side" || def.slot === "back" ? Math.max(0.15, t - copies * 0.18) : t, a);
+      if (e.detail === 2 && isUnlocked(id) && focusId === id) return equipFocused(); // double click equips
+      setFocus(id);
     };
   }
   const ghost = document.createElement("div");
@@ -835,6 +893,12 @@ export function openCreatureEditor(o) {
       return;
     }
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (previewId) {
+      // Touching the creature ends a preview.
+      previewId = null;
+      rebuild();
+      if (tab === "parts") renderInfo();
+    }
     if (pointers.size === 2) {
       const [a, b] = [...pointers.values()];
       drag = { kind: "pinch", d: Math.hypot(a.x - b.x, a.y - b.y), dist: orbit.dist };
@@ -1127,7 +1191,7 @@ export function openCreatureEditor(o) {
   function setTesting(on) {
     testing = on;
     $("#ceTest").setAttribute("aria-pressed", String(on));
-    $("#ceTest").textContent = on ? "■ Stop" : "▶ Test";
+    $("#ceTest").innerHTML = on ? `${ICONS.stop}<span>Stop</span>` : `${ICONS.play}<span>Test</span>`;
     root.classList.toggle("testing", on);
     fitCamera();
     handles.visible = !on;
@@ -1135,9 +1199,9 @@ export function openCreatureEditor(o) {
     const bar = $("#ceTestBar");
     bar.hidden = !on;
     if (on) {
-      const ab = abilitiesOf(creaturePartIds(rec), rec.legs.length, armPairsOf(rec));
+      const ab = abilitiesOf(creaturePartIds(view()), rec.legs.length, armPairsOf(rec));
       bar.innerHTML = [...COMBAT, ...SOCIAL]
-        .map((k) => `<button data-play="${k}" ${ab[k] ? "" : "disabled"}>${ABILITY_INFO[k].icon}<small>${ABILITY_INFO[k].name} ${ab[k] || "–"}</small></button>`)
+        .map((k) => `<button data-play="${k}" ${ab[k] ? "" : "disabled"}><b>${ABILITY_INFO[k].name}</b><small>Level ${ab[k] || "–"}</small></button>`)
         .join("");
       bar.querySelectorAll("[data-play]").forEach((b) => (b.onclick = () => creature.playAbility(b.dataset.play)));
       hint("Watch it walk. Tap an ability to see it.");
@@ -1160,6 +1224,8 @@ export function openCreatureEditor(o) {
     canvas.removeEventListener("pointercancel", onCanvasUp);
     canvas.removeEventListener("wheel", onWheel);
     camera.clearViewOffset();
+    window.removeEventListener("resize", fitCamera);
+    ["gesturestart", "gesturechange", "gestureend"].forEach((t) => document.removeEventListener(t, stopGesture));
     creature?.dispose();
     root.remove();
     [handleGeo, handleRimGeo, handleMat, handleSelMat, handleRimMat, marker.geometry, marker.material, partHalo.geometry, partHalo.material].forEach((d) => d.dispose());
@@ -1189,6 +1255,11 @@ export function openCreatureEditor(o) {
     } else if ((e.key === "Delete" || e.key === "Backspace") && selectedPart >= 0) removeSelectedPart();
     else if (e.key === "Escape") {
       if (testing) setTesting(false);
+      else if (previewId) {
+        previewId = null;
+        rebuild();
+        renderInfo();
+      }
       else if (selectedPart >= 0 || selectedNode >= 0) {
         selectedPart = selectedNode = -1;
         rebuild();
@@ -1198,17 +1269,40 @@ export function openCreatureEditor(o) {
   window.addEventListener("keydown", onKey);
 
   /* ---- start ------------------------------------------------------------------ */
-  /** Keep the creature centred in the space above the tool panel. */
+  /** Wide screens get the catalogue as a panel on the left; narrow ones as a sheet underneath. */
+  const wantsSide = () => innerWidth >= 900 || (innerWidth > innerHeight && innerWidth >= 640);
+  let avail = { w: innerWidth, h: innerHeight };
+  /** Lay the editor out for the window, and keep the creature centred in the space the tools leave free. */
   function fitCamera() {
-    const panel = testing ? 0 : root.querySelector(".cePanel")?.getBoundingClientRect().height || 0;
-    const top = root.querySelector(".ceTop")?.getBoundingClientRect().height || 0;
+    root.classList.toggle("side", wantsSide());
+    const side = root.classList.contains("side");
+    const rect = (sel) => root.querySelector(sel)?.getBoundingClientRect();
+    const top = rect(".ceTop")?.height || 0;
     camera.aspect = innerWidth / innerHeight;
-    camera.setViewOffset(innerWidth, innerHeight, 0, (panel - top) / 2, innerWidth, innerHeight);
+    if (side && !testing) {
+      const panelW = rect(".cePanel")?.width || 0;
+      const statsW = (rect(".ceStats")?.width || 0) + 20;
+      avail = { w: Math.max(200, innerWidth - panelW - statsW), h: Math.max(200, innerHeight - top) };
+      // Slide the picture right of the catalogue panel and left of the stats, and down under the top bar.
+      camera.setViewOffset(innerWidth, innerHeight, -(panelW - statsW) / 2, -top / 2, innerWidth, innerHeight);
+    } else {
+      const panel = testing ? 0 : rect(".cePanel")?.height || 0;
+      // The full stats panel (tablets in portrait) sits over the right edge: frame the creature in the space left of it.
+      const statsW = !testing && innerWidth > 760 ? (rect(".ceStats")?.width || 0) + 20 : 0;
+      avail = { w: Math.max(200, innerWidth - statsW), h: Math.max(200, innerHeight - panel - top) };
+      camera.setViewOffset(innerWidth, innerHeight, statsW / 2, (panel - top) / 2, innerWidth, innerHeight);
+    }
     $("#ceHint").style.top = top + 8 + "px";
+    root.style.setProperty("--ce-top", top + "px");
+    sizeTiles();
     camera.updateProjectionMatrix();
   }
+  window.addEventListener("resize", fitCamera);
+  /** Stop iOS from pinch-zooming the page while you work. */
+  const stopGesture = (e) => e.preventDefault();
+  ["gesturestart", "gesturechange", "gestureend"].forEach((t) => document.addEventListener(t, stopGesture, { passive: false }));
   try {
-    bakeThumbs();
+    thumbs = bakePartThumbs(o.renderer, { color: rec.colors.base });
   } catch (err) {
     /* thumbnails are decoration; the cards still work without them */
   }
@@ -1241,7 +1335,17 @@ export function openCreatureEditor(o) {
         // Orbit around the body's middle.
         const target = testing ? new THREE.Vector3(0, 1, 0) : centre;
         // Tall phone screens need the camera further back to fit the body's length.
-        const dist = orbit.dist * Math.max(1, 0.85 / Math.max(0.3, camera.aspect));
+        // Back off just far enough that the whole creature fits the free space (not under the panel or stats),
+        // easing as parts change. The zoom you set (orbit.dist, 9 = as framed) scales on top of that.
+        let fit = 9 * Math.max(1, 0.85 / Math.max(0.3, camera.aspect));
+        if (!testing) {
+          const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+          const dW = (bounds.w * 1.12) / (0.9 * (avail.w / innerWidth) * 2 * tanV * camera.aspect);
+          const dH = (bounds.h * 1.2) / (0.86 * (avail.h / innerHeight) * 2 * tanV);
+          fit = THREE.MathUtils.clamp(Math.max(dW, dH), 5, 15);
+        }
+        framing = framing ? framing + (fit - framing) * Math.min(1, dt * 5) : fit;
+        const dist = (testing ? fit : framing) * (orbit.dist / 9);
         camera.position.set(
           target.x + Math.cos(orbit.yaw) * Math.cos(orbit.pitch) * dist,
           target.y + Math.sin(orbit.pitch) * dist + 0.3,
@@ -1269,6 +1373,46 @@ export function openCreatureEditor(o) {
         placePart,
         surfaceAt,
         setTab,
+        /** The creature's on-screen rectangle (projected bounding box), and the free area it should sit in. */
+        screenBounds() {
+          creature.root.updateMatrixWorld(true);
+          const box = new THREE.Box3().setFromObject(creature.root);
+          const r = canvas.getBoundingClientRect();
+          let x0 = Infinity,
+            y0 = Infinity,
+            x1 = -Infinity,
+            y1 = -Infinity;
+          for (const x of [box.min.x, box.max.x])
+            for (const y of [box.min.y, box.max.y])
+              for (const z of [box.min.z, box.max.z]) {
+                const v = new THREE.Vector3(x, y, z).project(camera);
+                const px = r.left + (v.x * 0.5 + 0.5) * r.width,
+                  py = r.top + (-v.y * 0.5 + 0.5) * r.height;
+                x0 = Math.min(x0, px);
+                x1 = Math.max(x1, px);
+                y0 = Math.min(y0, py);
+                y1 = Math.max(y1, py);
+              }
+          const rect = (sel) => root.querySelector(sel)?.getBoundingClientRect();
+          const side = root.classList.contains("side");
+          const panel = rect(".cePanel"),
+            top = rect(".ceTop"),
+            stats = rect(".ceStats");
+          const free = side ? { left: panel.right, right: stats.left, top: top.bottom, bottom: innerHeight } : { left: 0, right: innerWidth > 760 ? stats.left : innerWidth, top: top.bottom, bottom: panel.top };
+          return { x0, y0, x1, y1, free };
+        },
+        /** Select a catalogue card as a tap would (tests). */
+        focus: setFocus,
+        equipFocused,
+        get previewId() {
+          return previewId;
+        },
+        get focusId() {
+          return focusId;
+        },
+        get shown() {
+          return view();
+        },
         setTesting,
         cost,
         problems,
