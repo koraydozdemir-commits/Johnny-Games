@@ -1535,15 +1535,16 @@ export function createCivStage(o) {
     );
     return true;
   }
-  /** Armed vehicles keep watch: the nearest hostile in range is shot at whatever else they are doing. */
+  /** Armed vehicles keep watch: they notice hostiles at about twice their weapon range and shoot whatever is within it. */
   function autoFire(v, dt) {
+    const w = weaponRange(v);
     v.autoT = (v.autoT || 0) - dt;
     if (v.autoT <= 0) {
       v.autoT = 0.45;
-      v.target = pickTarget(v, T.vehicles.filter((u) => !u.dead && hostile(v.owner, u.owner)), weaponRange(v));
+      v.target = pickTarget(v, T.vehicles.filter((u) => !u.dead && hostile(v.owner, u.owner)), w * 2.2);
     }
-    if (v.target && (v.target.dead || distXZ(v.pos, v.target.pos) > weaponRange(v) * 1.15)) v.target = null;
-    if (v.target) fireAt(v, v.target, dt);
+    if (v.target && (v.target.dead || distXZ(v.pos, v.target.pos) > w * 2.6)) v.target = null;
+    if (v.target && distXZ(v.pos, v.target.pos) <= w * 1.15) fireAt(v, v.target, dt);
     return v.target;
   }
   function actAt(v, c, dt) {
