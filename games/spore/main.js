@@ -2210,6 +2210,7 @@ function startCreatureStage(resume = false, intro = false) {
     sfx: playSfx,
     isTouch: isTouchUI,
     onMate: (d) => openCreatureEditorFor({ ...d, mated: true }, false),
+    onCourtship: (active) => audio.setMusic(active ? "mating" : creatureAtNest ? "nest" : "creature"),
     onNestProximity: (near) => {
       creatureAtNest = near;
       if (!creatureEditor) audio.setMusic(near ? "nest" : "creature");
@@ -2267,7 +2268,8 @@ function startCreatureStage(resume = false, intro = false) {
 }
 function openCreatureEditorFor(d, arrival) {
   if (!creatureStage || creatureEditor) return;
-  if (d.mated) audio.setMusic("mating");
+  // Courtship music is handled by the Creature Stage animation; the editor gets its own track.
+  audio.setMusic("creature");
   creatureStage.setPaused(true);
   document.body.classList.add("creatureEditing");
   stickEnd();
