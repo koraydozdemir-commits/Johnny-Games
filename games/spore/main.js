@@ -2210,6 +2210,10 @@ function startCreatureStage(resume = false, intro = false) {
     sfx: playSfx,
     isTouch: isTouchUI,
     onMate: (d) => openCreatureEditorFor({ ...d, mated: true }, false),
+    onNestProximity: (near) => {
+      creatureAtNest = near;
+      if (!creatureEditor) audio.setMusic(near ? "nest" : "creature");
+    },
     onGeneration: endCreatureGeneration,
     onChronicle: recordChronicle,
     onCard: (id, inst) => {
@@ -2291,7 +2295,7 @@ function openCreatureEditorFor(d, arrival) {
 }
 function closeCreatureEditor() {
   creatureEditor = null;
-  audio.setMusic(introAfterEditor ? "land" : "creature");
+  audio.setMusic(introAfterEditor ? "land" : creatureAtNest ? "nest" : "creature");
   document.body.classList.remove("creatureEditing");
   creatureStage?.setPaused(false);
   if (introAfterEditor && creatureStage) {
@@ -2303,6 +2307,7 @@ function closeCreatureEditor() {
   flushReveal();
 }
 let introAfterEditor = false;
+let creatureAtNest = false;
 /** A trait card earned while the editor was open waits until it closes. */
 let pendingReveal = null;
 function flushReveal() {
