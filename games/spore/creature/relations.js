@@ -30,6 +30,11 @@ const isPredatorKind = (n) => !!(n.epic || n.rogue || n.raider);
 export function relationOf(n) {
   if (!n) return "neutral";
   if (n.following || n.family || n.member?.friend || n.nest?.status === "allied") return "allied";
+  // Encounters: a rival claiming your nest, one that settled beside it, a lost youngster.
+  if (n.angryRival) return "furious";
+  if (n.neighbour) return "friendly";
+  if (n.rival) return "annoyed";
+  if (n.stray) return n.followYou ? "friendly" : "neutral";
   const calm = (n.calm || 0) > 0;
   if (isPredatorKind(n)) return n.hunting ? "furious" : "annoyed";
   if ((n.nest?.cowed || 0) > 0) return "annoyed"; // its alpha fell: wary of you, but not looking for a fight

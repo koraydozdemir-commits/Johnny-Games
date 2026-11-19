@@ -299,7 +299,11 @@ export function steerAround(x, z, dx, dz, r = 1, look = 9) {
   return { x: bx / bl, z: bz / bl };
 }
 
-export function createIsland(scene, quality = "medium", regionId = "coast") {
+/**
+ * @param {{ fossils?: boolean }} [opts]  fossils: false leaves them out (the Tribal and Civilization
+ *   stages); the island is otherwise identical.
+ */
+export function createIsland(scene, quality = "medium", regionId = "coast", opts = {}) {
   setRegion(regionId);
   const rng = makeRng(REGION.seed);
   const look = REGION.colors;
@@ -587,6 +591,7 @@ export function createIsland(scene, quality = "medium", regionId = "coast") {
     s.set(1.2, 0.9, 1.2);
   });
   const fruits = [];
+  let growth = 1; // how fast eaten fruit grows back: a season of plenty, or a lean one
   bushes.forEach((b) => {
     for (let f = 0; f < 3; f++) {
       const a = (f / 3) * TAU + rng();
@@ -709,34 +714,93 @@ export function createIsland(scene, quality = "medium", regionId = "coast") {
         }
       }
   });
+  /*
+   * Five kinds of fossil, so no two digs look alike: a skull, a ribcage, a spine, a clawed limb and a
+   * toothed jaw. Every one sits centred on its mound (where you dig) and rises the same way as you
+   * uncover it. The kind comes from its own seed, so the island's layout is exactly as before.
+   */
+  const toothGeo = new THREE.ConeGeometry(0.07, 0.26, 6);
+  const hornGeo = new THREE.ConeGeometry(0.12, 0.7, 7);
+  const vertGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.2, 8).rotateZ(Math.PI / 2);
+  const spikeGeo = new THREE.ConeGeometry(0.07, 0.34, 5);
+  const longBoneGeo = new THREE.CylinderGeometry(0.09, 0.11, 1.5, 8).rotateZ(Math.PI / 2);
+  const knobGeo = new THREE.SphereGeometry(0.17, 10, 8);
+  const jawGeo = new THREE.TorusGeometry(0.62, 0.11, 7, 18, Math.PI * 1.15);
+  const clawGeo = new THREE.ConeGeometry(0.11, 0.85, 7).translate(0, 0.42, 0);
+  const add = (group, geo, mat, x, y, z, rx = 0, ry = 0, rz = 0, sc = 1) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    m.rotation.set(rx, ry, rz);
+    m.scale.setScalar(sc);
+    group.add(m);
+    return m;
+  };
+  const FOSSIL_KINDS = {
+    // A big horned skull, nose down in the sand, its jaw beneath.
+    skull(b) {
+      add(b, skullGeo, boneMat, 0, 0.32, 0, 0, 0, -0.25, 1.35);
+      for (const z of [-0.2, 0.2]) add(b, socketGeo, dugMat, 0.38, 0.5, z, 0, 0, 0, 1.25);
+      for (const z of [-0.32, 0.32]) add(b, hornGeo, boneMat, -0.25, 0.75, z, z * 1.4, 0, 0.6);
+      add(b, jawGeo, boneMat, 0.15, 0.06, 0, Math.PI / 2, 0, Math.PI * 0.95, 0.75);
+    },
+    // Curved ribs arching out of the ground in two rows, joined along the top.
+    ribcage(b) {
+      add(b, spineGeo, boneMat, 0, 0.78, 0, 0, 0, 0, 0.9);
+      for (let k = 0; k < 5; k++) {
+        const x = -0.8 + k * 0.4,
+          sc = 1.15 - Math.abs(k - 2) * 0.16;
+        add(b, ribGeo, boneMat, x, 0.05, 0, 0, Math.PI / 2, 0, sc * 1.25);
+      }
+    },
+    // A long run of vertebrae in a gentle S, each with its spine.
+    spine(b) {
+      for (let k = 0; k < 9; k++) {
+        const x = -1.6 + k * 0.4,
+          z = Math.sin(k * 0.7) * 0.35,
+          sc = 1.1 - Math.abs(k - 4) * 0.08;
+        add(b, vertGeo, boneMat, x, 0.2, z, 0, -Math.cos(k * 0.7) * 0.35, 0, sc);
+        add(b, spikeGeo, boneMat, x, 0.42, z, 0, 0, -0.2, sc);
+      }
+    },
+    // A limb bone ending in three great hooked claws.
+    claw(b) {
+      add(b, longBoneGeo, boneMat, -0.55, 0.2, 0, 0, 0.15, 0.12);
+      add(b, knobGeo, boneMat, -1.28, 0.24, -0.1);
+      add(b, knobGeo, boneMat, 0.22, 0.3, 0, 0, 0, 0, 1.3);
+      for (const [z, ry] of [[-0.24, 0.35], [0, 0], [0.24, -0.35]]) {
+        const c = add(b, clawGeo, boneMat, 0.42, 0.32, z, 0, ry, -1.05);
+        c.scale.set(1, 1.2, 1);
+      }
+    },
+    // A lower jaw lying open, a row of teeth along it.
+    jaw(b) {
+      add(b, jawGeo, boneMat, 0, 0.08, 0, Math.PI / 2, 0, Math.PI * 0.92, 1.25);
+      for (let k = 0; k < 11; k++) {
+        const a = Math.PI * 0.92 + (k / 10) * Math.PI * 1.1;
+        add(b, toothGeo, boneMat, Math.cos(a) * 0.78, 0.26, Math.sin(a) * 0.78, 0, 0, 0, 1 - Math.abs(k - 5) * 0.05);
+      }
+    },
+  };
+  const FOSSIL_IDS = Object.keys(FOSSIL_KINDS);
+  const kindRng = makeRng(REGION.seed + 991);
+  const kinds = [];
   boneSpots.forEach((b, i) => {
+    // Pick a kind, avoiding the kind of any fossil close by.
+    let kind = FOSSIL_IDS[Math.floor(kindRng() * FOSSIL_IDS.length)];
+    for (let tries = 0; tries < 6 && boneSpots.some((o, j) => j < i && kinds[j] === kind && Math.hypot(o.x - b.x, o.z - b.z) < 40); tries++) kind = FOSSIL_IDS[(FOSSIL_IDS.indexOf(kind) + 1) % FOSSIL_IDS.length];
+    kinds.push(kind);
     const g = new THREE.Group();
     g.position.set(b.x, heightAt(b.x, b.z), b.z);
     g.rotation.y = rng() * TAU;
     const mound = new THREE.Mesh(moundGeo, moundMat);
     mound.position.y = 0.05;
+    mound.scale.set(0.9 + kindRng() * 0.25, 0.85 + kindRng() * 0.3, 0.9 + kindRng() * 0.25);
     g.add(mound);
-    // The skeleton pokes out of the sand: a row of ribs, a spine and a skull.
+    // The fossil pokes out of the sand.
     const bones = new THREE.Group();
-    const spineMesh = new THREE.Mesh(spineGeo, boneMat);
-    spineMesh.position.set(0, 0.45, 0);
-    bones.add(spineMesh);
-    for (let k = 0; k < 4; k++) {
-      const rib = new THREE.Mesh(ribGeo, boneMat);
-      rib.position.set(-0.6 + k * 0.38, 0.1, 0);
-      rib.rotation.y = Math.PI / 2;
-      rib.scale.setScalar(1 - Math.abs(k - 1.5) * 0.15);
-      bones.add(rib);
-    }
-    const skull = new THREE.Mesh(skullGeo, boneMat);
-    skull.position.set(1.25, 0.3, 0);
-    skull.rotation.z = -0.3 + (i % 3) * 0.15;
-    bones.add(skull);
-    for (const z of [-0.16, 0.16]) {
-      const eye = new THREE.Mesh(socketGeo, dugMat);
-      eye.position.set(1.55, 0.42, z);
-      bones.add(eye);
-    }
+    FOSSIL_KINDS[kind](bones);
+    bones.rotation.y = (kindRng() - 0.5) * 0.8;
+    bones.scale.setScalar(0.9 + kindRng() * 0.25);
     g.add(bones);
     // A slow golden glint marks an undug fossil from a distance.
     const glint = new THREE.Mesh(glintGeo, glintMat);
@@ -746,9 +810,10 @@ export function createIsland(scene, quality = "medium", regionId = "coast") {
     hole.position.y = 0.06;
     hole.visible = false;
     g.add(hole);
-    group.add(g);
-    bonePiles.push({ x: b.x, z: b.z, mesh: g, mound, bones, glint, hole, taken: false, dig: 0 });
+    if (opts.fossils !== false) group.add(g); // later stages: no fossils at all (no mesh, no marker, no dig spot)
+    bonePiles.push({ x: b.x, z: b.z, mesh: g, mound, bones, glint, hole, kind, taken: opts.fossils === false, dig: 0 });
   });
+  if (opts.fossils === false) bonePiles.length = 0;
   /** Mark a fossil as dug: the mound is gone, a dark hole is left. */
   const markDug = (b) => {
     b.taken = true;
@@ -837,6 +902,13 @@ export function createIsland(scene, quality = "medium", regionId = "coast") {
     exitSpot,
     group,
     fruits,
+    /** Seasons: fruit regrows this many times as fast (1 = normal). */
+    setGrowth(k) {
+      growth = Math.max(0.05, k);
+    },
+    get growth() {
+      return growth;
+    },
     nestSites,
     bonePiles,
     markDug,
@@ -901,7 +973,7 @@ export function createIsland(scene, quality = "medium", regionId = "coast") {
       let moved = false;
       fruits.forEach((f) => {
         if (!f.alive) {
-          if ((f.regrow -= dt) <= 0) {
+          if ((f.regrow -= dt * growth) <= 0) {
             moved = f.alive = true;
             if (f.tree) Object.assign(f, { y: f.hangY, hanging: true, vy: 0 }); // grows back up in the tree
           }

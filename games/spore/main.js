@@ -8,7 +8,8 @@ import { ZONES, plantShareIn, zoneAt } from "./cell/zones.js";
 import { GROWTH_STAGES, LAST_TIER, meteorPool, preyFor, stageFor, stageScale, unlockHint } from "./stages.js";
 import { dietPath } from "./traits.js";
 import { createTipEngine } from "./tutorials.js";
-import { hideTip, openHistoryScreen, pathScreenOpen, popCard, showTip, updateDietMeter } from "./progression-ui.js";
+import { hideTip, openHistoryScreen, pathScreenOpen, popCard, showTip, showTraitCard, updateDietMeter } from "./progression-ui.js";
+import { CELL_PASSIVES, INSTINCTS, instinctCard, leaningFor, profileOf, readLedger, seedLedger } from "./creature/identity.js";
 import { createAudio } from "./audio.js";
 import { loadSettings, openSettings, saveSettings } from "./settings.js";
 import { createTribeStage, loadTribeSave } from "./tribe/stage.js";
@@ -21,7 +22,7 @@ import { openCreatureEditor } from "./creature/editor.js";
 import { buildCreatureBody } from "./creature/body3d.js";
 import { CREATURE_SAVE_KEY, creatureFromCell, creaturePartIds, partsLimit } from "./creature/format.js";
 import { CREATURE_CARDS, DIET_CARDS } from "./traits.js";
-import { CHRONICLE_KEY, addEvent, creatureCardFor, eventsFromSaves, readChronicle, trackSummary, tribeLegacy } from "./lineage.js";
+import { CHRONICLE_KEY, TRIBE_LEGACY, addEvent, creatureCardFor, eventsFromSaves, readChronicle, trackSummary, tribeLegacy } from "./lineage.js";
 import { regionById } from "./creature/regions.js";
 import { openStore } from "./universe/store.js";
 import { bootUniverses, createUniverse, currentKeys, parkActive } from "./universe/manager.js";
@@ -479,6 +480,59 @@ function refreshQualityButton() {
   $("#qualityToggle").textContent = q === "low" ? "▢" : q === "medium" ? "◫" : "▣";
   $("#qualityToggle").title = "Graphics quality: " + q + " (click to change)";
 }
+/* ---- developer mode -----------------------------------------------------------------------
+   Off for players. Tapping the credits line in Settings seven times turns it on (for this browser);
+   the developer tools then appear in Settings. Hidden on purpose, not secured: by the owner's choice,
+   there is no password. */
+const DEV_KEY = "johnny-spore-dev";
+let devMode = (() => {
+  try {
+    return localStorage.getItem(DEV_KEY) === "1";
+  } catch (e) {
+    return false;
+  }
+})();
+let devJump = null;
+function setDevMode(on) {
+  devMode = !!on;
+  try {
+    if (devMode) localStorage.setItem(DEV_KEY, "1");
+    else localStorage.removeItem(DEV_KEY);
+  } catch (e) {
+    /* storage blocked: on for this visit only */
+  }
+}
+/** What the developer tools can do from where you are now. */
+function devActions() {
+  const list = [
+    { group: "Jump to stage", label: "🦠 Cell", run: () => devJump?.("cell") },
+    { group: "Jump to stage", label: "🦎 Creature", run: () => devJump?.("creature") },
+    { group: "Jump to stage", label: "🛖 Tribe", run: () => devJump?.("tribe") },
+    { group: "Jump to stage", label: "🏛 Civilization", run: () => devJump?.("civ") },
+  ];
+  if (creatureStage) {
+    const d = creatureStage.debug;
+    list.push(
+      { group: "Creature", label: "🧠 Fill the brain bar", run: () => d.gainXp(99999) },
+      { group: "Creature", label: "🔥 Stick throw → Tribe", run: () => d.playStickThrow() },
+      { group: "Creature", label: "⚠ Rival at the nest", run: () => d.startEncounter("rival") },
+      { group: "Creature", label: "😢 Lost youngster", run: () => d.startEncounter("stray") },
+      { group: "Creature", label: "🐺 Predators migrate in", run: () => d.applyEcoActions([d.eco.force("predators")]) },
+      { group: "Creature", label: "🥀 Lean season", run: () => d.applyEcoActions([d.eco.force("shortage")]) },
+    );
+  } else if (tribeStage) list.push({ group: "Tribe", label: "🏛 Rise into a civilization", run: () => tribeStage.debug?.playCivRise?.() });
+  else if (!civStage && state.runStarted)
+    list.push({
+      group: "Cell",
+      label: "🌱 Fill the growth bar",
+      run: () => {
+        state.food = state.foodGoal;
+        if (state.tier < LAST_TIER) advanceTier();
+        updateHUD();
+      },
+    });
+  return list;
+}
 function openGameSettings() {
   if (settingsOpen) return;
   settingsOpen = true;
@@ -502,6 +556,7 @@ function openGameSettings() {
       refreshQualityButton();
     },
     onOpen: (screen) => (screen === "title" ? backToTitle() : openUniverseScreen(screen)),
+    dev: { enabled: () => devMode, set: setDevMode, actions: devActions },
     onClose: () => {
       settingsOpen = false;
       if (civStage) civStage.setPaused(false);
@@ -1356,7 +1411,7 @@ function updateHUD() {
   $("#foodFill").closest(".metric").hidden = true;
   $("#touchBoost").classList.toggle("lockedAbility", !hasJet);
   $("#touchBoost").title = hasJet ? "Jet boost · spends stamina" : "Unlock a Jet in the Cell Editor to boost";
-  $("#touchMate").classList.toggle("readyAbility", state.food >= state.foodGoal && !state.mateSignal);
+  $("#touchMate").classList.toggle("readyAbility", finalReady() && !state.mateSignal);
   if ($("#touchMate").firstChild) $("#touchMate").firstChild.textContent = state.mateSignal ? "♥" : "♡";
   $("#healthValue").textContent = Math.round((state.health / state.maxHealth) * 100) + "%";
   $("#healthFill").style.width = Math.max(0, (state.health / state.maxHealth) * 100) + "%";
@@ -1377,8 +1432,8 @@ function updateHUD() {
   const hasMouth = parts.some((p) => p.def.cat === "Mouths");
   const objective = state.mateSignal
     ? ["MATE", "Follow the heart and touch your mate."]
-    : state.food >= state.foodGoal
-      ? ["READY", state.tier >= LAST_TIER ? "Call a mate to evolve your final generation." : "Call a mate to start the next generation."]
+    : finalReady()
+      ? ["READY", "Fully grown. Call a mate to leave the water."]
       : !hasMouth
         ? ["NEEDS MOUTH", "Open the cell editor and attach a mouth part to eat."]
         : [
@@ -1387,7 +1442,7 @@ function updateHUD() {
               (state.foodGoal - state.food) +
               " more food particle" +
               (state.foodGoal - state.food === 1 ? "" : "s") +
-              " to attract a mate.",
+              (state.tier >= LAST_TIER ? " to be fully grown." : " to grow."),
           ];
   const box = $("#objectiveText").closest(".hudbox");
   if ($("#objectiveText").textContent !== objective[1]) {
@@ -1400,9 +1455,9 @@ function updateHUD() {
   $("#landBtn").hidden = !progress.landReady;
   $("#touchLand").hidden = !progress.landReady;
   $("#callMateBtn").textContent = state.mateSignal ? "♥" : "♡";
-  $("#callMateBtn").title = state.mateSignal ? "Follow the heart" : "Call a mate when growth is full";
-  $("#mateCue").classList.toggle("show", state.food >= state.foodGoal || state.mateSignal);
-  $("#mateCueTitle").textContent = state.mateSignal ? "♥" : state.food >= state.foodGoal ? "✦" : "";
+  $("#callMateBtn").title = state.mateSignal ? "Follow the heart" : finalReady() ? "Call a mate to leave the water" : "Call a mate: a new generation to design";
+  $("#mateCue").classList.toggle("show", finalReady() || state.mateSignal);
+  $("#mateCueTitle").textContent = state.mateSignal ? "♥" : finalReady() ? "✦" : "";
   $("#mateCueText").textContent = "";
   const dietLabel = $("#dietLabel");
   if (dietLabel) {
@@ -1818,7 +1873,9 @@ function eat(f) {
   state.health = Math.min(state.maxHealth, state.health + 2);
   updateHUD();
   saveGame(true);
-  if (!wasReady && state.food >= state.foodGoal) {
+  if (!wasReady && state.food >= state.foodGoal && state.tier < LAST_TIER) {
+    advanceTier(); // ordinary stages grow on their own; only the last one needs a mate
+  } else if (!wasReady && state.food >= state.foodGoal) {
     spawnBurst(player.position.x, player.position.y, 0xffdf8a, 26);
     playSfx("mate");
     $("#growthBar").classList.add("growthReady");
@@ -1889,6 +1946,15 @@ function knockNPC(e, from, strength) {
 }
 function damageNPC(e, dmg, stun = false, from = null) {
   if (!e.userData.alive) return;
+  // A cell from the next stage: you can't hurt it until you've grown into its league.
+  if (e.userData.giant && !e.userData.epic) {
+    if (from && gameTime - (e.userData.shrugAt || -9) > 1.2) {
+      e.userData.shrugAt = gameTime;
+      spawnBurst(e.position.x, e.position.y, 0xcfe8ff, 6);
+      spawnFloatLabel(e.position.x, e.position.y + e.userData.size * 0.6, "Too big", 0xcfe8ff);
+    }
+    return;
+  }
   if (from && !e.userData.epic) knockNPC(e, from, 1 + Math.min(2.5, dmg * 0.2));
   e.userData.health -= dmg;
   const b = e.userData.bar;
@@ -1979,7 +2045,7 @@ function completeCellStage() {
   const card = progress.dietCard || dietPath(state.plants, state.meat);
   progress.dietCard = card;
   progress.cellStageComplete = true;
-  recordChronicle({ key: "cell:complete", stage: "cell", icon: DIET_CARDS[card].icon, text: "Left the water as a " + DIET_CARDS[card].title.toLowerCase() + ", earning " + DIET_CARDS[card].ability + "." });
+  recordChronicle({ key: "cell:complete", stage: "cell", icon: DIET_CARDS[card].icon, text: "Left the water as " + (/^[aeiou]/i.test(DIET_CARDS[card].title) ? "an " : "a ") + DIET_CARDS[card].title.toLowerCase() + ", earning " + DIET_CARDS[card].ability + "." });
   storeCellRecord(localStorage, record);
   writeHandoff(localStorage, record, {
     plants: state.plants,
@@ -1992,8 +2058,30 @@ function completeCellStage() {
     consequenceTraits: [{ stage: "cell", card }],
   });
   saveGame(true);
-  playSfx("hatch");
-  playSurfacing(() => startCreatureStage(false, true));
+  const c = DIET_CARDS[card],
+    land = CELL_PASSIVES[card];
+  const reasons = ["Ate " + state.plants + " plant" + (state.plants === 1 ? "" : "s") + " and " + state.meat + " meat"];
+  if (progress.kills) reasons.push("Defeated " + progress.kills + " cell" + (progress.kills === 1 ? "" : "s"));
+  if (progress.scavenged) reasons.push("Scavenged " + progress.scavenged + " time" + (progress.scavenged === 1 ? "" : "s"));
+  hideTip();
+  showTraitCard({
+    stage: "Cell Stage",
+    title: c.title,
+    icon: c.icon,
+    color: c.color,
+    ability: c.ability,
+    blurb: c.text,
+    reasons,
+    pros: ["On land: " + land.pro],
+    cons: ["On land: " + land.con],
+    later: [{ icon: "⛺", text: "Tribal Stage: " + TRIBE_LEGACY.cell[card].text }],
+    button: "🦎 Crawl ashore",
+    reducedMotion: settings.reducedMotion,
+    onClose: () => {
+      playSfx("hatch");
+      playSurfacing(() => startCreatureStage(false, true));
+    },
+  });
 }
 /** End of the Cell Stage: the camera pulls back, light floods down from the surface, and the cell
     rises toward it. The screen whites out and the Creature Stage fades up from it. */
@@ -2122,17 +2210,32 @@ function startCreatureStage(resume = false, intro = false) {
     onMate: (d) => openCreatureEditorFor({ ...d, mated: true }, false),
     onGeneration: endCreatureGeneration,
     onChronicle: recordChronicle,
-    onCard: (id) => {
+    onCard: (id, inst) => {
       const card = CREATURE_CARDS[id];
       progress.creatureCard = id;
-      recordChronicle({ key: "creature:card", stage: "creature", icon: card.icon, text: "Earned the " + card.title + " trait: " + card.ability + "." });
-      popCard({ kind: "Creature card · " + card.trait + " consequence trait", title: card.title + ": " + card.ability, text: card.text, icon: card.icon, color: card.color });
+      recordChronicle({ key: "creature:card", stage: "creature", icon: inst?.icon || card.icon, text: "Became " + (inst ? inst.title : card.title) + ", earning " + card.ability + "." });
+      pendingReveal = {
+        stage: "Creature Stage",
+        title: inst?.title || card.title,
+        icon: inst?.icon || card.icon,
+        color: inst?.color || card.color,
+        blurb: inst?.blurb || card.text,
+        ability: card.title + " · " + card.ability,
+        reasons: inst?.reasons || [],
+        pros: inst?.pros || [],
+        cons: inst?.cons || [],
+        later: [inst?.legacy && { icon: inst.legacy.icon, text: "Tribal Stage: " + inst.legacy.text }, { icon: card.icon, text: "Tribal Stage: " + TRIBE_LEGACY.creature[id].text }].filter(Boolean),
+      };
+      flushReveal();
       saveGame(true);
     },
     onUnlock: (part, source) => popCard({ kind: "New part · " + source, title: part.name, text: part.desc, img: partThumb(renderer, part.id), icon: "🦴", color: "#f5c75a" }),
     onHistory: openPath,
     onSettings: openGameSettings,
-    onTribe: () => startTribeStage(),
+    onTribe: (opts) => startTribeStage(null, opts),
+    // The ☰ shortcut to the Tribal Stage: once a tribe exists, or in developer mode. Otherwise you get
+    // there the Spore way, by mating once fully evolved.
+    tribeUnlocked: () => devMode || !!loadTribeSave(),
     onSaved: () => markSaved(localStorage),
     portrait: (rec) => creatureSnapshot(rec, { width: 120, height: 90 }),
     reducedMotion: () => settings.reducedMotion,
@@ -2144,17 +2247,16 @@ function startCreatureStage(resume = false, intro = false) {
       startCreatureStage(true, false);
     },
     intro: fresh && intro,
+    deferIntro: fresh && intro,
     onIntroDone: () => {
       document.body.classList.remove("cinematic");
-      arrive();
     },
   });
-  // Arrival: design the first land generation before setting off (after the crawl-out, if any).
-  const arrive = () => {
+  // Arrival: design the creature first; then (leaving the water) it crawls out onto land.
+  if (fresh) {
+    introAfterEditor = !!intro;
     openCreatureEditorFor(creatureStage.editorState(), true);
-  };
-  if (fresh && intro) document.body.classList.add("cinematic");
-  if (fresh && !intro) arrive();
+  }
 }
 function openCreatureEditorFor(d, arrival) {
   if (!creatureStage || creatureEditor) return;
@@ -2187,6 +2289,31 @@ function closeCreatureEditor() {
   creatureEditor = null;
   document.body.classList.remove("creatureEditing");
   creatureStage?.setPaused(false);
+  if (introAfterEditor && creatureStage) {
+    // Designed: now the new creature crawls out of the sea.
+    introAfterEditor = false;
+    document.body.classList.add("cinematic");
+    creatureStage.playIntro();
+  }
+  flushReveal();
+}
+let introAfterEditor = false;
+/** A trait card earned while the editor was open waits until it closes. */
+let pendingReveal = null;
+function flushReveal() {
+  if (!pendingReveal || creatureEditor || !creatureStage) return;
+  const d = pendingReveal;
+  pendingReveal = null;
+  creatureStage.setPaused(true);
+  showTraitCard({ ...d, reducedMotion: settings.reducedMotion, onClose: () => !creatureEditor && creatureStage?.setPaused(false) });
+}
+/** The species' character for the history screen, from a live stage's stats or a creature save. */
+function identityView(src) {
+  if (!src) return null;
+  const ledger = src.ledger ? readLedger(src.ledger) : seedLedger(src);
+  const id = INSTINCTS[src.instinct] ? src.instinct : leaningFor(ledger, src.leaning || null);
+  const view = { profile: profileOf(ledger), earned: !!INSTINCTS[src.instinct], id: null };
+  return id ? { ...instinctCard(id, ledger), ...view, id } : view;
 }
 /** A creature generation ends at mating: fill in what it achieved. */
 function endCreatureGeneration(entry) {
@@ -2279,8 +2406,12 @@ function openDesignEditor(kind, design, opts = {}) {
   });
   return modularEditor;
 }
-function startTribeStage(fallbackRecord = null) {
-  if (tribeStage) return;
+/** @param {{ cinematic?:boolean, frame?:object }} [opts] arriving from the stick-throw cutscene */
+function startTribeStage(fallbackRecord = null, opts = {}) {
+  if (tribeStage) {
+    opts.frame?.remove();
+    return;
+  }
   const record = creatureStage ? creatureStage.record : loadCreatureSave()?.record || fallbackRecord;
   if (!record) {
     toast("Reach land first: the Tribal Stage starts from your creature.");
@@ -2302,7 +2433,7 @@ function startTribeStage(fallbackRecord = null) {
     record,
     save: loadTribeSave(),
     regionId: creatureSave?.homeRegion || "coast",
-    legacy: tribeLegacy(progress.dietCard || dietPath(state.plants, state.meat), creatureCardFor(creatureSave)),
+    legacy: tribeLegacy(progress.dietCard || dietPath(state.plants, state.meat), creatureCardFor(creatureSave), creatureSave?.instinct || creatureSave?.leaning),
     onChronicle: recordChronicle,
     onHistory: openPath,
     quality: getQuality(),
@@ -2310,9 +2441,12 @@ function startTribeStage(fallbackRecord = null) {
     onSettings: openGameSettings,
     onSaved: () => markSaved(localStorage),
     portrait: (rec) => creatureSnapshot(rec, { width: 96, height: 96 }),
-    onCivilization: () => {
+    intro: opts.cinematic ? "campfire" : null,
+    frame: opts.frame || null,
+    reducedMotion: () => settings.reducedMotion,
+    onCivilization: (o2 = {}) => {
       stopTribeStage();
-      startCivStage();
+      startCivStage(o2);
     },
     onExit: () => {
       stopTribeStage();
@@ -2329,8 +2463,12 @@ function loadCivSave() {
   }
 }
 /** The Civilization Stage, on the tribe's island, with what every earlier stage earned. */
-function startCivStage() {
-  if (civStage) return;
+/** @param {{ frame?:object }} [opts] arriving from the Tribal → Civilization cutscene */
+function startCivStage(opts = {}) {
+  if (civStage) {
+    opts.frame?.remove();
+    return;
+  }
   const ts = loadTribeSave();
   const cs = loadCreatureSave();
   if (creatureStage) {
@@ -2369,6 +2507,9 @@ function startCivStage() {
     onSettings: openGameSettings,
     onSaved: () => markSaved(localStorage),
     onWon: () => syncPedia(),
+    intro: opts.frame ? "arrive" : null,
+    frame: opts.frame || null,
+    reducedMotion: () => settings.reducedMotion,
     onRestart: () => {
       try {
         localStorage.removeItem(CIV_SAVE_KEY);
@@ -2398,17 +2539,20 @@ function stopTribeStage() {
   tribeStage = null;
   document.body.classList.remove("tribeMode");
 }
-function callMate() {
-  if (state.editor || state.paused) return;
-  if (state.food < state.foodGoal) {
-    const bar = $("#growthBar");
-    bar.classList.remove("needsFoodPulse");
-    void bar.offsetWidth;
-    bar.classList.add("needsFoodPulse");
-    setTimeout(() => bar.classList.remove("needsFoodPulse"), 750);
+/** The last Cell stage is full: mating now ends the Cell Stage. */
+const finalReady = () => state.tier >= LAST_TIER && state.food >= state.foodGoal;
+function callMate(confirmed = false) {
+  if (state.editor || state.paused || growth) return;
+  if (state.mateSignal && state.mate) return;
+  // Leaving the water is a big step: ask once, so it never happens by accident.
+  if (finalReady() && !confirmed && !progress.landReady) {
+    showDialog("Leave the water?", "Mate now and your species evolves: you'll design your creature, then crawl onto land.", [
+      { label: "Not yet", action: () => {} },
+      { label: "🦎 Evolve", primary: true, action: () => callMate(true) },
+    ]);
     return;
   }
-  if (state.mateSignal && state.mate) return;
+  state.finalMate = finalReady();
   state.mateSignal = true;
   state.mateTimer = 30;
   // Your mate is one of your own species: the nearest relative, or a new one arriving from off screen.
@@ -2577,50 +2721,60 @@ function finishMate() {
   state.mateSignal = false;
   state.courtship = null;
   state.mateTimer = 0;
-  if (state.tier >= LAST_TIER) {
-    // The final generation: edit it like any other. Leaving the water is a separate choice
-    // (the Land button), so mating again later just reopens the editor.
-    const first = !progress.landReady;
-    state.food = 0;
-    state.foodSinceMate = 0;
+  spawnBurst(player.position.x, player.position.y, 0x80edff, 34);
+  spawnFloatLabel(player.position.x, player.position.y + 0.5, "+6 DNA", 0xffe7a2);
+  if (state.finalMate) {
+    // The last mating of the Cell Stage: the species leaves the water. Saved first.
+    state.finalMate = false;
     state.health = state.maxHealth;
-    progress.landReady = true;
-    progress.editorPass = true;
-    spawnBurst(player.position.x, player.position.y, 0x80edff, 34);
-    spawnFloatLabel(player.position.x, player.position.y + 0.5, "+6 DNA", 0xffe7a2);
     saveGame(true);
     updateHUD();
-    setEditor(true);
-    if (first) toast("Your cell is fully grown. Edit it, then tap Land whenever you're ready to leave the water.");
+    completeCellStage();
     return;
   }
+  // Any other mating is a new generation: design it in the editor. Growth carries on where it was.
+  progress.editorPass = true;
+  saveGame(true); // saved with the edit still owed, so reloading here reopens the editor
+  updateHUD();
+  setEditor(true);
+}
+/**
+ * The growth bar is full in an ordinary stage: the cell grows into the next one by itself. The world
+ * stays as it is; the cell swells while the camera pulls back, so the cells around it seem to shrink,
+ * and last stage's neighbours become prey while the next stage's giants become its equals.
+ */
+function advanceTier() {
+  if (growth || state.tier >= LAST_TIER) return;
+  const fromScale = state.scale;
   state.tier = Math.min(LAST_TIER, state.tier + 1);
   const stage = stageFor(state.tier);
   state.food = 0;
   state.foodGoal = stage.foodGoal;
   state.foodSinceMate = 0;
-  state.scale = Math.max(state.scale, stage.scale);
   state.epicTimer = EPIC_INTERVAL();
   state.eliteTimer = 28 + Math.random() * 20;
   worldSize *= 1.4;
-  player.scale.setScalar(state.scale);
-  velocity.set(0, 0);
-  jetVel.set(0, 0);
-  knockVel.set(0, 0);
-  cameraZoomTarget = 9 * stage.scale;
-  state.shake = 0.5;
-  spawnBurst(player.position.x, player.position.y, 0x80edff, 34);
-  spawnFloatLabel(player.position.x, player.position.y + 0.5, "+6 DNA", 0xffe7a2);
-  autoSaveTimer = 28;
-  spawnWorld();
+  regionCache.clear(); // each area's residents are chosen per stage
+  // Who is big and who is small, now that you have grown.
+  enemies.forEach((e) => {
+    const native = SPECIES[e.userData.species]?.tier || state.tier;
+    e.userData.giant = native > state.tier;
+    e.userData.prey = native < state.tier;
+  });
+  // The deeper soup of a bigger stage: top up its currents, clouds and meteors.
+  for (let n = currents.length; n < WORLD_TUNING.currents[tierIndex()]; n++) createCurrent();
+  for (let n = hazards.length; n < WORLD_TUNING.clouds[tierIndex()]; n++) createToxicCloud();
+  for (let n = 0; n < WORLD_TUNING.meteors[tierIndex()]; n++) spawnMeteor();
   state.health = state.maxHealth;
-  (stage.rewards || []).forEach((id) => unlockPart(id, "Reward for reaching the " + stage.name + " stage"));
-  // As in Spore, a new generation starts in the editor; the camera pulls back when you swim off.
-  progress.pendingBanner = state.tier;
-  progress.editorPass = true;
-  saveGame(true); // saved with the edit still owed, so reloading here reopens the editor
+  state.dna += 6;
+  autoSaveTimer = 28;
+  startGrowthPullback(state.tier, fromScale, Math.max(fromScale, stage.scale), 9 * stage.scale);
+  // Rewards wait until the growth is over, so nothing covers the moment.
+  const rewards = () => (stage.rewards || []).forEach((id) => unlockPart(id, "Reward for reaching the " + stage.name + " stage"));
+  if (growth) growth.after = rewards;
+  else rewards();
+  saveGame(true);
   updateHUD();
-  setEditor(true);
 }
 let velocity = new THREE.Vector2(),
   angle = 0,
@@ -3284,7 +3438,7 @@ function updateAI(dt, time) {
         u.state = "attack";
         u.attackCooldown -= dt;
         if (u.attackCooldown <= 0) {
-          const ratio = THREE.MathUtils.clamp(u.size / state.scale, 0.6, 2.2);
+          const ratio = THREE.MathUtils.clamp(u.size / state.scale, 0.6, u.giant ? 1.7 : 2.2); // giants: dangerous, not unfair
           const damage = Math.round((7 + state.tier * 2) * ratio * (u.alpha ? 1.8 : 1) * (u.epic ? 2.2 : 1));
           u.rig.eat?.();
           hurt(damage, "A " + (SPECIES[u.species]?.name || "predator") + " bit you!", e.position);
@@ -3753,7 +3907,7 @@ function spawnRegionNPC(spot, pack = null) {
   const huntersHere = !pack && Math.random() < ZONES[cellZone].hunters ? regionSpecies(spot.x, spot.y).filter((sp) => SPECIES[sp]?.diet === "meat") : [];
   if (huntersHere.length) species = huntersHere[Math.floor(Math.random() * huntersHere.length)];
   else if (roll < 0.22 && prey.length) species = prey[Math.floor(Math.random() * prey.length)];
-  else if (roll < 0.3 && giants.length && !enemies.some((e) => e.userData.alive && e.userData.giant)) species = giants[Math.floor(Math.random() * giants.length)];
+  else if (roll < 0.34 && giants.length && enemies.filter((e) => e.userData.alive && e.userData.giant).length < 2) species = giants[Math.floor(Math.random() * giants.length)];
   else if (pack) species = pack;
   else {
     const residents = regionSpecies(spot.x, spot.y);
@@ -4040,9 +4194,18 @@ function spawnMeteor() {
    No banner: as in Spore, the camera pulls back to show how much bigger the world has become while
    time slows and the HUD steps aside, then settles in at the new size. */
 let growth = null;
-function startGrowthPullback(tier) {
+/**
+ * Spore's growth moment: the cell swells, the camera pulls back so everything else seems to shrink,
+ * then settles in close again at the new scale. Gameplay size follows the visible size every frame.
+ */
+function startGrowthPullback(tier, fromScale = state.scale, toScale = state.scale, toZoom = cameraZoomTarget) {
+  if (growth) return;
   const reduced = settings.reducedMotion;
-  growth = { t: 0, dur: reduced ? 1.6 : 3.6, from: cameraZoom, to: cameraZoomTarget, peak: reduced ? 0.3 : 1.05, zoom: cameraZoom };
+  growth = { t: 0, dur: reduced ? 1.6 : 3.8, from: cameraZoom, to: toZoom, peak: reduced ? 0.25 : 0.8, zoom: cameraZoom, fromScale, toScale };
+  cameraZoomTarget = toZoom;
+  state.damageCooldown = Math.max(state.damageCooldown, growth.dur); // nothing bites mid-growth
+  velocity.set(0, 0);
+  spawnBurst(player.position.x, player.position.y, 0x80edff, 30);
   document.body.classList.add("growthPullback");
   playSfx("growth");
   // Screen readers still hear which stage this is.
@@ -4058,10 +4221,19 @@ function updateGrowthPullback(dt) {
   const ease = k * k * (3 - 2 * k);
   const bell = Math.pow(Math.sin(Math.PI * k), 1.4); // out and back again
   g.zoom = (g.from + (g.to - g.from) * ease) * (1 + g.peak * bell);
+  // The cell grows over the first two thirds, a little ahead of the camera, so it visibly swells first.
+  const gk = Math.min(1, k / 0.66),
+    grow = gk * gk * (3 - 2 * gk);
+  state.scale = g.fromScale + (g.toScale - g.fromScale) * grow;
+  player.scale.setScalar(state.scale);
   if (k >= 1) {
     growth = null;
     cameraZoom = g.to;
+    state.scale = g.toScale;
+    player.scale.setScalar(state.scale);
     document.body.classList.remove("growthPullback");
+    g.after?.();
+    saveGame(true);
   }
   return dt * (1 - 0.7 * bell);
 }
@@ -4444,7 +4616,7 @@ function updateGame(dt, time) {
   }
   camera.lookAt(camera.position.x, camera.position.y, 0);
   updateMateRings(dt);
-  if (state.food >= state.foodGoal && !state.mateSignal) $("#growthBar").classList.add("growthReady");
+  if (finalReady() && !state.mateSignal) $("#growthBar").classList.add("growthReady");
   state.waypointTimer = (state.waypointTimer || 0) - dt;
   if (state.waypointTimer <= 0) {
     updateWaypoint();
@@ -4657,23 +4829,12 @@ function bindUI() {
   $("#skipHatch").onclick = skipHatch;
   bindStageSwitcher();
   /*
-   * TEMPORARY stage switcher for playtesting: jumps straight to any stage. Saves are kept, so a jump
-   * resumes a stage where it was left; a stage never reached starts fresh from the current cell.
+   * Developer stage jump (Settings → Developer, once developer mode is on): jumps straight to any
+   * stage. Saves are kept, so a jump resumes a stage where it was left; a stage never reached starts
+   * fresh from the current cell.
    */
   function bindStageSwitcher() {
-    const root = $("#devStages");
-    if (!root) return;
-    const toggle = $("#devStagesToggle"),
-      menu = $("#devStagesMenu");
     const currentStage = () => (civStage ? "civ" : tribeStage ? "tribe" : creatureStage ? "creature" : "cell");
-    const setOpen = (open) => {
-      menu.hidden = !open;
-      toggle.setAttribute("aria-expanded", String(open));
-      if (!open) return;
-      const now = state.runStarted ? currentStage() : null;
-      menu.querySelectorAll("button").forEach((b) => b.setAttribute("aria-current", String(b.dataset.stage === now)));
-      menu.querySelector("button")?.focus();
-    };
     const hasCellSave = () => {
       try {
         return !!localStorage.getItem("johnny-spore-cell-stage");
@@ -4710,7 +4871,6 @@ function bindUI() {
       updateHUD();
     };
     const jumpTo = (stage) => {
-      setOpen(false);
       if (state.runStarted && stage === currentStage()) return;
       clearScreens();
       if (civStage) stopCivStage();
@@ -4739,17 +4899,7 @@ function bindUI() {
       }
       startTribeStage(creatureFromCell(currentRecord(), state.cellName));
     };
-    toggle.onclick = () => setOpen(menu.hidden);
-    menu.querySelectorAll("button").forEach((b) => (b.onclick = () => jumpTo(b.dataset.stage)));
-    root.addEventListener("keydown", (e) => {
-      if (e.key !== "Escape" || menu.hidden) return;
-      e.stopPropagation();
-      setOpen(false);
-      toggle.focus();
-    });
-    document.addEventListener("pointerdown", (e) => {
-      if (!menu.hidden && !root.contains(e.target)) setOpen(false);
-    });
+    devJump = jumpTo;
   }
   $("#begin").onclick = () => {
     audio.setAmbient("cell");
@@ -4785,7 +4935,7 @@ function bindUI() {
   $("#guideButton").onclick = () =>
     showDialog(
       "FIELD GUIDE",
-      "YOUR GOAL\nEat compatible food until the evolution bar is full. Collect meteor fragments to unlock parts and earn DNA.\n\nMOVEMENT\nWASD / arrows to swim. The mouse steers your cell on desktop. On touch screens, put your thumb anywhere on the water and drag the way you want to swim. Tap Boost if you have a Jet. Space / BOOST uses a Jet part and stamina.\n\nSURVIVAL\nSmall carnivores may hunt you. Avoid poison clouds, follow current rings carefully, and use spikes or electric organs to fight back.\n\nEVOLUTION\nPress M or tap MATE when the bar fills. One of your own species (the teal dots on the radar) answers: swim into them, then edit your cell. The soup goes on forever, and each area has its own resident species.",
+      "YOUR GOAL\nEat compatible food to grow. Collect meteor fragments to unlock parts and earn DNA.\n\nMOVEMENT\nWASD / arrows to swim. The mouse steers your cell on desktop. On touch screens, put your thumb anywhere on the water and drag the way you want to swim. Tap Boost if you have a Jet. Space / BOOST uses a Jet part and stamina.\n\nSURVIVAL\nSmall carnivores may hunt you. Avoid poison clouds, follow current rings carefully, and use spikes or electric organs to fight back.\n\nEVOLUTION\nFill the growth bar and your cell grows into the next stage by itself. Mate whenever you like (M or MATE) to design a new generation. In the last stage, a full bar and a mate take your species onto land.",
       [
         { label: "Got it", primary: true, action: () => {} },
       ],
@@ -5204,6 +5354,8 @@ function loadGame() {
     cameraZoomTarget = cameraZoom;
     unlocked.clear();
     (d.unlocked || STARTER_UNLOCKS).forEach((id) => unlocked.add(id));
+    // Every stage reached has handed out its reward parts (even if the page closed mid-growth).
+    GROWTH_STAGES.slice(1, state.tier).forEach((st) => (st.rewards || []).forEach((id) => unlocked.add(id)));
     if (d.nodes && d.nodes.length >= 2) nodes = straightenSpine(d.nodes);
     parts = (d.parts || [])
       .map((p) => ({
@@ -5319,17 +5471,17 @@ function frame(t) {
   }
   if (civStage) {
     civStage.update(dt);
-    civStage.render();
+    civStage?.render(); // a cutscene may have handed over to another stage this frame
     return;
   }
   if (tribeStage) {
     tribeStage.update(dt);
-    tribeStage.render();
+    tribeStage?.render();
     return;
   }
   if (creatureStage) {
     creatureStage.update(dt);
-    creatureStage.render();
+    creatureStage?.render();
     return;
   }
   tipClock -= dt;
@@ -5345,6 +5497,8 @@ function frame(t) {
     $("#dialogOverlay").style.display !== "flex"
   ) {
     updateGame(growth ? updateGrowthPullback(dt) : dt, gameTime);
+    // A save from before automatic growth may be sitting on a full bar: grow now.
+    if (!growth && state.runStarted && state.tier < LAST_TIER && state.food >= state.foodGoal) advanceTier();
   } else {
     if (state.editor) {
       player.rotation.z = Math.PI;
@@ -5394,7 +5548,7 @@ function tipContext() {
     touchedWrongFood: gameTime - progress.wrongFoodAt < 2,
     predatorNear: near(enemies, 7, (e) => e.userData.alive && e.userData.diet === "meat" && !e.userData.kin && e.userData.size > state.scale * 0.85),
     healthPct: state.health / state.maxHealth,
-    mateReady: state.food >= state.foodGoal,
+    mateReady: finalReady(),
     mateSignal: state.mateSignal,
     meteorNear: near(meteors, view, (m) => m.userData.alive),
     partOrbNear: near(partOrbs, view),
@@ -5874,7 +6028,7 @@ function syncPedia() {
   }
   const chronicle = loadChronicle().events;
   for (const ev of chronicle) if (!S.pedia.entries["hist:" + ev.key]) S.record({ id: "hist:" + ev.key, kind: "history", name: ev.text, icon: ev.icon, stage: ev.stage, at: ev.at || Date.now() });
-  const traits = [progress.cellStageComplete && progress.dietCard ? DIET_CARDS[progress.dietCard]?.title : null, cs?.card ? CREATURE_CARDS[cs.card]?.title : null, ts?.path ? { peace: "Diplomatic", balance: "Industrious", conquest: "Warlike" }[ts.path] : null].filter(Boolean);
+  const traits = [progress.cellStageComplete && progress.dietCard ? DIET_CARDS[progress.dietCard]?.title : null, cs?.instinct && INSTINCTS[cs.instinct] ? INSTINCTS[cs.instinct].title : cs?.card ? CREATURE_CARDS[cs.card]?.title : null, ts?.path ? { peace: "Diplomatic", balance: "Industrious", conquest: "Warlike" }[ts.path] : null].filter(Boolean);
   const cv = loadCivSave();
   if (cv?.won && CIV_CARDS[cv.card]) traits.push(CIV_CARDS[cv.card].name);
   const stage = civStage || cv ? "Civilization" : tribeStage || ts ? "Tribal" : creatureStage || cs ? "Creature" : "Cell";
@@ -5947,7 +6101,8 @@ function openPath() {
       creature: cs ? { brain: cs.brain || 1, alliances: cs.alliances || 0, extinctions: cs.extinctions || 0, deaths: cs.deaths || 0, dna: cs.dna || 0, card: creatureCardFor(cs) } : null,
       tribe: trackSummary({ tribe: ts }).tribe,
       civ: cv ? { card: cv.won && CIV_CARDS[cv.card] ? CIV_CARDS[cv.card] : null, cities: cv.cities.filter((c) => c.owner === "you").length, total: cv.cities.length, captures: Object.values(cv.captures).reduce((a, b) => a + b, 0) } : null,
-      legacy: tribeLegacy(progress.dietCard || dietPath(state.plants, state.meat), creatureCardFor(cs)).lines,
+      legacy: tribeLegacy(progress.dietCard || dietPath(state.plants, state.meat), creatureCardFor(cs), cs?.instinct || cs?.leaning).lines,
+      identity: identityView(cs),
       chronicle,
       history: progress.history,
       stats: progressStats(),
@@ -5966,6 +6121,7 @@ function openPath() {
       card: progress.dietCard,
       creature: { brain: st.brain, alliances: st.alliances, extinctions: st.extinctions, deaths: st.deaths, dna: st.dna, card: st.card },
       library: creatureStage.library(),
+      identity: identityView(st),
       tribe: trackSummary({ tribe: loadTribeSave() }).tribe,
       chronicle,
       history: progress.history,
@@ -6081,6 +6237,7 @@ if (new URLSearchParams(location.search).has("debug")) {
       for (let i = 0; i < n; i++) spawnBurst(player.position.x, player.position.y, 0xffcc88, 20);
     },
     killNPC,
+    damageNPC,
     completeCellStage,
     startCreatureStage,
     stopCreatureStage,

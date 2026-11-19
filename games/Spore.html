@@ -605,6 +605,52 @@ body.creatureEditing .creatureHUD,body.creatureEditing .moveStick{display:none!i
 .stageIntro .siSkip{position:absolute;right:14px;bottom:calc(11vh + 12px);border:1px solid #ffffff44;background:#0006;color:#fff;border-radius:16px;padding:7px 13px;font:inherit;font-size:12px;cursor:pointer;opacity:0;transition:opacity .6s .8s}
 .stageIntro.show .siSkip{opacity:1}
 .creatureHUD.intro{visibility:hidden}
+/* Progression & immersion: cutscene frame, brain growth bubble, developer settings */
+.cineFrame{position:fixed;inset:0;z-index:115;pointer-events:none;color:#fff}
+.cineFrame::before{content:"";position:absolute;inset:0;opacity:0;transition:opacity 1.4s,background 1.4s}
+.cineFrame.night::before{opacity:1;background:radial-gradient(ellipse at 50% 55%,#0c174000,#060b26d9 75%)}
+.cineFrame.dawn::before{opacity:1;background:linear-gradient(180deg,#ffd7a855,#ffefd000 55%)}
+.cineFrame .cfBar{position:absolute;left:0;right:0;height:11vh;background:#05080b;transition:transform .9s cubic-bezier(.2,.8,.2,1)}
+.cineFrame .cfBar.cfTop{top:0;transform:translateY(-100%)}.cineFrame .cfBar.cfBottom{bottom:0;transform:translateY(100%)}
+html body.cutscene .moveStick,html body.cutscene .mobileControls{display:none!important}
+.cineFrame.show .cfBar{transform:none}
+.cineFrame .cfFlash{position:absolute;inset:0;background:var(--flash,#fff);opacity:0;transition:opacity .9s ease}
+.cineFrame.flashing .cfFlash{opacity:1}
+.cineFrame .cfTitle{position:absolute;left:0;right:0;bottom:calc(11vh + 4vh);text-align:center;opacity:0;transform:translateY(12px);transition:opacity 1s,transform 1s;text-shadow:0 3px 20px #000b}
+.cineFrame.titled .cfTitle{opacity:1;transform:none}
+.cineFrame .cfTitle small{display:block;font-size:12px;letter-spacing:.45em;text-transform:uppercase;color:#ffe6a8}
+.cineFrame .cfTitle b{display:block;font-size:clamp(30px,7vw,58px);font-weight:900;margin-top:4px}
+.cineFrame .cfSkip{pointer-events:auto;position:absolute;right:14px;bottom:calc(11vh + 12px);min-height:40px;border:1px solid #ffffff44;background:#0007;color:#fff;border-radius:18px;padding:8px 14px;font:inherit;font-size:13px;cursor:pointer;opacity:0;transition:opacity .6s .6s}
+.cineFrame.show .cfSkip{opacity:1}
+.tribeHUD.cine{visibility:hidden}
+.creatureHUD .chMate.final{background:linear-gradient(#ffd27a,#f0a23a);color:#2a1500;box-shadow:0 0 0 3px #fff6,0 0 22px 6px #ffb44a99;animation:chBlink 1.4s infinite}
+/* Brain growth: Spore's bubble beside the head, a dotted line to it, the brain inside */
+.creatureHUD .chBrainFx{position:absolute;inset:0;pointer-events:none;z-index:2}
+.creatureHUD .chBrainFx .bfLink{position:absolute;inset:0;width:100%;height:100%;overflow:visible;opacity:0;transition:opacity .35s;filter:drop-shadow(0 1px 2px #000a)}
+.creatureHUD .chBrainFx .bfLink line{stroke:#fff;stroke-width:4.5;stroke-linecap:round;stroke-dasharray:.1 9}
+.creatureHUD .chBrainFx .bfLink circle{fill:#fff}
+.creatureHUD .chBrainFx .bfBox{position:absolute;left:var(--bx,40px);top:var(--by,120px);width:96px;height:96px;transform:scale(0);transform-origin:18% 100%;transition:transform .45s cubic-bezier(.3,1.6,.5,1),opacity .4s}
+.creatureHUD .chBrainFx.show .bfBox{transform:scale(1)}.creatureHUD .chBrainFx.show .bfLink{opacity:1}
+.creatureHUD .chBrainFx .bfShard{position:absolute;inset:0;border-radius:20px;background:radial-gradient(circle at 35% 28%,#f4f6f7,#c9ced1 45%,#8e979c);box-shadow:inset 0 0 0 3px #fff,0 0 0 2px #1c2226,0 8px 20px #0007;transition:transform .8s cubic-bezier(.2,.7,.3,1),opacity .8s}
+.creatureHUD .chBrainFx .s1{clip-path:polygon(0 0,56% 0,46% 47%,0 62%)}.creatureHUD .chBrainFx .s2{clip-path:polygon(56% 0,100% 0,100% 44%,46% 47%)}
+.creatureHUD .chBrainFx .s3{clip-path:polygon(0 62%,46% 47%,53% 100%,0 100%)}.creatureHUD .chBrainFx .s4{clip-path:polygon(46% 47%,100% 44%,100% 100%,53% 100%)}
+.creatureHUD .chBrainFx .bfBrain{position:absolute;inset:0;width:100%;height:100%;overflow:visible;transform:scale(var(--b,.2));transition:filter .6s}
+.creatureHUD .chBrainFx .bfLobe{fill:#7b4192;stroke:#3a1648;stroke-width:3}
+.creatureHUD .chBrainFx .bfFold{fill:none;stroke:#43195a;stroke-width:3.2;stroke-linecap:round}
+.creatureHUD .chBrainFx .bfShine{fill:#ffffff40}
+.creatureHUD .chBrainFx.burst .s1{transform:translate(-58px,-64px) rotate(-38deg);opacity:0}.creatureHUD .chBrainFx.burst .s2{transform:translate(62px,-58px) rotate(34deg);opacity:0}
+.creatureHUD .chBrainFx.burst .s3{transform:translate(-54px,66px) rotate(28deg);opacity:0}.creatureHUD .chBrainFx.burst .s4{transform:translate(60px,62px) rotate(-30deg);opacity:0}
+.creatureHUD .chBrainFx.burst .bfBrain{filter:drop-shadow(0 0 10px #ffd6ff) drop-shadow(0 0 26px #c77dff)}
+.creatureHUD .chBrainFx.burst .bfLink{opacity:0}
+.creatureHUD .chBrainFx.still .bfBox,.creatureHUD .chBrainFx.still .bfShard{transition:opacity .3s}
+/* Settings: the credits line (seven taps: developer mode) and the developer tools */
+.settingsPanel .spCredits{touch-action:manipulation;display:block;width:100%;min-height:44px;margin-top:10px;border:0;background:none;color:#7f9aa6;font:inherit;font-size:12px;text-align:center;cursor:default;border-radius:10px;-webkit-tap-highlight-color:transparent}
+.settingsPanel .spCredits.tapped{background:#ffffff10;color:#cfe3ea}
+.settingsPanel .spDev{border:1px dashed #ffcf6a66;border-radius:14px;padding:10px 12px;margin-top:12px}
+.settingsPanel .spDevGroup{margin-top:8px}.settingsPanel .spDevGroup small{display:block;color:#e8c77f;font-size:11px;margin-bottom:5px}
+.settingsPanel .spDevGroup div{display:flex;flex-wrap:wrap;gap:6px}
+.settingsPanel .spDev button{min-height:44px;border:1px solid #ffffff22;border-radius:10px;padding:8px 11px;background:#15324a;color:#fff;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.settingsPanel .spDev .spDevOff{margin-top:10px;width:100%;background:none;color:#cfe3ea;font-weight:600}
 html body.cinematic.creatureMode .moveStick,html body.cinematic .mobileControls{display:none!important}
 /* Creature editor */
 .crEditor{position:fixed;inset:0;z-index:70;pointer-events:none;color:#fff;font-family:inherit}
@@ -764,6 +810,24 @@ body.designing>:not(#scene):not(.mdEditor):not(script){visibility:hidden!importa
 .creatureHUD::before{content:"";position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 140px 40px #030c12;opacity:0;transition:opacity .35s}
 .creatureHUD.sneaking::before{opacity:.75}
 .creatureHUD .chMenuPanel{z-index:3}
+/* Consequences & Immersion: quiet hints, the species' character badge, the field guide */
+.creatureHUD .chHint{position:absolute;left:50%;top:calc(max(10px,env(safe-area-inset-top)) + 156px);transform:translate(-50%,-6px);max-width:min(86vw,420px);padding:6px 13px;border-radius:999px;background:#0d2232cc;border:1px solid #ffffff1f;color:#e8f4f7;font-size:13px;font-weight:600;line-height:1.3;text-align:center;opacity:0;pointer-events:none;transition:opacity .35s,transform .35s;z-index:2}
+.creatureHUD .chHint.show{opacity:1;transform:translate(-50%,0)}
+.creatureHUD .chHistBtn{position:relative}
+.creatureHUD .chLean{position:absolute;right:-6px;bottom:-6px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-style:normal;background:#0d2232;border:2px solid var(--c,#f5c75a);box-shadow:0 0 0 1px #0008}
+.creatureHUD .chLean.pulse{animation:chLeanPulse 1.2s ease-in-out infinite}
+@keyframes chLeanPulse{50%{box-shadow:0 0 0 4px var(--c,#f5c75a),0 0 16px 4px var(--c,#f5c75a)}}
+.creatureHUD .chGuide{pointer-events:auto;position:absolute;top:60px;right:10px;width:min(340px,calc(100vw - 20px));max-height:calc(100% - 200px);overflow:auto;background:#0d2232f5;border:1px solid #ffffff22;border-radius:14px;padding:12px 14px;z-index:4;font-size:13px}
+.creatureHUD .chGuide .cgHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.creatureHUD .chGuide dl{margin:0;display:grid;gap:7px}.creatureHUD .chGuide dl div{display:grid;grid-template-columns:96px 1fr;gap:8px}
+.creatureHUD .chGuide dt{font-weight:800;color:#ffd98a}.creatureHUD .chGuide dd{margin:0;color:#d4e6ec;line-height:1.35}
+.creatureHUD .chChoice{pointer-events:auto;position:absolute;left:50%;bottom:calc(208px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;flex-wrap:wrap;justify-content:center;gap:8px;width:max-content;max-width:calc(100vw - 20px);z-index:3;animation:chChoiceIn .35s ease-out}
+.creatureHUD .chChoice button{display:flex;align-items:center;gap:6px;min-height:44px;border:1px solid #ffffff38;border-radius:22px;padding:9px 15px;font:inherit;font-weight:800;font-size:14px;color:#fff;background:#0d2232e6;box-shadow:0 6px 18px #0007;cursor:pointer}
+.creatureHUD .chChoice button span{font-size:18px}
+.creatureHUD .chChoice button:hover{background:#183b52}
+@keyframes chChoiceIn{from{opacity:0;transform:translate(-50%,8px)}}
+@media (max-width:420px){.creatureHUD .chChoice{bottom:calc(196px + env(safe-area-inset-bottom))}.creatureHUD .chChoice button{font-size:13px;padding:8px 12px}}
+@media (prefers-reduced-motion:reduce){.creatureHUD .chLean.pulse{animation:none;box-shadow:0 0 0 3px var(--c,#f5c75a)}.creatureHUD .chHint{transition:none}.creatureHUD .chChoice{animation:none}}
 /* ==== Species library ==== */
 .library{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .libCard{margin:0;border-radius:12px;background:#132f43;border:1px solid #ffffff1a;overflow:hidden;display:flex;flex-direction:column}
@@ -1133,6 +1197,37 @@ body.cellEditorMode #partsPanel .partCard.locked{min-height:96px}
 .chronicle .chr.cell::before{background:#3f9cf0}.chronicle .chr.creature::before{background:#3fc26e}.chronicle .chr.tribe::before{background:#f5c75a}
 .chronicle .chrStage{flex:none;width:18px;text-align:center;opacity:.7;font-size:12px}.chronicle .chrIcon{flex:none}
 .legacyList{margin:0;padding-left:18px;display:grid;gap:5px;font-size:13px;color:#e4f0f3}
+/* the timeline: turning points stand out */
+.chronicle .chr.key{font-weight:700;color:#fff}.chronicle .chr.key::before{width:14px;height:14px;left:-22px;top:4px;background:var(--k,#f5c75a);box-shadow:0 0 0 3px #0b1c28,0 0 12px var(--k,#f5c75a)}
+.chronicle .chr.civ::before{background:#c58bff}
+/* the species' character in the history screen */
+.idCard{display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:14px;border:2px solid var(--c);background:linear-gradient(160deg,color-mix(in srgb,var(--c) 30%,#132f43),#0f2536)}
+.idCard .idIcon{font-size:34px;line-height:1}.idCard b{font-size:16px}.idCard p{margin:3px 0 0;font-size:13px;color:#d9e8ee;line-height:1.35}
+.idCard .idWhy{color:#ffe7a3}.idCard .idFx{display:flex;flex-wrap:wrap;gap:4px 10px}.idCard .pro{color:#8ff0b0}.idCard .con{color:#ffb0a8}
+.idAxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px 14px;margin-top:10px}
+.idAxis{display:grid;grid-template-columns:78px 1fr;align-items:center;gap:8px;font-size:12px;color:#cfe3ea}
+.idAxis i{display:block;height:7px;border-radius:4px;background:#ffffff1a;overflow:hidden}.idAxis i b{display:block;height:100%;background:linear-gradient(90deg,#9fd8e2,#fff);border-radius:4px}
+/* end-of-stage trait card reveal */
+.traitReveal{position:fixed;inset:0;z-index:120;display:grid;place-items:center;padding:16px;background:radial-gradient(circle at 50% 40%,color-mix(in srgb,var(--c) 30%,#06121bdd),#03080ef2);opacity:0;transition:opacity .35s;color:#fff}
+.traitReveal.in{opacity:1}.traitReveal.out{opacity:0}
+.traitReveal .trCard{width:min(360px,92vw);height:min(560px,calc(100dvh - 32px));perspective:1100px}
+.traitReveal .trInner{position:relative;width:100%;height:100%;transition:transform .9s cubic-bezier(.2,.8,.2,1);transform-style:preserve-3d}
+.traitReveal.flipped .trInner{transform:rotateY(180deg)}
+.traitReveal .trFace{position:absolute;inset:0;border-radius:22px;backface-visibility:hidden;-webkit-backface-visibility:hidden;box-shadow:0 24px 60px #000a}
+.traitReveal .trBack{display:grid;place-items:center;font-size:64px;color:#f5c75a;border:3px solid #f5c75a;background:repeating-linear-gradient(45deg,#163a52 0 12px,#1b4560 12px 24px)}
+.traitReveal .trFront{transform:rotateY(180deg);overflow:auto;padding:20px 18px 18px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;border:3px solid var(--c);background:linear-gradient(175deg,color-mix(in srgb,var(--c) 38%,#183b52),#0b1d2b 60%)}
+.traitReveal .trKind{letter-spacing:.2em;font-size:10px;text-transform:uppercase;color:#cfe3ea}
+.traitReveal .trIcon{font-size:58px;line-height:1.1;filter:drop-shadow(0 4px 12px #0008)}
+.traitReveal h2{margin:0;font-family:Georgia,serif;font-size:26px;color:#fff;text-shadow:0 2px #0008}
+.traitReveal .trAbility{font-style:normal;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:color-mix(in srgb,var(--c) 70%,#fff)}
+.traitReveal .trBlurb{margin:2px 0;font-size:14px;line-height:1.4;color:#e4f0f3}
+.traitReveal .trSection{width:100%;text-align:left;font-size:13px}.traitReveal .trSection>b{display:block;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#9fb8c2;margin-bottom:3px}
+.traitReveal ul{list-style:none;margin:0;padding:0;display:grid;gap:4px}.traitReveal li{display:flex;gap:7px;line-height:1.35}.traitReveal li span{flex:none;width:14px;text-align:center;font-weight:800}
+.traitReveal .trReasons{color:#ffe7a3}.traitReveal .trPros li{color:#a9f5c4}.traitReveal .trCons li{color:#ffbdb6}.traitReveal .trFx{display:grid;gap:4px;padding:8px 10px;border-radius:12px;background:#0006}
+.traitReveal .trLater li{color:#d4e6ec}
+.traitReveal .trGo{margin-top:auto;border:0;border-radius:24px;padding:13px 26px;font:inherit;font-weight:800;font-size:15px;background:var(--c);color:#0b1d2b;cursor:pointer;min-height:44px}
+.traitReveal .trGo:focus-visible{outline:3px solid #fff;outline-offset:3px}
+.traitReveal.still,.traitReveal.still .trInner{transition:none}
 .tribeHUD .tsLegacy{list-style:none;padding-left:0}
 .genCard{flex:none;width:170px;margin:0;border-radius:12px;background:#132f43;border:1px solid #ffffff1a;overflow:hidden;scroll-snap-align:start}
 .genCard img{display:block;width:100%;aspect-ratio:240/150;object-fit:cover;background:#0d2a40}
@@ -1346,15 +1441,6 @@ body.cellEditorMode #partsPanel .catalog{overflow-y:auto;overflow-x:hidden;min-h
 .creatureHUD .chEgg{background:#ffe7a8;color:#3b2a06;box-shadow:0 6px 20px #ffd76a55;animation:none}
 .creatureHUD .chPop.sleep{font-size:18px;opacity:.85;animation-duration:2.4s}
 /* TEMPORARY stage switcher (playtesting aid) */
-.devStages{position:fixed;z-index:80;left:0;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:6px;pointer-events:none}
-.devStagesToggle{pointer-events:auto;writing-mode:vertical-rl;min-width:26px;min-height:58px;padding:8px 4px;border:1px dashed #ffcf6e;border-left:0;border-radius:0 9px 9px 0;background:#2a1d08e6;color:#ffd98a;font:800 10px/1 "Trebuchet MS",system-ui,sans-serif;letter-spacing:.22em;box-shadow:0 3px 14px #0007}
-.devStagesToggle[aria-expanded=true]{background:#5a3d0fef}
-.devStagesMenu{pointer-events:auto;display:flex;flex-direction:column;gap:6px;padding:10px;border:1px dashed #ffcf6e;border-radius:11px;background:#1d1606f2;box-shadow:0 8px 28px #000a}
-.devStagesMenu[hidden]{display:none}
-.devStagesMenu small{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#e8c77f}
-.devStagesMenu button{min-height:44px;min-width:132px;text-align:left;font-weight:700;background:linear-gradient(#4b3a1a,#2b2010);border-color:#c9a25a88}
-.devStagesMenu button[aria-current=true]{border-color:#ffd98a;background:linear-gradient(#7a5a1f,#4a3412);color:#fff4d6}
-.devStagesToggle:focus-visible,.devStagesMenu button:focus-visible{outline:2px solid #ffe7a6;outline-offset:2px}
 
 /* ---- Galaxy start screen ---- */
 .gs{position:fixed;inset:0;z-index:60;pointer-events:none;color:#eef0ff;font:14px/1.4 "Trebuchet MS",system-ui,sans-serif;opacity:0;transition:opacity .9s;-webkit-user-select:none;user-select:none}
@@ -1481,17 +1567,6 @@ body.galaxyStart>:not(#scene):not(.gs):not(.uv):not(.settingsScreen):not(.homeAr
 <div class="worldToast" id="toast"></div><div id="worldWaypoint" aria-hidden="true"><span class="waypointArrow">➤</span><span class="waypointText"><b id="waypointTitle">METEOR</b><small id="waypointSubtitle">DNA FRAGMENT</small></span></div><div class="controlHint" id="controlHint"><span id="controlHintText">STEER · EAT · EVOLVE</span><button id="dismissControlHint" aria-label="Dismiss controls hint">×</button></div>
 <div class="overlay" id="intro"><div class="dialog"><h1>PRIMORDIAL SOUP</h1><p>A meteor brings life to the soup. Build your first cell, then eat to grow, find new parts in meteor shards and fallen cells, and choose your path: plants, meat, or both.</p><p><b>Swim:</b> WASD / arrows · <b>Jet:</b> Space · <b>Call mate:</b> M · <b>Editor:</b> Tab<br>On mobile, use the virtual joystick and the Boost / Mate / Pause buttons. In the editor, drag the spine and radius handles directly.</p><div class="options"><button id="begin" class="primary">Begin life</button></div><nav class="uvLinks" id="uvLinks" aria-label="Universe"><button data-open="universes"><span aria-hidden="true">🪐</span><b id="uvActiveName">Universe</b><small>Saves</small></button><button data-open="galaxy"><span aria-hidden="true">🌌</span><b>Galaxy</b><small>Explore</small></button><button data-open="pedia"><span aria-hidden="true">📖</span><b>Sporepedia</b><small>Collection</small></button></nav></div></div>
 <div id="hatchCinematic" aria-label="Meteor impact and life beginning"><div class="hatchStarfield"></div><div class="hatchOrbit hatchOrbitOne"></div><div class="hatchOrbit hatchOrbitTwo"></div><div class="hatchMeteorTrail"></div><div class="hatchMeteor"></div><div class="hatchRipple"></div><div class="hatchEgg" id="hatchEgg"></div><div class="hatchCaption"><small>PRIMORDIAL SOUP</small><b id="hatchTitle">LIFE BEGINS</b><span>ONE CELL. ONE CHANCE.</span></div><button id="skipHatch">SKIP ›</button></div><div class="overlay" id="dialogOverlay" style="display:none"><div class="dialog"><h1 id="dialogTitle"></h1><p id="dialogText"></p><div class="options" id="dialogOptions"></div></div></div>
-<!-- TEMPORARY: stage switcher for playtesting. Remove before release. -->
-<div id="devStages" class="devStages" data-temporary>
-<button id="devStagesToggle" class="devStagesToggle" aria-expanded="false" aria-controls="devStagesMenu" aria-label="Temporary stage switcher">DEV</button>
-<div id="devStagesMenu" class="devStagesMenu" role="group" aria-label="Jump to stage" hidden>
-<small>Temporary · jump to stage</small>
-<button data-stage="cell"><span aria-hidden="true">🦠</span> Cell</button>
-<button data-stage="creature"><span aria-hidden="true">🦎</span> Creature</button>
-<button data-stage="tribe"><span aria-hidden="true">🛖</span> Tribe</button>
-<button data-stage="civ"><span aria-hidden="true">🏛</span> Civilization</button>
-</div>
-</div>
 <script type="module" src="spore/main.js"></script>
 <div class="tipBubble" id="tipBubble" role="status" aria-live="polite"><span class="tipIcon">!</span><span id="tipText"></span><button id="tipClose" aria-label="Dismiss hint">Got it</button></div>
 <div class="srOnly" id="growthAnnounce" aria-live="polite"></div><div class="stageBanner" id="stageBanner" aria-live="polite"><small id="stageBannerKicker">STAGE 1</small><strong id="stageBannerTitle">Microbe</strong><span id="stageBannerText"></span></div>
