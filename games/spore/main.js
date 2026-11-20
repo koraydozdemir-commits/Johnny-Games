@@ -2410,6 +2410,7 @@ function openDesignEditor(kind, design, opts = {}) {
     kind,
     design: JSON.parse(JSON.stringify(base)),
     roles: opts.roles,
+    templates: opts.templates,
     sfx: (k) => playSfx(k),
     onDone: (d, st) => {
       finish();
@@ -2522,6 +2523,8 @@ function startCivStage(opts = {}) {
       creatureCard: creatureCard ? CREATURE_CARDS[creatureCard]?.title : null,
       tribeTrait: ts?.path ? { peace: "Diplomatic", balance: "Industrious", conquest: "Warlike" }[ts.path] : null,
     },
+    // Rival leaders' faces, for the Civilization Stage's conversations.
+    portrait: (rec) => creatureSnapshot(rec, { width: 120, height: 120 }),
     sfx: playSfx,
     openEditor: (kind, design, opts) => openDesignEditor(kind, design, opts),
     onCreation: (kind, design) => {

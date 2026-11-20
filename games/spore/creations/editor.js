@@ -12,7 +12,7 @@
 import * as THREE from "three";
 import { validateModular } from "./format.js";
 import { buildDesignMesh, partExtent } from "./mesh.js";
-import { CATALOGS, MAX_PARTS, ROLES, designStats, partOf } from "./modular.js";
+import { CATALOGS, CATEGORIES, MAX_PARTS, ROLES, VEHICLE_CLASSES, designStats, partOf } from "./modular.js";
 
 const SWATCHES = [0xf2f2f2, 0xe8dcc0, 0xd6a03f, 0xf2c84b, 0xc9483c, 0xd94f8a, 0x8a5fd0, 0x4a74e0, 0x3fa9d6, 0x3fc2a0, 0x6b7a4a, 0x8a8f96, 0x6b5a48, 0x3a3f45, 0x1d2228];
 const KIND_NAMES = { building: "Building", vehicle: "Vehicle", ship: "Spaceship" };
@@ -35,6 +35,8 @@ const round = (v) => Math.round(v * 100) / 100;
  * @param {"building"|"vehicle"|"ship"} o.kind
  * @param {object} o.design        the design to edit (a starter design for a new one)
  * @param {string[]} [o.roles]     roles the player may pick (default: all of the kind's)
+ * @param {{id:string, mode:string, name:string, icon:string, design:object}[]} [o.templates]
+ *        vehicles: ready-made designs to start from, by category (land, sea, air)
  * @param {(kind:string)=>void} [o.sfx]
  * @param {(design:object, stats:object)=>void} o.onDone
  * @param {()=>void} o.onCancel
@@ -118,7 +120,7 @@ export function openModularEditor(o) {
     <section class="cePanel" aria-label="Editor tools">
       <nav class="ceTabs" role="tablist">
         <button role="tab" data-tab="parts" aria-selected="true">Parts <small class="ceBudget" id="mdBudget"></small></button>
-        <button role="tab" data-tab="style" aria-selected="false">Role &amp; paint</button>
+        <button role="tab" data-tab="style" aria-selected="false">${kind === "vehicle" ? "Type &amp; paint" : "Role &amp; paint"}</button>
       </nav>
       <div class="ceTab" data-pane="parts"></div>
       <div class="ceTab" data-pane="style" hidden></div>
@@ -190,7 +192,8 @@ export function openModularEditor(o) {
     };
     const role = ROLES[kind][design.role];
     $("#mdStats").innerHTML = `<h3>${role.icon} ${esc(role.name)}</h3>
-      ${s.mode ? `<p class="mdMode">${MODE_NAMES[s.mode]}</p>` : ""}
+      ${s.mode ? `<p class="mdMode">${MODE_NAMES[s.mode]}${s.cls ? ` · ${VEHICLE_CLASSES[s.cls].icon} ${esc(VEHICLE_CLASSES[s.cls].name)}` : ""}</p>` : ""}
+      ${s.cls ? `<p class="mdClass">Good: ${esc(VEHICLE_CLASSES[s.cls].good)}. Weak: ${esc(VEHICLE_CLASSES[s.cls].weak)}.</p>` : ""}
       ${Object.entries(s.stats)
         .map(([k, v]) => `<div class="ceStat" title="${v} of 10"><span>${esc(label(k))}</span><i aria-label="${v} of 10">${bars(v)}</i></div>`)
         .join("")}
@@ -285,8 +288,17 @@ export function openModularEditor(o) {
   }
   function renderStyleTab() {
     const pane = root.querySelector("[data-pane=style]");
-    pane.innerHTML = `
-      <div class="ceGroup"><h4>ROLE</h4>
+    const templates = (o.templates || []).filter((t) => !design.category || t.mode === design.category);
+    const typeGroup =
+      kind === "vehicle"
+        ? `<div class="ceGroup"><h4>CATEGORY</h4>
+        <div class="ceRow mdRoles" role="radiogroup" aria-label="Category">${Object.entries(CATEGORIES)
+          .map(([m, name]) => `<button role="radio" data-category="${m}" aria-checked="${m === design.category}">${MODE_NAMES[m] || name}</button>`)
+          .join("")}</div>
+        ${templates.length ? `<h4>START FROM</h4><div class="ceRow mdRoles mdTemplates">${templates.map((t) => `<button data-template="${o.templates.indexOf(t)}" title="Replace the parts with a ready-made ${esc(t.name.toLowerCase())}">${t.icon} ${esc(t.name)}</button>`).join("")}</div><p class="mdNote">Starting from a template replaces the parts (Undo brings them back).</p>` : ""}</div>`
+        : "";
+    pane.innerHTML = `${typeGroup}
+      <div class="ceGroup"${roleIds.length < 2 ? " hidden" : ""}><h4>ROLE</h4>
         <div class="ceRow mdRoles" role="radiogroup" aria-label="Role">${roleIds
           .map((r) => {
             const def = ROLES[kind][r];
@@ -307,6 +319,33 @@ export function openModularEditor(o) {
           pushUndo();
           design.role = b.dataset.role;
           sfx("click");
+          refresh();
+        }),
+    );
+    pane.querySelectorAll("[data-category]").forEach(
+      (b) =>
+        (b.onclick = () => {
+          if (b.dataset.category === design.category) return;
+          pushUndo();
+          design.category = b.dataset.category;
+          sfx("click");
+          hint(`A ${CATEGORIES[design.category].toLowerCase()} vehicle: ${design.category === "land" ? "wheels or treads" : design.category === "sea" ? "a hull with propellers, sails or pontoons" : "wings, jets or rotors"} must outnumber its other ways of moving.`);
+          refresh();
+        }),
+    );
+    pane.querySelectorAll("[data-template]").forEach(
+      (b) =>
+        (b.onclick = () => {
+          const t = o.templates[Number(b.dataset.template)];
+          if (!t) return;
+          pushUndo();
+          design.parts = JSON.parse(JSON.stringify(t.design.parts));
+          design.category = t.mode;
+          // A name nobody chose yet follows the template.
+          if (/^New /.test(design.name)) nameInput.value = design.name = t.design.name;
+          selected = -1;
+          sfx("click");
+          hint(`Started from a ${t.name.toLowerCase()}. Change anything you like.`);
           refresh();
         }),
     );
