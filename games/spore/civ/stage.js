@@ -78,8 +78,10 @@ import {
   QUEUE_MAX,
   DERRICK_UPGRADE,
   SPICE_PRICE,
+  ROUTE_INCOME,
 } from "./rules.js";
 import { createProjectiles } from "./projectiles.js";
+import { PERSONALITIES, availableOptions, answer, cityPrice, incoming, leaderName, leaderTitle, MESSAGE_TTL, nudge, personalityFor, respond, silence } from "./leaders.js";
 
 const TAU = Math.PI * 2;
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -337,6 +339,9 @@ export function createCivStage(o) {
   NATION_KINDS.forEach((type, i) => {
     const sp = generateSpecies(90210 + i * 7919, "omni", 1);
     const saved = save?.nations[i];
+    // The leader: the same for a nation every game on this planet (from the planet's seed).
+    const lr = mulberry((seed ^ ((i + 1) * 40503)) >>> 0);
+    const personality = saved?.personality || personalityFor(type, lr());
     T.nations.push({
       id: "n" + i,
       index: i,
@@ -350,6 +355,19 @@ export function createCivStage(o) {
       money: saved ? saved.money : 120,
       spice: saved?.spice ?? 0,
       alive: saved ? saved.alive : true,
+      species: sp,
+      personality,
+      leader: { name: leaderName(lr), title: leaderTitle(personality) },
+      // Diplomacy: whether you've met, agreements, and what's been said.
+      met: !!saved?.met,
+      allied: !!saved?.allied,
+      pact: !!saved?.pact,
+      cowedUntil: saved?.cowedUntil || 0,
+      preachUntil: saved?.preachUntil || 0,
+      assistAt: 0,
+      beliefsAt: 0,
+      log: saved?.log || [],
+      talkClock: 25 + i * 9,
       clock: 4 + i * 1.3,
       buildClock: 20 + i * 7,
     });
@@ -927,6 +945,7 @@ export function createCivStage(o) {
     <div class="trMenuPanel" id="cvMenuPanel" hidden>
       <button id="cvResume" class="primary">Resume</button>
       <button id="cvDesignsMenu">🎨 Designs</button>
+      <button id="cvMessages">📨 Messages</button>
       <button id="cvHistory">📜 Species history</button>
       <button id="cvSettings">⚙ Settings</button>
       <button id="cvHelp">How to play</button>
@@ -1408,11 +1427,190 @@ export function createCivStage(o) {
     if (sel.length) orderTo(sel, { type: "move", d: hit.d });
     else if (sheet) closeSheet();
   }
+  /* ---- diplomacy: leaders, what they say, and what comes of it ---------------------------------- */
+  /** Military strength: what a nation's armed vehicles can do, plus the turrets on its walls. */
+  function militaryPower(owner) {
+    let p = 0;
+    for (const v of T.vehicles) if (!v.dead && v.owner === owner && v.role === "military") p += v.unit.dps * Math.sqrt(v.unit.hp) * 0.25;
+    for (const c of T.cities) if (c.owner === owner) p += c.turrets * c.turretHp * 3;
+    return Math.round(p * 10) / 10;
+  }
+  /** How devout your nation is: temples, and religious cities. */
+  const yourFaith = () => yourCities().reduce((s, c) => s + c.plots.filter((p) => p === "temple").length * 2 + (c.type === "religious" ? 2 : 0), 0);
+  const namesFor = (n) => ({ you: o.name || "your nation", them: n.name });
+  const leaderLine = (n) => warLine(n);
+  const warLine = (n) => ({ aggressive: `Enough talk. The ${n.name} march on ${o.name || "you"}!`, friendly: "You leave us no choice. It is war.", greedy: "You've cost us too much. This is war.", religious: `The heretics must be stopped. War!`, cautious: "We have weighed it, and we must fight. War." })[n.personality] || "War.";
+  /** Whether you and a nation have come across each other: your cities or vehicles near theirs. */
+  function seenBy(n) {
+    const theirs = [...citiesOf(n.id).map((c) => c.d), ...vehiclesOf(n.id).map((v) => v.d)];
+    const mine = [...yourCities().map((c) => c.d), ...vehiclesOf(YOU).map((v) => v.d)];
+    return theirs.some((a) => mine.some((b) => arc(a, b) < 110));
+  }
+  /** The cheapest of a nation's cities it would sell (never its last). */
+  function cityForSale(n) {
+    const list = citiesOf(n.id);
+    if (list.length < 2) return null;
+    return list
+      .slice(1)
+      .map((c) => ({ c, price: cityPrice(cityEconomy(c, {}), { personality: n.personality, relation: n.relation }) }))
+      .sort((a, b) => a.price - b.price)[0];
+  }
+  function commsCtx(n, extra = {}) {
+    const sale = cityForSale(n);
+    return {
+      personality: n.personality,
+      relation: n.relation,
+      war: n.war,
+      met: n.met,
+      allied: n.allied,
+      pact: n.pact,
+      power: militaryPower(n.id),
+      yourPower: militaryPower(YOU),
+      money: n.money,
+      yourMoney: T.money,
+      faith: yourFaith(),
+      cities: citiesOf(n.id).length,
+      now: T.time,
+      assistAt: n.assistAt,
+      beliefsAt: n.beliefsAt,
+      cityPrice: sale?.price || 0,
+      forces: n.allied && yourCities().length ? helpersOf(n).length : 0,
+      ...extra,
+    };
+  }
+  /** The record of what's been said (shown in the conversation's history, and under 📜 Messages). */
+  function logTalk(n, who, text, summary = "") {
+    n.log.push({ t: Math.round(T.time), who, text, summary });
+    if (n.log.length > 30) n.log.splice(0, n.log.length - 30);
+  }
+  /* -- messages leaders send you: one waiting per nation; left too long, it's taken as a no -- */
+  const inbox = [];
+  let lastPost = 0;
+  const inboxOf = (n) => inbox.find((m) => m.n === n);
+  function post(n, msg, urgent = false) {
+    if (inboxOf(n)) inbox.splice(inbox.indexOf(inboxOf(n)), 1);
+    inbox.push({ n, msg, until: T.time + MESSAGE_TTL });
+    lastPost = T.time;
+    logTalk(n, "them", msg.text);
+    if (!urgent) toast(`📨 ${n.leader.title} ${n.leader.name} of the ${n.name} wants to talk.`, 4);
+    o.sfx("click");
+    updateHUD();
+  }
+  function reply(n, choiceId) {
+    const m = inboxOf(n);
+    if (!m) return;
+    inbox.splice(inbox.indexOf(m), 1);
+    if (m.msg.kind === "notice") {
+      if (choiceId === "talk") openSheet("nation", { nation: n });
+      else closeSheet();
+      return;
+    }
+    const r = { ...answer(m.msg, choiceId, commsCtx(n), namesFor(n)), accept: choiceId === "accept" };
+    const label = m.msg.choices.find((c) => c.id === choiceId)?.label || "";
+    logTalk(n, "you", label.replace(/^\S+\s/, ""));
+    applyEffects(n, r.effects);
+    logTalk(n, "them", r.text, r.summary);
+    sheet = { kind: "nation", nation: n, reply: r };
+    renderSheet();
+  }
+  /** Messages nobody answered: silence is an answer. */
+  function updateInbox() {
+    for (const m of [...inbox])
+      if (T.time > m.until) {
+        inbox.splice(inbox.indexOf(m), 1);
+        if (m.msg.kind === "notice") continue;
+        const r = silence(m.msg, commsCtx(m.n), namesFor(m.n));
+        applyEffects(m.n, r.effects);
+        logTalk(m.n, "them", "(No answer.) " + r.text, r.summary);
+        if (sheet?.nation === m.n) renderSheet();
+      }
+  }
+  /** Say something to a leader (an option from the conversation). */
+  function talk(n, option) {
+    const ctx = commsCtx(n);
+    const opt = availableOptions(ctx).find((x) => x.id === option);
+    if (!opt) return;
+    if (!opt.ok) return toast(opt.why);
+    const sale = option === "buy" ? cityForSale(n) : null;
+    const r = respond(option, ctx, Math.random, namesFor(n));
+    logTalk(n, "you", opt.name + (sale ? ` (${sale.c.name}, §${sale.price})` : ""));
+    applyEffects(n, r.effects, sale?.c);
+    logTalk(n, "them", r.text, r.summary);
+    o.sfx(r.accept ? "unlock" : "click");
+    sheet = { kind: "nation", nation: n, reply: r };
+    renderSheet();
+  }
+  /** Make what was agreed (or threatened) real. */
+  function applyEffects(n, e, city = null) {
+    if (e.met) n.met = true;
+    if (e.relation) n.relation = nudge(n.relation, e.relation);
+    if (e.money) {
+      T.money += e.money;
+      n.money = Math.max(0, n.money - e.money);
+    }
+    if (e.allied) {
+      n.allied = true;
+      chronicle({ key: "civ:ally:" + n.id, stage: "civ", icon: "🛡", text: "Allied with the " + n.name + " nation." });
+    }
+    if (e.pact) {
+      n.pact = true;
+      chronicle({ key: "civ:pact:" + n.id, stage: "civ", icon: "🤝", text: "Signed a trade agreement with the " + n.name + " nation." });
+    }
+    if (e.cowed) n.cowedUntil = T.time + e.cowed;
+    if (e.preach) n.preachUntil = T.time + e.preach;
+    if (e.assistAt) n.assistAt = e.assistAt;
+    if (e.beliefsAt) n.beliefsAt = e.beliefsAt;
+    if (e.war && !n.war) {
+      n.war = true;
+      n.allied = n.pact = false;
+      n.relation = nudge(n.relation, DIPLO.war);
+      o.sfx("roar");
+      chronicle({ key: "civ:war:" + n.id + ":" + Math.floor(T.time), stage: "civ", icon: "⚔", text: "War with the " + n.name + " nation." });
+    }
+    if (e.peace) {
+      n.war = false;
+      n.relation = Math.max(n.relation, DIPLO.peaceAt);
+      vehiclesOf(n.id).forEach((v) => (v.order = null));
+      vehiclesOf(YOU).filter((v) => v.order?.type === "vehicle" && v.order.target.owner === n.id).forEach((v) => (v.order = null));
+      chronicle({ key: "civ:peace:" + n.id + ":" + Math.floor(T.time), stage: "civ", icon: "🕊", text: "Made peace with the " + n.name + " nation." });
+    }
+    if (e.assist) sendAssistance(n);
+    if (e.buy && city && city.owner === n.id) {
+      n.money += -e.money || 0;
+      takeCity(city, YOU, "economic");
+    }
+  }
+  /** An ally's help: its idle military vehicles guard your most threatened city for three minutes, or it sends money. */
+  const threatenedCity = () =>
+    yourCities()
+      .map((c) => ({ c, foes: T.vehicles.filter((v) => !v.dead && hostile(YOU, v.owner) && arc(v.d, c.d) < 80).length }))
+      .sort((a, b) => b.foes - a.foes)[0]?.c || capital();
+  /** An ally's military vehicles that could come to your aid (up to three). */
+  const helpersOf = (n, city = threatenedCity()) =>
+    vehiclesOf(n.id)
+      .filter((v) => v.role === "military" && reachCity(v, city))
+      .slice(0, 3);
+  function sendAssistance(n) {
+    const threatened = threatenedCity();
+    const helpers = helpersOf(n, threatened);
+    if (helpers.length) {
+      helpers.forEach((v, i) => (v.order = { type: "guard", d: offsetDir(threatened.d, (i - 1) * 6, -(WALL + 7), threatened.f), until: T.time + 180 }));
+      toast(`${helpers.length} ${n.name} vehicle${helpers.length === 1 ? " is" : "s are"} on the way to guard ${threatened.name}.`, 4);
+    } else {
+      const gift = Math.min(150, Math.round(n.money * 0.3));
+      n.money -= gift;
+      T.money += gift;
+      toast(`The ${n.name} send §${gift} for your war chest.`, 3.5);
+    }
+  }
   function declareOn(owner, why) {
     const n = nationOf(owner);
     if (!n || n.war) return;
     n.war = true;
+    if (n.allied || n.pact) toast(`You betrayed your ${n.allied ? "alliance" : "trade agreement"} with the ${n.name}!`, 4);
+    n.allied = n.pact = false;
     n.relation = clampRel(n.relation + DIPLO.attack);
+    logTalk(n, "you", "Your forces attacked the " + n.name + ".", "War.");
     toast(`War with the ${n.name} nation! ${why}.`, 4);
     chronicle({ key: "civ:war:" + n.id + ":" + Math.floor(T.time), stage: "civ", icon: "⚔", text: "Went to war with the " + n.name + " nation." });
     o.sfx("roar");
@@ -1461,9 +1659,11 @@ export function createCivStage(o) {
   }
   const hostile = (a, b) => {
     if (!a || !b || a === b) return false;
-    if (a !== YOU && b !== YOU) return false; // rival nations leave each other's vehicles alone
-    const n = nationOf(a === YOU ? b : a);
-    return !!n?.war;
+    if (a === YOU || b === YOU) return !!nationOf(a === YOU ? b : a)?.war;
+    // Two rivals leave each other alone, except that your allies fight the nations at war with you.
+    const na = nationOf(a),
+      nb = nationOf(b);
+    return !!((na?.allied && nb?.war) || (nb?.allied && na?.war));
   };
   function nearestFoeVehicle(v, radius) {
     let best = null,
@@ -1568,7 +1768,9 @@ export function createCivStage(o) {
   }
   /** A delivery: both sides are paid (more for longer routes and bigger partners), and the partnership grows. */
   function deliver(v, c, home, raided) {
-    const pay = deliveryPay(arc(home.d, c.d), cityEconomy(c, {}).pop, raided);
+    // A trade agreement between the two sides: half as much again.
+    const pactWith = nationOf(v.owner === YOU ? c.owner : c.owner === YOU ? v.owner : null);
+    const pay = Math.round(deliveryPay(arc(home.d, c.d), cityEconomy(c, {}).pop, raided) * (pactWith?.pact ? 1.5 : 1));
     const res = deliverTrade(c, v.owner, v.unit.trade * 1.2);
     earn(v.owner, pay);
     if (c.owner) earn(c.owner, Math.round(pay * 0.5));
@@ -1640,6 +1842,7 @@ export function createCivStage(o) {
       return;
     }
     if (ord?.type === "guard") {
+      if (ord.until && T.time > ord.until) return void (v.order = null);
       // Hold the spot: military vehicles fight whatever comes near (above), then come back here.
       if (arc(v.d, ord.d) > 2.2 && drive(v, ord.d, dt, 2) === Infinity) v.order = null;
       return;
@@ -1766,7 +1969,12 @@ export function createCivStage(o) {
         n.spice = 40;
       }
       // Relations settle toward a resting point that falls as your nation grows: a rising power worries everyone.
-      const rest = n.base - 6 * Math.max(0, yourCities().length - 1);
+      const rest = n.base + (PERSONALITIES[n.personality]?.rest || 0) + (n.pact ? 5 : 0) + (n.allied ? 10 : 0) - 6 * Math.max(0, yourCities().length - 1);
+      if (n.allied && n.relation < 20) {
+        n.allied = false;
+        toast(`The ${n.name} have ended your alliance.`, 4);
+        logTalk(n, "them", "Our alliance is over.", "Alliance ended (relations fell below 20).");
+      }
       if (!n.war) n.relation = clampRel(n.relation + Math.sign(rest - n.relation) * Math.min(Math.abs(rest - n.relation), DIPLO.drift * dt));
       // Growing their towns: a building or a turret now and then.
       if ((n.buildClock -= dt) <= 0) {
@@ -1784,15 +1992,29 @@ export function createCivStage(o) {
           buildCity(c, "new");
         }
       }
+      // Leaders get in touch on their own: first contact, offers, demands, invitations.
+      if ((n.talkClock -= dt) <= 0) {
+        n.talkClock = 35 + Math.random() * 35;
+        if (!inboxOf(n) && T.time > 40 && T.time - lastPost > 25) {
+          const m = incoming(commsCtx(n, { seen: seenBy(n) }), Math.random, namesFor(n));
+          if (m) post(n, m);
+        }
+      }
       if ((n.clock -= dt) > 0) continue;
       n.clock = 4;
       const fleet = vehiclesOf(n.id);
       const plan = nationPlan(
-        { type: n.type, relation: n.relation, war: n.war, money: n.money, vehicles: fleet.length, cap: vehicleCap(n.id) },
-        { yourCities: yourCities().length, freeCities: citiesOf(null).length, grace: T.time < GRACE },
+        { type: n.type, relation: n.relation, war: n.war, money: n.money, vehicles: fleet.length, cap: vehicleCap(n.id), personality: n.personality, warAt: PERSONALITIES[n.personality]?.warAt, allied: n.allied, cowed: T.time < n.cowedUntil, preachYou: T.time < n.preachUntil },
+        { yourCities: yourCities().length, freeCities: citiesOf(null).length, grace: T.time < GRACE, power: militaryPower(n.id), yourPower: militaryPower(YOU) },
       );
+      // A trade agreement brings their merchants to you.
+      if (n.pact && n.type === "economic" && plan.target === "free" && Math.random() < 0.6) plan.target = "you";
       if (plan.declareWar) {
         n.war = true;
+        n.pact = false;
+        const said = leaderLine(n);
+        logTalk(n, "them", said, "They declared war.");
+        post(n, { kind: "notice", text: said, choices: [{ id: "ok", label: "⚔ So be it" }, { id: "talk", label: "🕊 Talk peace" }] }, true);
         toast(`The ${n.name} nation has declared war on you!`, 4.5);
         o.sfx("roar");
         chronicle({ key: "civ:attacked:" + n.id + ":" + Math.floor(T.time), stage: "civ", icon: "⚔", text: "The " + n.name + " nation declared war." });
@@ -1878,6 +2100,7 @@ export function createCivStage(o) {
     else if (sheet.kind === "designs") html = designsHtml();
     else if (sheet.kind === "spice") html = spiceHtml(sheet.gz);
     else if (sheet.kind === "economy") html = economyHtml();
+    else if (sheet.kind === "messages") html = messagesHtml();
     else if (sheet.kind === "won") html = wonHtml();
     else if (sheet.kind === "lost") html = lostHtml();
     else html = helpHtml();
@@ -1990,20 +2213,61 @@ export function createCivStage(o) {
       <div class="tsBtns">
         <button class="good" id="cvSend" ${dis(!sel.length)}>Send ${sel.length || ""} selected</button>
         <button class="gift" id="cvBuy" ${dis(myTrade < 100 || T.money < cost)}>Buy · §${cost}</button>
+        ${nat?.alive ? `<button id="cvContact">📡 Contact ${esc(nat.leader.title)}</button>` : ""}
       </div>
       <p class="tsHint">${sel.length ? "Military vehicles attack its turrets, then its hall. Economic ones trade (buy it when trade is full). Religious ones preach until it converts." : "Select vehicles first (tap them, or 🚙 All), then send them here."}${nat && !nat.war && sel.some((v) => v.role === "military") ? " <b>Attacking means war with this nation.</b>" : ""}</p>`;
   }
+  /** Leader portraits: the nation's species, drawn once. */
+  const portraits = new Map();
+  const portraitOf = (n) => {
+    if (!portraits.has(n)) portraits.set(n, (o.portrait && n.species?.record && o.portrait(n.species.record)) || "");
+    return portraits.get(n);
+  };
+  const moodFace = (n) => (n.war ? "😠" : n.relation >= 60 ? "😄" : n.relation >= 20 ? "🙂" : n.relation > -20 ? "😐" : n.relation > -50 ? "😒" : "😡");
+  /** The conversation with a nation's leader: who they are, how they feel, what you can say. */
   function nationHtml(n) {
+    const P = PERSONALITIES[n.personality];
     const cities = citiesOf(n.id).length;
-    return `<div class="tsHead"><div>${CITY_TYPES[n.type].icon} ${esc(n.name)} nation<small>${CITY_TYPES[n.type].name} · ${cities} ${cities === 1 ? "city" : "cities"} · ${vehiclesOf(n.id).length} vehicles</small></div><button class="tsClose" aria-label="Close">✕</button></div>
-      ${bar((n.relation + 100) / 200, n.war ? "foe" : "")}
-      <p class="tsHint"><b>${relationWord(n.relation, n.war)}</b> (${Math.round(n.relation)}). ${
-        n.type === "military" ? "A military nation: if it grows to hate you, it declares war and sends its army." : n.type === "economic" ? "An economic nation: it trades with you while relations are decent. Trade routes pay you both." : "A religious nation: it preaches to cities of nations it dislikes. Temples help your cities resist."
-      }</p>
-      <div class="tsBtns">
-        <button class="gift" id="cvGift" ${dis(T.money < DIPLO.giftCost || !n.alive)}>Gift · §${DIPLO.giftCost}</button>
-        <button class="${n.war ? "good" : ""}" id="cvPeace" ${dis(!n.war || T.money < DIPLO.peaceCost)}>${n.war ? `Offer peace · §${DIPLO.peaceCost}` : "At peace"}</button>
-      </div>`;
+    const pic = portraitOf(n);
+    const pending = inboxOf(n);
+    const status = [n.war ? "⚔ At war" : "", n.allied ? "🛡 Allied" : "", n.pact ? "🤝 Trade agreement" : "", T.time < n.cowedUntil ? "😨 Cowed" : "", T.time < n.preachUntil ? "🕯 Preaching to you" : "", !n.met ? "Not met yet" : ""].filter(Boolean);
+    const said = sheet.reply ? sheet.reply.text : pending ? pending.msg.text : !n.met ? "…" : n.log.length ? n.log[n.log.length - 1].text : "";
+    const head = `<div class="tsHead"><div>${CITY_TYPES[n.type].icon} The ${esc(n.name)}<small>${CITY_TYPES[n.type].name} nation · ${cities} ${cities === 1 ? "city" : "cities"} · ${vehiclesOf(n.id).length} vehicles · strength ${Math.round(militaryPower(n.id))} (yours ${Math.round(militaryPower(YOU))})</small></div><button class="tsClose" aria-label="Close">✕</button></div>`;
+    const leader = `<div class="cvLeader" style="--rel:${hex(n.color)}">
+        <div class="cvPortrait">${pic ? `<img src="${pic}" alt="">` : `<span>${CITY_TYPES[n.type].icon}</span>`}<em>${moodFace(n)}</em></div>
+        <div class="cvLeaderText"><b>${esc(n.leader.title)} ${esc(n.leader.name)}</b><small>${P.icon} ${P.name}: ${esc(P.desc)}</small>
+        ${bar((n.relation + 100) / 200, n.war ? "foe" : "")}<small>${relationWord(n.relation, n.war)} (${Math.round(n.relation)})${status.length ? " · " + status.join(" · ") : ""}</small></div>
+      </div>
+      ${said ? `<div class="cvSpeech">“${esc(said)}”</div>` : ""}
+      ${sheet.reply?.summary ? `<p class="cvOutcome ${sheet.reply.accept ? "good" : "bad"}">${esc(sheet.reply.summary)}</p>` : ""}`;
+    if (sheet.tab === "log") {
+      const rows = n.log
+        .slice()
+        .reverse()
+        .map((l) => `<li class="${l.who}"><small>${clockText(l.t)} · ${l.who === "you" ? "You" : esc(n.leader.name)}</small>${esc(l.text)}${l.summary ? `<em>${esc(l.summary)}</em>` : ""}</li>`)
+        .join("");
+      return `${head}${leader}<div class="tsBtns"><button id="cvTalkTab">💬 Talk</button></div><ul class="cvLog">${rows || "<li>Nothing said yet.</li>"}</ul>`;
+    }
+    let choices;
+    if (pending && pending.msg.kind !== "notice")
+      choices = `<p class="tsHint">They're waiting for an answer (${Math.max(0, Math.ceil(pending.until - T.time))}s).</p><div class="cvChoices">${pending.msg.choices.map((c) => `<button class="good" data-answer="${c.id}">${esc(c.label)}</button>`).join("")}</div>`;
+    else if (pending) choices = `<div class="cvChoices">${pending.msg.choices.map((c) => `<button data-answer="${c.id}">${esc(c.label)}</button>`).join("")}</div>`;
+    else if (!n.alive) choices = '<p class="tsHint">This nation is no more.</p>';
+    else {
+      const sale = cityForSale(n);
+      choices = `<div class="cvChoices">${availableOptions(commsCtx(n))
+        .map((op) => `<button data-talk="${op.id}" class="${op.id === "war" || op.id === "threaten" || op.id === "demand" ? "bad" : op.id === "alliance" || op.id === "pact" || op.id === "peace" || op.id === "introduce" ? "good" : ""}" ${dis(!op.ok)} title="${esc(op.why)}"><span>${op.icon}</span>${esc(op.id === "buy" && sale ? `Buy ${sale.c.name}` : op.name)}${op.cost ? ` <small>§${op.cost}</small>` : op.why ? ` <small>${esc(op.why)}</small>` : ""}</button>`)
+        .join("")}</div>`;
+    }
+    return `${head}${leader}${choices}<div class="tsBtns"><button id="cvLogTab">📜 History (${n.log.length})</button></div>`;
+  }
+  const clockText = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+  /** Everything every leader has said to you (and you to them), newest first. */
+  function messagesHtml() {
+    const all = T.nations.flatMap((n) => n.log.map((l) => ({ ...l, n }))).sort((a, b) => b.t - a.t);
+    return `<div class="tsHead"><b>📜 Messages</b><button class="tsClose" aria-label="Close">✕</button></div>
+      ${inbox.length ? `<div class="tsBtns">${inbox.map((m) => `<button class="good" data-open="${m.n.id}">📨 ${esc(m.n.leader.name)} of the ${esc(m.n.name)} is waiting</button>`).join("")}</div>` : ""}
+      <ul class="cvLog">${all.map((l) => `<li class="${l.who}"><small>${clockText(l.t)} · ${l.who === "you" ? "You → " + esc(l.n.name) : esc(l.n.leader.name) + " (" + esc(l.n.name) + ")"}</small>${esc(l.text)}${l.summary ? `<em>${esc(l.summary)}</em>` : ""}</li>`).join("") || "<li>No messages yet. Tap a nation at the top to contact its leader.</li>"}</ul>`;
   }
   function designsHtml() {
     const row = (kind, key, design, label, sub) => `<button class="tsTradeBtn cvDesign" data-design="${kind}|${key}"><span>${label}</span><b>${esc(design.name)}<small>${esc(sub)}</small></b><em>Edit</em></button>`;
@@ -2160,25 +2424,21 @@ export function createCivStage(o) {
       closeSheet();
     });
     on("#cvBuy", () => buyCity(sheet.city));
-    on("#cvGift", () => {
+    if (sheet?.kind === "nation") {
       const n = sheet.nation;
-      T.money -= DIPLO.giftCost;
-      n.relation = clampRel(n.relation + DIPLO.gift);
-      o.sfx("gift");
-      toast(`The ${n.name} nation thanks you for the gift.`);
-      renderSheet();
-    });
-    on("#cvPeace", () => {
-      const n = sheet.nation;
-      T.money -= DIPLO.peaceCost;
-      n.war = false;
-      n.relation = Math.max(n.relation, DIPLO.peaceAt);
-      vehiclesOf(n.id).forEach((v) => (v.order = null));
-      o.sfx("unlock");
-      toast(`Peace with the ${n.name} nation.`);
-      chronicle({ key: "civ:peace:" + n.id + ":" + Math.floor(T.time), stage: "civ", icon: "🕊", text: "Made peace with the " + n.name + " nation." });
-      renderSheet();
-    });
+      el.querySelectorAll("[data-talk]").forEach((b) => (b.onclick = () => talk(n, b.dataset.talk)));
+      el.querySelectorAll("[data-answer]").forEach((b) => (b.onclick = () => reply(n, b.dataset.answer)));
+      on("#cvLogTab", () => {
+        sheet.tab = "log";
+        renderSheet();
+      });
+      on("#cvTalkTab", () => {
+        sheet.tab = null;
+        renderSheet();
+      });
+    }
+    el.querySelectorAll("[data-open]").forEach((b) => (b.onclick = () => openSheet("nation", { nation: nationOf(b.dataset.open) })));
+    on("#cvContact", () => openSheet("nation", { nation: nationOf(sheet.city.owner) }));
     on("#cvKeep", closeSheet);
     on("#cvRestart", () => o.onRestart());
   }
@@ -2443,7 +2703,17 @@ export function createCivStage(o) {
   }
 
   /* ---- HUD refresh -------------------------------------------------------------------------------------- */
-  const income = () => yourCities().reduce((s, c) => s + cityEconomy(c, ownerMods(YOU)).income, 0) + tradeIncome(T.cities, YOU);
+  const income = () => yourCities().reduce((s, c) => s + cityEconomy(c, ownerMods(YOU)).income, 0) + tradeIncome(T.cities, YOU) + pactBonus();
+  /** Trade agreements: your routes with that nation pay half as much again. */
+  function pactBonus() {
+    let routes = 0;
+    for (const c of T.cities) {
+      const n = nationOf(c.owner);
+      if (n?.pact && (c.trade?.[YOU] || 0) > 0) routes++;
+      if (c.owner === YOU) for (const [k, val] of Object.entries(c.trade || {})) if (val > 0 && nationOf(k)?.pact) routes++;
+    }
+    return routes * ROUTE_INCOME * 0.5;
+  }
   const spiceIncome = (owner = YOU) => T.geysers.filter((g) => g.owner === owner).reduce((s, g) => s + spiceYield(g), 0);
   let hudClock = 0,
     liveClock = 1;
@@ -2514,7 +2784,8 @@ export function createCivStage(o) {
     $h("#cvNations").innerHTML = T.nations
       .map((n) => {
         const col = n.war ? "#ef4b48" : n.relation >= DIPLO.allyAt ? "#3fc26e" : n.relation >= 20 ? "#8fd18f" : n.relation > -20 ? "#b9c3c9" : "#f0a04b";
-        return `<button class="trTribe cvNation" role="listitem" data-nation="${n.id}" style="--rel:${col}" aria-label="${esc(n.name)} nation, ${relationWord(n.relation, n.war)}${n.alive ? "" : ", fallen"}" ${n.alive ? "" : 'aria-disabled="true"'}><span>${n.alive ? CITY_TYPES[n.type].icon : "🏳"}</span></button>`;
+        const msg = inboxOf(n);
+        return `<button class="trTribe cvNation${msg ? " msg" : ""}" role="listitem" data-nation="${n.id}" style="--rel:${col}" aria-label="${esc(n.name)} nation (${esc(n.leader.title)} ${esc(n.leader.name)}), ${relationWord(n.relation, n.war)}${n.allied ? ", allied" : ""}${msg ? ", has a message for you" : ""}${n.alive ? "" : ", fallen"}" ${n.alive ? "" : 'aria-disabled="true"'}><span>${n.alive ? CITY_TYPES[n.type].icon : "🏳"}</span>${msg ? "<i>📨</i>" : n.allied ? "<i>🛡</i>" : ""}</button>`;
       })
       .join("");
     $h("#cvNations")
@@ -2645,6 +2916,7 @@ export function createCivStage(o) {
   $h("#cvSuper").onclick = startTargeting;
   $h("#cvMenu").onclick = () => ($h("#cvMenuPanel").hidden = !$h("#cvMenuPanel").hidden);
   $h("#cvResume").onclick = () => ($h("#cvMenuPanel").hidden = true);
+  $h("#cvMessages").onclick = () => openSheet("messages");
   $h("#cvHistory").onclick = () => {
     $h("#cvMenuPanel").hidden = true;
     o.onHistory?.();
@@ -2666,7 +2938,7 @@ export function createCivStage(o) {
       spice: Math.round(T.spice * 10) / 10,
       price: Math.round(T.price * 100) / 100,
       startType: T.startType,
-      nations: T.nations.map((n) => ({ id: n.id, type: n.type, relation: n.relation, war: n.war, money: Math.round(n.money), spice: Math.round(n.spice), alive: n.alive })),
+      nations: T.nations.map((n) => ({ id: n.id, type: n.type, relation: n.relation, war: n.war, money: Math.round(n.money), spice: Math.round(n.spice), alive: n.alive, personality: n.personality, met: n.met, allied: n.allied, pact: n.pact, cowedUntil: Math.round(n.cowedUntil), preachUntil: Math.round(n.preachUntil), log: n.log.slice(-12) })),
       cities: T.cities.map((c) => ({ id: c.id, owner: c.owner, type: c.type, plots: c.plots, turrets: c.turrets, turretHp: c.turretHp, hallHp: c.hallHp, trade: c.trade, conv: c.conv, unrest: c.unrest, queue: c.queue.map((q) => ({ key: q.key, done: Math.round(q.done * 1000) / 1000, money: q.money, spice: q.spice })) })),
       geysers: T.geysers.map((g) => ({ owner: g.owner, hp: g.hp, level: g.level })),
       vehicles: T.vehicles.filter((v) => !v.dead).map((v) => ({ owner: v.owner, design: v.key, d: { x: r3(v.d.x), y: r3(v.d.y), z: r3(v.d.z) }, hp: Math.round((v.hp / v.unit.hp) * 100) / 100, city: v.home })),
@@ -2786,6 +3058,7 @@ export function createCivStage(o) {
         for (const v of [...T.vehicles]) if (!v.dead) updateVehicle(v, dt);
         updateTurrets(dt);
         updateNations(dt);
+        updateInbox();
         autoDefend();
       }
       for (const v of T.vehicles) placeVehicle(v, dt);
@@ -2877,6 +3150,8 @@ export function createCivStage(o) {
       focusOn,
       reachable,
       projectiles,
+      hostile,
+      talk,
       get sheet() {
         return sheet;
       },
