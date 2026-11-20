@@ -445,7 +445,6 @@ export function createCivStage(o) {
       <button id="cvHistory">📜 Species history</button>
       <button id="cvSettings">⚙ Settings</button>
       <button id="cvHelp">How to play</button>
-      <button id="cvExit">Back to the Tribal Stage</button>
     </div>`;
   document.body.appendChild(hud);
   const $h = (q) => hud.querySelector(q);
@@ -607,12 +606,12 @@ export function createCivStage(o) {
       <p class="tsWonText"><b>One world, one nation.</b> ${esc(card.text)}</p>
       <div class="tsStats"><span><b>${T.cities.length}</b>cities</span><span><b>${T.captures.military}</b>by force</span><span><b>${T.captures.economic}</b>bought</span><span><b>${T.captures.religious}</b>converted</span></div>
       <p class="tsHint">Your species earns the <b>${card.name}</b> card. The Space Stage comes next and isn't part of the game yet: keep playing here, or go back to the Tribal Stage.</p>
-      <div class="tsBtns"><button class="good" id="cvKeep">Keep playing</button><button id="cvBack">Back to the Tribal Stage</button></div>`;
+      <div class="tsBtns tsWide"><button class="good" id="cvKeep">Keep playing</button></div>`;
   }
   function lostHtml() {
     return `<div class="tsHead"><b>Your nation has fallen</b></div>
       <p class="tsWonText">Every one of your cities now flies another flag.</p>
-      <div class="tsBtns"><button class="good" id="cvRestart">Start the Civilization Stage again</button><button id="cvBack">Back to the Tribal Stage</button></div>`;
+      <div class="tsBtns tsWide"><button class="good" id="cvRestart">Start the Civilization Stage again</button></div>`;
   }
   function helpHtml() {
     return `<div class="tsHead"><b>Civilization Stage · how to play</b><button class="tsClose" aria-label="Close">✕</button></div>
@@ -702,10 +701,6 @@ export function createCivStage(o) {
       renderSheet();
     });
     on("#cvKeep", closeSheet);
-    on("#cvBack", () => {
-      saveState();
-      o.onExit();
-    });
     on("#cvRestart", () => o.onRestart());
   }
   function vehicleRefusal(c, mode) {
@@ -905,7 +900,6 @@ export function createCivStage(o) {
   if (!arrive) o.frame?.remove();
   else {
     o.frame.title(false);
-    o.frame.setSkip?.(() => arrive && (arrive.t = CUTSCENES.civArrive.end));
     hud.classList.add("cine"); // the city labels and buttons come in once the camera has landed
   }
   function placeCamera(dt) {
@@ -1536,10 +1530,6 @@ export function createCivStage(o) {
     o.onSettings?.();
   };
   $h("#cvHelp").onclick = () => openSheet("help");
-  $h("#cvExit").onclick = () => {
-    saveState();
-    o.onExit();
-  };
 
   /* ---- saving --------------------------------------------------------------------------------------------- */
   function saveState() {

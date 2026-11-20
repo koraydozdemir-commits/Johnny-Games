@@ -143,11 +143,14 @@ dwellings) were loaded and played: both ran clean, and the older tribe repaired 
 - **Tribal Stage minimap** (bottom right; reuses the Creature Stage map): every rival village coloured
   by relations (green allies, orange wary, red at war, crossed out when conquered), your village, your
   members, and raiders (on the rim when off the map). Tap for the labelled island map.
-- **Creature → Tribal cutscene, timed to "Founding A Tribe"** (134 s: 120 s stick throw + 13 s
-  campfire, plus loading): the family gathers; the stick is picked up, held high and thrown; it climbs
-  into the sky and hangs there turning while **the sun's glare** (a blazing disc behind the stick, a
-  wash, a streak and lens-flare rings) fills the picture, cutting between the sky, the thrower's
-  upturned face, the watching family and a view from above; then it falls **straight back onto the
-  thrower's head** (a flash of the hit, 💫, a dazed wobble, the family's reaction), it shakes it off
-  and poses anyway; white-out into the campfire. Starts in the morning so it stays daylight. Skip
-  still works throughout; the song plays on into the Tribal Stage and hands over to its theme.
+- **Creature → Tribal cutscene with "Founding A Tribe"** (about 17 s, then the 6.4 s campfire): the
+  family gathers; the stick is picked up, held high and thrown; it hangs in the sky while **the sun's
+  glare** (a blazing disc behind the stick, a wash, a streak and lens-flare rings) fills the picture,
+  cutting between the sky, the thrower's upturned face and a view from above; then it falls **straight
+  back onto the thrower's head** (a flash of the hit, 💫, a dazed wobble, the family's reaction), it
+  shakes it off and poses anyway; white-out into the campfire. Moved to daylight if it's evening or
+  night. The song plays on into the Tribal Stage and hands over to its theme.
+- **No skipping, no stage hopping:** cutscenes have no Skip button any more, and the menus no longer
+  jump between stages (Creature menu: Tribal Stage; Tribal menu and its end card: back to the Creature
+  Stage; Civilization menu and its cards: back to the Tribal Stage). Moving on to the Civilization
+  Stage after winning the Tribal Stage stays. The hidden developer menu still jumps between stages.
