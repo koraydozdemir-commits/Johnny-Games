@@ -68,7 +68,9 @@ import {
   vehicleTemplates,
   CLASSES_BY_MODE,
   hitMult,
+  weaponFor,
 } from "./rules.js";
+import { createProjectiles } from "./projectiles.js";
 
 const TAU = Math.PI * 2;
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -144,7 +146,8 @@ export function createCivStage(o) {
   for (const s of sites) planet.flatten(s.d, CITY_FLAT);
   const spiceDirs = planet.spiceSites(sites, 12);
   const globe = createGlobe(scene, planet, { colors: palette, water: hw?.water?.color ?? region.water ?? 0x2f78b8, sky: hw?.atmosphere?.day ?? region.sky?.day ?? 0x8cc8ff, quality: o.quality });
-  sites.forEach((s) => globe.clearTrees(s.d, CITY_FLAT + 2));
+  // (Room round each city for the vehicles that park outside its gate.)
+  sites.forEach((s) => globe.clearTrees(s.d, CITY_FLAT + 10));
   spiceDirs.forEach((d) => globe.clearTrees(d, 6));
   globe.placeTrees();
   const HOME = sites[0].d;
@@ -839,6 +842,20 @@ export function createCivStage(o) {
     }
   }
 
+  /* ---- projectiles: shells, tracers, artillery, missiles, bombs, torpedoes, flak --------------------- */
+  const projectiles = createProjectiles(scene, {
+    glowTex,
+    onBlast: (p, size, burst) => {
+      // Flak bursts in the air; everything else blows up where it lands.
+      if (cam.salt < 420) boom(p, burst ? size * 0.8 : size);
+    },
+  });
+  /** Where a vehicle is now, for a shot to home in on (null once it's gone). */
+  function aimAt(v) {
+    const out = new THREE.Vector3();
+    return () => (v.dead ? null : vehiclePos(v, 1.2, out));
+  }
+
   /* ---- HUD ------------------------------------------------------------------------------------------ */
   const hud = document.createElement("div");
   hud.className = "tribeHUD civHUD";
@@ -856,8 +873,23 @@ export function createCivStage(o) {
     <div class="trToast" id="cvToast" role="status" aria-live="polite"></div>
     <div class="trPlace" id="cvTarget" hidden role="status" aria-live="polite"><span id="cvTargetText"></span><button id="cvTargetCancel">Cancel</button></div>
     <div class="trSheet" id="cvSheet" hidden></div>
+    <div class="cvBoxRect" id="cvBoxRect" hidden></div>
     <div class="trBottom">
-      <div class="trUnits" id="cvUnits" role="list" aria-label="Your vehicles"></div>
+      <div class="cvOrders" id="cvOrders" hidden>
+        <div class="cvSelInfo" id="cvSelInfo" aria-live="polite"></div>
+        <div class="cvCmds" role="toolbar" aria-label="Orders for the selected vehicles">
+          <button data-cmd="guard" aria-label="Guard: hold this spot and fight anything that comes near"><span>🛡</span><small>Guard</small></button>
+          <button data-cmd="patrol" aria-label="Patrol: tap a place to patrol between there and here"><span>🔁</span><small>Patrol</small></button>
+          <button data-cmd="formation" aria-label="Change formation"><span id="cvFormIcon">▤</span><small id="cvFormName">Line</small></button>
+          <button data-cmd="follow" aria-label="Follow with the camera"><span>🎥</span><small>Follow</small></button>
+          <button data-cmd="stop" aria-label="Stop: cancel their orders"><span>✋</span><small>Stop</small></button>
+          <button data-cmd="clear" aria-label="Deselect"><span>✕</span><small>Deselect</small></button>
+        </div>
+      </div>
+      <div class="cvUnitRow">
+        <button class="trUnit cvBox" id="cvBox" aria-pressed="false" aria-label="Box select: drag a box around your vehicles to select them" title="Box select"><span class="noPic">⬚</span></button>
+        <div class="trUnits" id="cvUnits" role="list" aria-label="Your vehicles"></div>
+      </div>
       <div class="trActions cvActions">
         <button id="cvAll" aria-label="Select every vehicle"><span>🚙</span><small>All</small></button>
         <button id="cvHome" aria-label="Go to your capital"><span>🏛</span><small>Capital</small></button>
@@ -922,6 +954,58 @@ export function createCivStage(o) {
     return planet.region("land", d) === (v.landmass ??= planet.region("land", v.d));
   }
   const reachCity = (v, c) => reachable(v, c.d, c);
+  /* ---- formations: where each vehicle of a group goes ---------------------------------------------- */
+  const FORMATIONS = {
+    line: { name: "Line", icon: "▤", hint: "side by side, facing the way they're going: the most guns forward" },
+    wedge: { name: "Wedge", icon: "◭", hint: "an arrowhead: the lead vehicle takes the first hits" },
+    ring: { name: "Ring", icon: "◯", hint: "a circle round the spot: holds ground from every side" },
+  };
+  let formation = "line";
+  /** Spots for `list` around `d`, in the current formation, facing the way the group travels. */
+  function formationSpots(list, d) {
+    if (list.length < 2) return list.map(() => d);
+    let cx = 0,
+      cy = 0,
+      cz = 0;
+    for (const v of list) (cx += v.d.x), (cy += v.d.y), (cz += v.d.z);
+    const centre = { x: cx, y: cy, z: cz };
+    const n = arc(norm3(centre), d) > 2 ? towards(d, norm3(centre)) : frameAt(d).north;
+    // Facing: away from where they come from.
+    const north = { x: -n.x, y: -n.y, z: -n.z };
+    const east = { x: north.y * d.z - north.z * d.y, y: north.z * d.x - north.x * d.z, z: north.x * d.y - north.y * d.x };
+    const f = { up: d, north, east };
+    const gap = 4.5;
+    const spots = list.map((v, i) => {
+      let x = 0,
+        z = 0;
+      if (formation === "line") x = (i - (list.length - 1) / 2) * gap;
+      else if (formation === "wedge") {
+        const k = Math.ceil(i / 2);
+        x = (i % 2 ? -1 : 1) * k * gap * 0.8;
+        z = -k * gap * 0.8;
+      } else {
+        const r = Math.max(5, (list.length * gap) / (2 * Math.PI));
+        const a = (i / list.length) * Math.PI * 2;
+        x = Math.cos(a) * r;
+        z = Math.sin(a) * r;
+      }
+      return offsetDir(d, x, z, f);
+    });
+    // Each vehicle takes the free spot nearest to it (so they don't cross over each other).
+    const out = new Array(list.length);
+    const free = spots.map((_, i) => i);
+    list.forEach((v, i) => {
+      let best = 0;
+      for (let k = 1; k < free.length; k++) if (arc(v.d, spots[free[k]]) < arc(v.d, spots[free[best]])) best = k;
+      out[i] = spots[free.splice(best, 1)[0]];
+    });
+    // A spot a vehicle can't stand on (a boat's spot on land) falls back to the middle.
+    return out.map((sp, i) => ((list[i].mode === "land" && !planet.isLand(sp)) || (list[i].mode === "sea" && planet.isLand(sp)) ? d : sp));
+  }
+  const norm3 = (v) => {
+    const l = Math.hypot(v.x, v.y, v.z) || 1;
+    return { x: v.x / l, y: v.y / l, z: v.z / l };
+  };
   function orderTo(list, order) {
     let refused = 0,
       sent = 0;
@@ -935,6 +1019,15 @@ export function createCivStage(o) {
       v.order = { ...order };
       v.route = null;
       sent++;
+    }
+    // Groups moving, guarding or patrolling take up the formation.
+    const group = list.filter((v) => !v.dead && v.owner === YOU && v.order && (order.type === "move" || order.type === "guard" || order.type === "patrol") && v.order.d === order.d);
+    if (group.length > 1) {
+      const spots = formationSpots(group, order.d);
+      group.forEach((v, i) => {
+        v.order.d = spots[i];
+        if (order.type === "patrol") v.order.b = spots[i];
+      });
     }
     if (refused && order.type === "vehicle") toast(sent ? `${refused} of them can't fight ${order.target.mode === "air" ? "aircraft" : order.target.mode === "sea" ? "ships" : "land vehicles"}.` : `They can't fight ${order.target.mode === "air" ? "aircraft: build fighters, or add flak guns" : order.target.mode === "sea" ? "ships" : "land vehicles"}.`, 4);
     else if (refused) toast(sent ? `${refused} of them can't get there: land vehicles stay on their continent, boats on their sea.` : "They can't get there: land vehicles can't cross the sea. Build boats at a coastal city, or aircraft once you have " + AIR_AT + " cities.", 4.5);
@@ -1075,8 +1168,10 @@ export function createCivStage(o) {
   const onDown = (e) => {
     if (paused || e.target !== canvas) return;
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
-    if (pointers.size === 1) gesture = { panned: false, pinch: 0, ang: null };
+    if (pointers.size === 1) gesture = { panned: false, pinch: 0, ang: null, box: boxMode || e.shiftKey };
     else if (pointers.size === 2 && gesture) {
+      gesture.box = false; // two fingers: back to turning and zooming
+      boxRect.hidden = true;
       const [a, b] = [...pointers.values()];
       gesture.pinch = Math.hypot(a.x - b.x, a.y - b.y);
       gesture.ang = Math.atan2(b.y - a.y, b.x - a.x);
@@ -1112,6 +1207,14 @@ export function createCivStage(o) {
     }
     if (!gesture.panned && Math.hypot(e.clientX - p.sx, e.clientY - p.sy) < 10) return;
     gesture.panned = true;
+    if (gesture.box) {
+      const x = Math.min(p.sx, e.clientX),
+        y = Math.min(p.sy, e.clientY);
+      Object.assign(boxRect.style, { left: x + "px", top: y + "px", width: Math.abs(e.clientX - p.sx) + "px", height: Math.abs(e.clientY - p.sy) + "px" });
+      boxRect.hidden = false;
+      gesture.rect = [x, y, x + Math.abs(e.clientX - p.sx), y + Math.abs(e.clientY - p.sy)];
+      return;
+    }
     dragBy(dx, dy);
   };
   const onUp = (e) => {
@@ -1119,7 +1222,9 @@ export function createCivStage(o) {
     pointers.delete(e.pointerId);
     if (!p || !gesture) return;
     if (pointers.size === 0) {
-      if (!gesture.panned && e.type === "pointerup") tap(e.clientX, e.clientY);
+      if (gesture.box && gesture.rect) boxSelect(gesture.rect);
+      else if (!gesture.panned && e.type === "pointerup") tap(e.clientX, e.clientY);
+      boxRect.hidden = true;
       gesture = null;
     } else if (pointers.size === 1) gesture.ang = null;
   };
@@ -1133,7 +1238,11 @@ export function createCivStage(o) {
   const onKey = (e) => {
     if (paused || (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA"))) return;
     if (e.key === "Escape") {
-      if (T.targeting) stopTargeting();
+      if (pendingCmd || boxMode) {
+        pendingCmd = null;
+        setBoxMode(false);
+        updateHUD();
+      } else if (T.targeting) stopTargeting();
       else if (sheet) closeSheet();
       else T.selected.clear();
       return;
@@ -1192,6 +1301,29 @@ export function createCivStage(o) {
     for (const gz of T.geysers) if (g && arc(g, gz.d) < 7) return { type: "geyser", gz };
     return g ? { type: "ground", d: g } : null;
   }
+  const boxRect = $h("#cvBoxRect");
+  let boxMode = false;
+  function setBoxMode(on) {
+    boxMode = on;
+    $h("#cvBox").setAttribute("aria-pressed", String(on));
+    $h("#cvBox").classList.toggle("sel", on);
+    if (on) tipOnce("box", "Box select: drag a box around your vehicles. Two fingers still turn and zoom.", 3.5);
+  }
+  /** Select your vehicles inside a screen rectangle (adding to the selection with Shift held). */
+  function boxSelect([x0, y0, x1, y1]) {
+    const inside = vehiclesOf(YOU).filter((v) => {
+      const p = project(vehiclePos(v, 1.2));
+      return p.on && p.x >= x0 - 6 && p.x <= x1 + 6 && p.y >= y0 - 6 && p.y <= y1 + 6;
+    });
+    if (!keys.has("shift")) T.selected.clear();
+    inside.forEach((v) => T.selected.add(v));
+    o.sfx("click");
+    toast(inside.length ? `${inside.length} vehicle${inside.length === 1 ? "" : "s"} selected.` : "No vehicles of yours in that box.", 2);
+    if (boxMode) setBoxMode(false);
+    updateHUD();
+  }
+  let lastTap = null;
+  let pendingCmd = null;
   function tap(sx, sy) {
     $h("#cvMenuPanel").hidden = true;
     const hit = pick(sx, sy);
@@ -1201,8 +1333,28 @@ export function createCivStage(o) {
     }
     if (!hit) return;
     const sel = [...T.selected].filter((v) => !v.dead);
+    if (pendingCmd === "patrol" && sel.length && hit.type !== "vehicle") {
+      pendingCmd = null;
+      const d = hit.type === "city" ? offsetDir(hit.c.d, 0, -(WALL + 5), hit.c.f) : hit.type === "geyser" ? hit.gz.d : hit.d;
+      orderTo(sel, { type: "patrol", d, b: d, leg: false });
+      sel.forEach((v) => v.order?.type === "patrol" && (v.order.a = v.d));
+      toast("Patrolling: they'll go back and forth, fighting anything hostile on the way.", 3);
+      return;
+    }
+    pendingCmd = null;
     if (hit.type === "vehicle") {
       if (hit.v.owner === YOU) {
+        // Double tap: every vehicle of that class on screen.
+        const now = performance.now();
+        if (lastTap && lastTap.v === hit.v && now - lastTap.t < 380) {
+          const same = vehiclesOf(YOU).filter((v) => v.unit.cls === hit.v.unit.cls && project(vehiclePos(v, 1.2)).on);
+          same.forEach((v) => T.selected.add(v));
+          toast(`${same.length} × ${clsOf(hit.v.unit)?.name || "vehicle"} selected.`, 2);
+          lastTap = null;
+          updateHUD();
+          return;
+        }
+        lastTap = { v: hit.v, t: now };
         if (T.selected.has(hit.v)) T.selected.delete(hit.v);
         else T.selected.add(hit.v);
         o.sfx("click");
@@ -1318,13 +1470,24 @@ export function createCivStage(o) {
         const n = nationOf(v.owner);
         if (n && !n.war) return void (v.order = null);
       }
-      const r = damageCity(c, v.unit.dps * v.unit.vsCity * dt, cityDefence(c, c.owner === YOU ? strengths : {}));
-      if ((v.cool -= dt) <= 0) {
-        v.cool = 0.5;
-        shot(from, to, v.owner === YOU ? "you" : "foe");
-        if (Math.random() < 0.35) boom(to.clone().addScaledVector(to.clone().normalize(), -2), 3);
+      // Its defences down, a city is taken by whoever occupies it: a land vehicle or a ship (aircraft
+      // can bomb a city defenceless, but can't hold it).
+      if (c.hallHp <= 0) {
+        if (v.mode !== "air") return void takeCity(c, v.owner, "military");
+        if (v.owner === YOU) tipOnce("occupy:" + c.id, `${c.name}'s defences are down! Aircraft can't hold a city: send a land vehicle or a ship to take it.`, 5);
+        return;
       }
-      if (r.captured) takeCity(c, v.owner, "military");
+      if ((v.cool -= dt) <= 0) {
+        const w = weaponFor(v.unit, "land");
+        v.cool = w.every * (0.85 + Math.random() * 0.3);
+        const dmg = v.unit.dps * v.unit.vsCity * w.every;
+        const spot = offsetDir(c.d, (Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12, c.f);
+        const aim = ground(spot, 3);
+        projectiles.fire(w.weapon, from.clone(), () => aim, () => {
+          if (c.owner === v.owner) return;
+          damageCity(c, dmg, cityDefence(c, c.owner === YOU ? strengths : {}));
+        });
+      }
     } else if (v.role === "religious") {
       const faith = cityEconomy(c, ownerMods(c.owner)).faith;
       const done = preachTo(c, v.owner, preachRate(v.unit.preach, faith) * dt);
@@ -1369,16 +1532,21 @@ export function createCivStage(o) {
     if (v.role === "military") {
       const chase = ord?.type === "vehicle" && !ord.target.dead && hitMult(v.unit, ord.target.mode) ? ord.target : null;
       const reach = 10 + v.unit.range * 0.6;
-      const foe = chase || nearestFoeVehicle(v, 6 + reach);
+      // A guard doesn't chase further than 30 from its post: it goes back instead.
+      const leash = ord?.type === "guard" && arc(v.d, ord.d) > 30;
+      const foe = chase || (leash ? null : nearestFoeVehicle(v, (ord?.type === "guard" || ord?.type === "patrol" ? 16 : 6) + reach));
       if (foe) {
         const d = arc(v.d, foe.d);
         if (d > reach) {
           if (drive(v, foe.d, dt, reach - 1) === Infinity) v.order = null;
         } else {
-          hurtVehicle(foe, v.unit.dps * hitMult(v.unit, foe.mode) * dt, v.owner);
+          v.fwd = tangentize(nlerp(v.fwd, towards(v.d, foe.d), Math.min(1, dt * 5)), v.d);
           if ((v.cool -= dt) <= 0) {
-            v.cool = 0.45;
-            shot(vehiclePos(v, 1.5, _a), vehiclePos(foe, 1.2, _b), v.owner === YOU ? "you" : "foe");
+            const w = weaponFor(v.unit, foe.mode);
+            v.cool = w.every * (0.85 + Math.random() * 0.3);
+            const dmg = v.unit.dps * hitMult(v.unit, foe.mode) * w.every;
+            const by = v.owner;
+            projectiles.fire(w.weapon, vehiclePos(v, 1.5, new THREE.Vector3()), aimAt(foe), () => !foe.dead && hurtVehicle(foe, dmg, by));
           }
         }
         return;
@@ -1396,6 +1564,18 @@ export function createCivStage(o) {
       if (left === Infinity) return void (v.order = null);
       const inRange = v.mode === "sea" ? left <= reach + 0.5 : left <= reach + 3.5;
       if (inRange) actAt(v, c, dt);
+      return;
+    }
+    if (ord?.type === "guard") {
+      // Hold the spot: military vehicles fight whatever comes near (above), then come back here.
+      if (arc(v.d, ord.d) > 2.2 && drive(v, ord.d, dt, 2) === Infinity) v.order = null;
+      return;
+    }
+    if (ord?.type === "patrol") {
+      const to = ord.leg ? ord.a : ord.b;
+      const left = drive(v, to, dt, 2);
+      if (left === Infinity) return void (v.order = null);
+      if (left <= 2.2) ord.leg = !ord.leg;
       return;
     }
     if (ord?.type === "move" || ord?.type === "geyser") {
@@ -1471,12 +1651,16 @@ export function createCivStage(o) {
       }
       if (!target) continue;
       const far = bd > (target.mode === "sea" && c.anchor ? Math.max(TURRET_RANGE + 1, arc(c.anchor, c.d) + RANGE.sea + 5) : TURRET_RANGE + 1);
-      hurtVehicle(target, def.dps * c.turretHp * dt * 0.6 * (far ? 0.35 : 1), c.owner);
       c.shotCool = (c.shotCool || 0) - dt;
       if (c.shotCool <= 0) {
-        c.shotCool = 0.6;
-        const k = Math.floor(Math.random() * c.turrets);
-        shot(ground(turretSpot(c, k), 5, _a), vehiclePos(target, 1, _b), c.owner === YOU ? "you" : "foe");
+        // Each turret takes its turn; the shot carries the damage of the time since the last one.
+        const every = 0.6 / Math.max(1, Math.min(3, c.turrets));
+        c.shotCool = every;
+        const dmg = def.dps * c.turretHp * every * 0.6 * (far ? 0.35 : 1);
+        const k = (c.nextTurret = ((c.nextTurret || 0) + 1) % c.turrets);
+        const owner = c.owner,
+          tv = target;
+        projectiles.fire(tv.mode === "air" ? "flak" : "turret", ground(turretSpot(c, k), 5, new THREE.Vector3()), aimAt(tv), () => !tv.dead && hurtVehicle(tv, dmg, owner));
       }
     }
   }
@@ -1709,7 +1893,7 @@ export function createCivStage(o) {
       <ul class="tsHelp">
         <li><b>Look around:</b> drag to turn the planet, pinch or scroll to zoom from orbit down to the streets, twist two fingers (or Q/E) to turn the view. 🌍 jumps between the whole planet and the ground.</li>
         <li><b>Your cities:</b> tap one to build houses (people), factories (money, but unhappy people), entertainment (happiness), temples (faith) and turrets.</li>
-        <li><b>Vehicles:</b> each city makes vehicles of its own kind. Tap vehicles (or 🚙 All) to select them, then tap a city, a spice geyser or the ground. Land vehicles stay on their continent; boats (from coastal cities) cross the sea; aircraft go anywhere.</li>
+        <li><b>Vehicles:</b> each city makes vehicles of its own kind. Tap vehicles (or 🚙 All) to select them, double-tap one for every vehicle of its class on screen, or use ⬚ (Shift-drag on a computer) to drag a box round a group. Then tap a city, a spice geyser, an enemy vehicle or the ground. The panel above your vehicles shows their health and gives more orders: 🛡 Guard a spot, 🔁 Patrol, change formation, 🎥 Follow, ✋ Stop. Land vehicles stay on their continent; boats (from coastal cities) cross the sea; aircraft go anywhere.</li>
         <li><b>Take cities</b> three ways: ⚔ military vehicles knock out turrets and then the hall; 💰 economic vehicles trade until you can buy the city; 🕊 religious vehicles preach until it converts. Every city you take makes vehicles of its kind.</li>
         <li><b>Spice:</b> drive any vehicle to a geyser to claim it. Each one pays you. Military vehicles can wreck a rival's derrick.</li>
         <li><b>Nations:</b> tap a nation at the top for gifts and peace. Military nations go to war with those they hate; religious ones preach; economic ones trade.</li>
@@ -2013,8 +2197,40 @@ export function createCivStage(o) {
   let hudClock = 0,
     liveClock = 1;
   const marks = new Map();
+  const hpBars = new Map();
+  function updateBars(layer) {
+    const near = cam.salt < 160 && !arrive;
+    for (const [v, el] of hpBars)
+      if (v.dead || !near) {
+        el.remove();
+        hpBars.delete(v);
+      }
+    if (!near) return;
+    for (const v of T.vehicles) {
+      // Bars over your selected vehicles, and over anything damaged that's close enough to see.
+      const show = !v.dead && (T.selected.has(v) || v.hp < v.unit.hp - 0.5);
+      let el = hpBars.get(v);
+      if (!show) {
+        if (el) el.hidden = true;
+        continue;
+      }
+      const p = project(vehiclePos(v, v.mode === "air" ? 3 : 3.2));
+      if (!el) {
+        el = document.createElement("i");
+        el.className = "cvBar " + (v.owner === YOU ? "mine" : "foe");
+        el.appendChild(document.createElement("b"));
+        layer.appendChild(el);
+        hpBars.set(v, el);
+      }
+      el.hidden = !p.on;
+      if (!p.on) continue;
+      el.style.transform = `translate(${p.x - 14}px,${p.y}px)`;
+      el.firstChild.style.width = Math.round(Math.max(0, v.hp / v.unit.hp) * 100) + "%";
+    }
+  }
   function updateMarks() {
     const layer = $h("#cvMarks");
+    updateBars(layer);
     for (const c of T.cities) {
       let m = marks.get(c);
       if (!m) {
@@ -2069,11 +2285,87 @@ export function createCivStage(o) {
             updateHUD();
           }),
       );
+    updateSelection();
     const s = superState();
     const sb = $h("#cvSuper");
     sb.innerHTML = `<span>${s.def.icon}</span><small>${s.unlocked ? (T.superCool > 0 ? Math.ceil(T.superCool) + "s" : "§" + SUPER_COST) : "Locked"}</small>`;
     sb.setAttribute("aria-label", `${s.def.name}: ${s.def.desc}${s.unlocked ? "" : " Locked until you hold half the cities."}`);
     sb.setAttribute("aria-disabled", String(!s.ready));
+  }
+  /* ---- the selection: what's selected, and orders for it ----------------------------------------- */
+  $h("#cvBox").onclick = () => setBoxMode(!boxMode);
+  hud.querySelectorAll("[data-cmd]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        const sel = [...T.selected].filter((v) => !v.dead);
+        const cmd = b.dataset.cmd;
+        if (cmd === "formation") {
+          const ids = Object.keys(FORMATIONS);
+          formation = ids[(ids.indexOf(formation) + 1) % ids.length];
+          toast(`${FORMATIONS[formation].name} formation: ${FORMATIONS[formation].hint}.`, 3);
+        } else if (cmd === "clear") {
+          T.selected.clear();
+          pendingCmd = null;
+        } else if (!sel.length) return;
+        else if (cmd === "guard") {
+          // Guard where they are now, around the group's middle.
+          let x = 0,
+            y = 0,
+            z = 0;
+          sel.forEach((v) => ((x += v.d.x), (y += v.d.y), (z += v.d.z)));
+          orderTo(sel, { type: "guard", d: norm3({ x, y, z }) });
+          toast("Guarding: they'll hold here and fight anything hostile that comes near.", 3);
+        } else if (cmd === "patrol") {
+          pendingCmd = pendingCmd === "patrol" ? null : "patrol";
+          if (pendingCmd) toast("Tap the far end of the patrol route.", 3);
+        } else if (cmd === "follow") {
+          cam.follow = cam.follow && T.selected.has(cam.follow) ? null : sel[0];
+          if (cam.follow) cam.alt = Math.min(cam.alt, ALT.city);
+        } else if (cmd === "stop") {
+          sel.forEach((v) => ((v.order = null), (v.route = null)));
+          toast("Stopped.", 1.5);
+        }
+        o.sfx("click");
+        updateHUD();
+      }),
+  );
+  /** The panel above your vehicles: what's selected (one in detail, a group by class) and its orders. */
+  function updateSelection() {
+    const sel = [...T.selected].filter((v) => !v.dead);
+    const panel = $h("#cvOrders");
+    panel.hidden = !sel.length;
+    $h("#cvFormIcon").textContent = FORMATIONS[formation].icon;
+    $h("#cvFormName").textContent = FORMATIONS[formation].name;
+    hud.querySelector('[data-cmd="patrol"]').classList.toggle("on", pendingCmd === "patrol");
+    hud.querySelector('[data-cmd="follow"]').classList.toggle("on", !!cam.follow && T.selected.has(cam.follow));
+    if (!sel.length) return;
+    const doing = (v) => {
+      const o2 = v.order;
+      if (!o2) return "idle";
+      if (o2.type === "city") return (v.role === "military" ? "attacking " : v.role === "religious" ? "preaching to " : "trading with ") + o2.city.name;
+      return { move: "moving", guard: "guarding", patrol: "patrolling", geyser: "claiming spice", vehicle: "attacking a vehicle" }[o2.type] || "busy";
+    };
+    let html;
+    if (sel.length === 1) {
+      const v = sel[0],
+        u = v.unit,
+        k = clsOf(u);
+      const hp = Math.max(0, v.hp / u.hp);
+      const what = v.role === "military" ? `attack ${u.dps}/s · range ${RANGE[v.mode] + u.range}` : v.role === "economic" ? `trade ${u.trade}` : `preaching ${u.preach}`;
+      html = `<div class="cvSelHead"><span>${k?.icon || MODE_ICON[v.mode]}</span><b>${esc(T.designs.vehicle[v.key]?.name || vehicleDesign(v.owner, v.key).name)}<small>${esc(k?.name || "")} · ${doing(v)}</small></b></div>
+        <div class="cvHp"><i><b style="width:${Math.round(hp * 100)}%"></b></i><small>${Math.ceil(v.hp)}/${u.hp}</small></div>
+        <p>Speed ${u.speed} · ${what}${k ? `<br><span class="good">+ ${esc(k.good)}</span> <span class="weak">− ${esc(k.weak)}</span>` : ""}</p>`;
+    } else {
+      const byCls = {};
+      sel.forEach((v) => (byCls[v.unit.cls] = (byCls[v.unit.cls] || 0) + 1));
+      const hp = sel.reduce((a, v) => a + Math.max(0, v.hp / v.unit.hp), 0) / sel.length;
+      html = `<div class="cvSelHead"><span>${sel.length}</span><b>vehicles selected<small>${Object.entries(byCls)
+        .map(([c, n]) => `${n} ${VEHICLE_CLASSES[c]?.icon || ""}`)
+        .join(" · ")} · ${doing(sel[0])}</small></b></div>
+        <div class="cvHp"><i><b style="width:${Math.round(hp * 100)}%"></b></i><small>${Math.round(hp * 100)}%</small></div>`;
+    }
+    const el = $h("#cvSelInfo");
+    if (el._html !== html) el.innerHTML = el._html = html;
   }
   $h("#cvAll").onclick = () => {
     if (T.selected.size && T.selected.size === vehiclesOf(YOU).length) T.selected.clear();
@@ -2253,6 +2545,7 @@ export function createCivStage(o) {
       updateCitizens(dt, cam.sf, cam.salt);
       updateLOD(dt);
       updateShots(dt);
+      projectiles.update(dt);
       updateBooms(dt);
       updateMarks();
       if ((hudClock -= dt) <= 0) {
@@ -2294,6 +2587,7 @@ export function createCivStage(o) {
       shots.forEach((s) => s.line.geometry.dispose());
       booms.forEach((b) => b.s.material.dispose());
       Object.values(shotMat).forEach((m) => m.dispose());
+      projectiles.dispose();
       matCache.forEach((set) => Object.values(set).forEach((m) => m.dispose()));
       Object.values(sharedGeo).forEach((g) => g.dispose());
       Object.values(sharedMat).forEach((m) => m.dispose());
@@ -2323,6 +2617,7 @@ export function createCivStage(o) {
       editDesign,
       focusOn,
       reachable,
+      projectiles,
       get sheet() {
         return sheet;
       },

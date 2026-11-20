@@ -148,6 +148,24 @@ export const CLASS_COMBAT = {
   bomber: { vsCity: 1.9, vsLand: 0.7, vsSea: 0.7, vsAir: 0, range: 0 },
 };
 const NO_COMBAT = { vsCity: 1, vsLand: 0, vsSea: 0, vsAir: 0, range: 0 };
+/** What each class fires (civ/projectiles.js WEAPONS) and how often (seconds between shots). */
+export const CLASS_WEAPON = {
+  car: { weapon: "tracer", every: 0.35 },
+  tank: { weapon: "shell", every: 0.8 },
+  artillery: { weapon: "artillery", every: 1.6 },
+  warship: { weapon: "shell", every: 0.7 },
+  torpedo: { weapon: "torpedo", every: 1.4 },
+  fighter: { weapon: "tracer", every: 0.3 },
+  bomber: { weapon: "bomb", every: 1.3 },
+};
+/** The weapon a unit uses on a target that moves this way (flak against aircraft, if it carries any). */
+export function weaponFor(unit, targetMode = "land") {
+  if (targetMode === "air" && unit.flak) return { weapon: "flak", every: 0.4 };
+  // A torpedo boat fights anything that isn't a ship with its deck gun.
+  if (unit.cls === "torpedo" && targetMode !== "sea") return { weapon: "shell", every: 0.9 };
+  if (unit.missiles && (unit.cls === "tank" || unit.cls === "car" || unit.cls === "fighter" || unit.cls === "warship")) return { weapon: "missile", every: 1.1 };
+  return CLASS_WEAPON[unit.cls] || { weapon: "shell", every: 0.8 };
+}
 
 export function vehicleUnit(design, mods = {}) {
   const s = designStats(design);
@@ -159,6 +177,7 @@ export function vehicleUnit(design, mods = {}) {
   const fight = role === "military" && CLASS_COMBAT[cls] ? { ...CLASS_COMBAT[cls] } : { ...NO_COMBAT };
   // Flak guns let anything fight aircraft (artillery and torpedo boats included, if you add them).
   const flak = role === "military" ? partTotals(design).antiAir || 0 : 0;
+  const missiles = role === "military" && design.parts.some((p) => p.id === "missiles");
   if (flak) fight.vsAir = Math.round(Math.min(2.5, fight.vsAir + 0.6 * flak) * 100) / 100;
   return {
     ok: s.ok,
@@ -169,6 +188,8 @@ export function vehicleUnit(design, mods = {}) {
     hp: Math.round((24 + s.stats.health * 9) * (1 + (mods.health || 0))),
     dps: role === "military" ? Math.round((2 + power * 0.9) * (1 + (mods.damage || 0)) * 10) / 10 : 0,
     ...fight,
+    flak: flak > 0,
+    missiles,
     // Trade: how much of the way to a full trade partnership one delivery takes you.
     trade: role === "economic" ? Math.round((10 + power * 1.6) * (1 + (mods.social || 0))) : 0,
     // Preaching: conversion per second before the city's faith resists.
@@ -308,7 +329,7 @@ export const SUPERWEAPONS = {
 };
 export const SUPER_COST = 400;
 export const SUPER_COOLDOWN = 150;
-/** The superweapon unlocks when you hold at least half the island's cities. */
+/** The superweapon unlocks when you hold at least half the planet's cities. */
 export const superUnlocked = (yours, total) => total > 0 && yours >= Math.ceil(total / 2);
 
 /** How you have mostly won cities: the kind of superweapon you get and the card you finish with. */

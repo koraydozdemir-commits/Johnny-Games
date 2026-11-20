@@ -258,3 +258,24 @@ test("a design's chosen category must match how it moves", () => {
   assert.match(s.problems.join(" "), /aircraft/);
   assert.equal(validateModular({ ...car, category: "submarine" }, "vehicle").category, undefined);
 });
+
+test("weapons: each class fires its own kind of shot, flak against aircraft when it has any", async () => {
+  const { vehicleTemplates, weaponFor } = await import("../civ/rules.js");
+  const { WEAPONS } = await import("../civ/projectiles.js").catch(() => ({ WEAPONS: null }));
+  const unit = (cls, extra = []) => {
+    const d = validateModular(vehicleTemplates("military").find((t) => t.id === cls).design, "vehicle");
+    return vehicleUnit(validateModular({ ...d, parts: [...d.parts, ...extra] }, "vehicle"));
+  };
+  assert.equal(weaponFor(unit("artillery")).weapon, "artillery");
+  assert.equal(weaponFor(unit("bomber")).weapon, "bomb");
+  assert.equal(weaponFor(unit("torpedo"), "sea").weapon, "torpedo");
+  assert.equal(weaponFor(unit("torpedo"), "land").weapon, "shell");
+  assert.equal(weaponFor(unit("fighter"), "air").weapon, "tracer");
+  assert.equal(weaponFor(unit("tank", [{ id: "flak", x: 0, y: 1.4, z: -0.4 }]), "air").weapon, "flak");
+  assert.equal(weaponFor(unit("tank", [{ id: "missiles", x: 0, y: 1.4, z: -0.4 }]), "land").weapon, "missile");
+  for (const cls of ["car", "tank", "artillery", "warship", "torpedo", "fighter", "bomber"]) {
+    const w = weaponFor(unit(cls));
+    assert.ok(w.every > 0);
+    if (WEAPONS) assert.ok(WEAPONS[w.weapon], w.weapon);
+  }
+});
