@@ -43,15 +43,15 @@ export function beatClock(beats) {
 
 /**
  * The timings of each transition, in seconds. Reduced motion shortens them; nothing ever waits on
- * an animation it can't finish, and Skip always works.
+ * an animation it can't finish. Cutscenes can't be skipped.
  */
 export const CUTSCENES = {
-  // Creature → Tribal, over "Founding A Tribe" (about 40 s across both scenes): the stick picked up,
+  // Creature → Tribal, to "Founding A Tribe" (which plays on into the Tribal Stage): the stick picked up,
   // raised and thrown high; it hangs against the sun's glare while the family looks on; then it falls
   // straight back down on the thrower's head. White-out; in the Tribal Stage a stick falls into the
   // tribe's first fire.
-  stickThrow: { gather: 2, pickUp: 4, raise: 6, throw: 7.5, glare: 9, apex: 12, glareOut: 19.5, fall: 21, bonk: 24, shrug: 27, flash: 29.5, end: 31 },
-  campfire: { land: 2, gathered: 5.5, end: 8.5 },
+  stickThrow: { gather: 1.3, pickUp: 2.3, raise: 3.3, throw: 3.8, glare: 4.4, apex: 6.6, glareOut: 10, fall: 10.8, bonk: 12.2, shrug: 14.4, flash: 16.4, end: 17.4 },
+  campfire: { land: 1.7, gathered: 4.6, end: 6.4 },
   // Tribal → Civilization: night falls on the village; it rises in stone; dawn over a city.
   civRise: { gather: 1.0, rise: 1.8, risen: 5.2, crane: 5.4, dawn: 6.6, flash: 7.6, end: 8.2 },
   civArrive: { end: 3.6 },
@@ -62,37 +62,25 @@ export const CUTSCENES = {
 export const cutsceneLength = (id, reduced = false) => CUTSCENES[id].end * (reduced ? 0.6 : 1);
 
 /**
- * Letterbox frame over the game. Returns controls; remove() takes it away.
+ * Letterbox frame over the game. Returns controls; remove() takes it away. Cutscenes always play
+ * through: there is no Skip button (onSkip and setSkip are accepted and ignored).
  * @param {{ title?:string, kicker?:string, onSkip?:()=>void, flash?:string }} o
  */
 export function openFrame(o = {}) {
   const el = document.createElement("div");
   el.className = "cineFrame";
   el.innerHTML = `<i class="cfBar cfTop"></i><i class="cfBar cfBottom"></i><div class="cfFlash"></div>
-    <div class="cfTitle" aria-live="polite"><small></small><b></b></div>
-    ${o.onSkip ? '<button class="cfSkip" type="button">Skip ▸</button>' : ""}`;
+    <div class="cfTitle" aria-live="polite"><small></small><b></b></div>`;
   el.querySelector(".cfTitle small").textContent = o.kicker || "";
   el.querySelector(".cfTitle b").textContent = o.title || "";
   if (o.flash) el.style.setProperty("--flash", o.flash);
   document.body.appendChild(el);
   document.body.classList.add("cutscene"); // hides the joystick and touch controls
-  // The frame can pass from one stage to the next: each sets what Skip does there.
-  let onSkip = o.onSkip || null;
-  const skip = el.querySelector(".cfSkip");
-  if (skip)
-    skip.onclick = () => {
-      const run = onSkip;
-      onSkip = null;
-      run?.();
-    };
   requestAnimationFrame(() => el.classList.add("show"));
   return {
     el,
-    /** What Skip does now (null hides the button). */
-    setSkip(fn) {
-      onSkip = fn;
-      if (skip) skip.hidden = !fn;
-    },
+    /** Kept for callers; cutscenes can't be skipped. */
+    setSkip() {},
     /** Show (or hide) the title card. */
     title(on, title, kicker) {
       if (title !== undefined) el.querySelector(".cfTitle b").textContent = title;

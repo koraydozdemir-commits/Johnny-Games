@@ -27,7 +27,7 @@ export const TRACKS = {
   mating: { file: "Spore OST/Creature Mating.mp3", gain: 0.95, loop: true },
   // Starts with the Creature → Tribal cutscene and carries it; it hands over to the tribe's theme
   // shortly after the tribe arrives (maxPlay), rather than playing its full two minutes into the stage.
-  founding: { file: "Spore OST/Founding A Tribe.mp3", gain: 1, loop: false, then: "tribe", maxPlay: 48 },
+  founding: { file: "Spore OST/Founding A Tribe.mp3", gain: 1, loop: false, then: "tribe", maxPlay: 30 },
   tribe: { file: "Spore OST/Tribal Stage Relaxed.mp3", gain: 0.95, loop: true, resume: true },
   // Danger in the Tribal Stage borrows the war theme.
   tribeWar: { file: "Spore OST/Civilisation War.mp3", gain: 0.9, loop: true, resume: true, minHold: 20 },

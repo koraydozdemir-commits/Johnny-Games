@@ -899,7 +899,6 @@ export function createTribeStage(o) {
       <button id="trSettings">⚙ Settings</button>
       <button id="trHelp">How to play</button>
       <button id="trCivGo" hidden>🏛 Civilization Stage</button>
-      <button id="trExit">Back to the Creature Stage</button>
     </div>`;
   document.body.appendChild(hud);
   const $h = (q) => hud.querySelector(q);
@@ -986,10 +985,6 @@ export function createTribeStage(o) {
     $h("#trMenuPanel").hidden = true;
     saveState();
     o.onHistory?.();
-  };
-  $h("#trExit").onclick = () => {
-    saveState();
-    o.onExit();
   };
   // Once the island is settled, the menu leads on to the Civilization Stage.
   $h("#trMenu").addEventListener("click", () => ($h("#trCivGo").hidden = !(T.won && o.onCivilization)));
@@ -1184,7 +1179,7 @@ export function createTribeStage(o) {
         <div class="tsStats"><span><b>${allied}</b> allied</span><span><b>${conquered}</b> conquered</span><span><b>${mine().length}</b> members</span><span><b>${Math.floor(T.food)}</b> food</span></div>
         ${v.trait ? `<p class="tsHint">Your species earns the <b>${v.trait}</b> trait, carried into the stages to come. Your village can become a city: the Civilization Stage begins when you're ready.</p>` : ""}
         ${o.onCivilization ? `<div class="tsBtns tsWide"><button class="good" id="tsCiv">🏛 Begin the Civilization Stage</button></div>` : ""}
-        <div class="tsBtns"><button id="tsKeep">Keep playing</button><button id="tsBack">Back to the Creature Stage</button></div>`;
+        <div class="tsBtns tsWide"><button id="tsKeep">Keep playing</button></div>`;
     } else {
       html = `<div class="tsHead"><b>Tribal Stage · how to play</b><button class="tsClose" aria-label="Close">✕</button></div>
         <ul class="tsHelp">
@@ -1286,10 +1281,6 @@ export function createTribeStage(o) {
       saveState();
       closeSheet();
       playCivRise();
-    });
-    on("#tsBack", () => {
-      saveState();
-      o.onExit();
     });
     on("#tsRaid", () => {
       const tr = sheet.tribe;
@@ -1760,12 +1751,11 @@ export function createTribeStage(o) {
     disposables.push(stick.geometry, stick.material);
     stick.position.set(FIRE.x, gy + 34, FIRE.z);
     scene.add(stick);
-    const frame = o.frame || openFrame({ flash: "#fff3d6", onSkip: () => {} });
+    const frame = o.frame || openFrame({ flash: "#fff3d6" });
     frame.flash(true);
     frame.title(false);
-    frame.setSkip(() => cine && (cine.t = Math.max(cine.t, CUTSCENES.campfire.end)));
     stick.scale.setScalar(1.8);
-    cine = { kind: "campfire", t: 0, k: reduced ? 1 / 0.6 : 1, T: CUTSCENES.campfire, stick, gy, frame, beats: beatClock({ clear: 0.15, land: CUTSCENES.campfire.land, title: 2.6, untitle: 7 }) };
+    cine = { kind: "campfire", t: 0, k: reduced ? 1 / 0.6 : 1, T: CUTSCENES.campfire, stick, gy, frame, beats: beatClock({ clear: 0.15, land: CUTSCENES.campfire.land, title: 2.2, untitle: 4.9 }) };
     hud.classList.add("cine");
   }
   function playCivRise() {
@@ -1815,7 +1805,7 @@ export function createTribeStage(o) {
         disposables.push(m.material);
       });
     });
-    const frame = openFrame({ kicker: "Tribal Stage complete", title: "Civilization", onSkip: () => (cine ? (cine.t = Math.max(cine.t, CUTSCENES.civRise.flash)) : null), flash: "#eaf4ff" });
+    const frame = openFrame({ kicker: "Tribal Stage complete", title: "Civilization", flash: "#eaf4ff" });
     frame.el.classList.add("dusk");
     cine = { kind: "civ", t: 0, k: reduced ? 1 / 0.6 : 1, T: CUTSCENES.civRise, frame, ring, extras, village, stoneColor: new THREE.Color(0xd2cabc), beats: beatClock({ night: 0.2, rise: CUTSCENES.civRise.rise, dawn: CUTSCENES.civRise.dawn, flash: CUTSCENES.civRise.flash }) };
     hud.classList.add("cine");
@@ -1895,7 +1885,6 @@ export function createTribeStage(o) {
     if (t >= T.end) {
       const frame = c.frame;
       cine = null; // the Civilization Stage lifts the frame
-      frame.setSkip(null);
       o.onCivilization({ frame });
     }
   }
@@ -3382,9 +3371,22 @@ export function createTribeStage(o) {
       chronicle({ key: "tribe:won", stage: "tribe", icon: v.icon, text: "Settled the island and earned the " + v.trait + " trait." });
       setTimeout(() => {
         o.sfx("unlock");
-        openSheet("won");
+        // Every tribe is an ally or gone: the village rises into a city by itself.
+        if (o.onCivilization) advanceToCiv(v);
+        else openSheet("won");
       }, 2500);
     } else tipOnce("room", "Your village can now hold " + room() + " members.", 4);
+  }
+  /** The island is settled: a moment to read how, then the city rises (the cutscene leads into Civilization). */
+  function advanceToCiv(v) {
+    if (disposed || cine) return;
+    toast(v.icon + " " + v.title + ". Your species earns the " + v.trait + " trait.", 4);
+    setTimeout(() => {
+      if (disposed || cine) return;
+      closeSheet();
+      saveState();
+      playCivRise();
+    }, 4000);
   }
   function updateTribes(dt) {
     for (const tr of T.tribes) {
@@ -3834,6 +3836,8 @@ export function createTribeStage(o) {
   // Arriving from the Creature Stage's stick throw: the campfire scene.
   if (o.intro === "campfire") startCampfire();
   else o.frame?.remove();
+  // A saved tribe that had already settled the island goes straight on to Civilization.
+  if (save && T.won && o.onCivilization) setTimeout(() => advanceToCiv(victoryPath(T.tribes) || { icon: "✦", title: "The island is settled", trait: "tribal" }), 1500);
 
   return {
     record,

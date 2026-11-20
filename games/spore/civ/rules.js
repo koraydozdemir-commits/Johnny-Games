@@ -5,10 +5,10 @@
  *
  * Rates are per second of play. Money is "§" (Sporebucks).
  */
-import { designStats, vehicleMode } from "../creations/modular.js";
+import { VEHICLE_CLASSES, designStats, partTotals, vehicleClass, vehicleMode } from "../creations/modular.js";
 
 export const CIV_SAVE_KEY = "johnny-spore-civ-stage";
-export const CIV_VERSION = 1;
+export const CIV_VERSION = 2;
 export const YOU = "you";
 
 /** The three kinds of city. A city makes vehicles of its own kind. */
@@ -133,19 +133,63 @@ export const COAST = 45;
  * Play values for a vehicle design.
  * @returns {{ ok:boolean, role:string, mode:string|null, speed:number, hp:number, dps:number, trade:number, preach:number, cost:number }}
  */
+/**
+ * What each class of military vehicle is good at. vsCity multiplies damage to defences and halls;
+ * vsLand/vsSea/vsAir multiply damage to vehicles that move that way (0: can't target them at all);
+ * range is added to the distance it fights from. Flak guns add to vsAir on any class.
+ */
+export const CLASS_COMBAT = {
+  car: { vsCity: 0.8, vsLand: 1.25, vsSea: 1, vsAir: 0.5, range: 0 },
+  tank: { vsCity: 1, vsLand: 1, vsSea: 1, vsAir: 0.35, range: 0 },
+  artillery: { vsCity: 1.7, vsLand: 0.5, vsSea: 0.6, vsAir: 0, range: 9 },
+  warship: { vsCity: 1.2, vsLand: 1, vsSea: 1.1, vsAir: 0.5, range: 4 },
+  torpedo: { vsCity: 0.6, vsLand: 0.4, vsSea: 2.2, vsAir: 0, range: 0 },
+  fighter: { vsCity: 0.6, vsLand: 0.9, vsSea: 0.9, vsAir: 2.2, range: 0 },
+  bomber: { vsCity: 1.9, vsLand: 0.7, vsSea: 0.7, vsAir: 0, range: 0 },
+};
+const NO_COMBAT = { vsCity: 1, vsLand: 0, vsSea: 0, vsAir: 0, range: 0 };
+/** What each class fires (civ/projectiles.js WEAPONS) and how often (seconds between shots). */
+export const CLASS_WEAPON = {
+  car: { weapon: "tracer", every: 0.35 },
+  tank: { weapon: "shell", every: 0.8 },
+  artillery: { weapon: "artillery", every: 1.6 },
+  warship: { weapon: "shell", every: 0.7 },
+  torpedo: { weapon: "torpedo", every: 1.4 },
+  fighter: { weapon: "tracer", every: 0.3 },
+  bomber: { weapon: "bomb", every: 1.3 },
+};
+/** The weapon a unit uses on a target that moves this way (flak against aircraft, if it carries any). */
+export function weaponFor(unit, targetMode = "land") {
+  if (targetMode === "air" && unit.flak) return { weapon: "flak", every: 0.4 };
+  // A torpedo boat fights anything that isn't a ship with its deck gun.
+  if (unit.cls === "torpedo" && targetMode !== "sea") return { weapon: "shell", every: 0.9 };
+  if (unit.missiles && (unit.cls === "tank" || unit.cls === "car" || unit.cls === "fighter" || unit.cls === "warship")) return { weapon: "missile", every: 1.1 };
+  return CLASS_WEAPON[unit.cls] || { weapon: "shell", every: 0.8 };
+}
+
 export function vehicleUnit(design, mods = {}) {
   const s = designStats(design);
   const role = design.role;
   const mode = vehicleMode(design);
+  const cls = vehicleClass(design, mode);
   const pace = mode === "air" ? 1.25 : mode === "sea" ? 1.05 : 1;
   const power = s.stats.power;
+  const fight = role === "military" && CLASS_COMBAT[cls] ? { ...CLASS_COMBAT[cls] } : { ...NO_COMBAT };
+  // Flak guns let anything fight aircraft (artillery and torpedo boats included, if you add them).
+  const flak = role === "military" ? partTotals(design).antiAir || 0 : 0;
+  const missiles = role === "military" && design.parts.some((p) => p.id === "missiles");
+  if (flak) fight.vsAir = Math.round(Math.min(2.5, fight.vsAir + 0.6 * flak) * 100) / 100;
   return {
     ok: s.ok,
     role,
     mode,
+    cls,
     speed: Math.round((4 + s.stats.speed * 1.3) * pace * 10) / 10,
     hp: Math.round((24 + s.stats.health * 9) * (1 + (mods.health || 0))),
     dps: role === "military" ? Math.round((2 + power * 0.9) * (1 + (mods.damage || 0)) * 10) / 10 : 0,
+    ...fight,
+    flak: flak > 0,
+    missiles,
     // Trade: how much of the way to a full trade partnership one delivery takes you.
     trade: role === "economic" ? Math.round((10 + power * 1.6) * (1 + (mods.social || 0))) : 0,
     // Preaching: conversion per second before the city's faith resists.
@@ -153,6 +197,9 @@ export function vehicleUnit(design, mods = {}) {
     cost: s.cost,
   };
 }
+
+/** How hard a unit hits a vehicle that moves this way (0: it can't fight it). */
+export const hitMult = (unit, targetMode) => unit[{ land: "vsLand", sea: "vsSea", air: "vsAir" }[targetMode]] || 0;
 
 /** Which modes a nation may build, given its city count and whether the city is on the coast. */
 export function allowedModes(cityCount, coastal) {
@@ -178,21 +225,99 @@ const CHASSIS = {
 };
 const LIFT = { land: 0, sea: -0.2, air: -0.35 };
 const NAMES = { military: { land: "Rumbler", sea: "Gunboat", air: "Striker" }, economic: { land: "Hauler", sea: "Barge", air: "Courier" }, religious: { land: "Herald", sea: "Chapel Boat", air: "Seraph" } };
-/** A ready-made vehicle for a role and mode, in a nation's colours. */
-export function starterVehicle(role, mode, colors = { base: 0xd6a03f, accent: 0x3fa9d6, trim: 0x2a2f25 }) {
+/**
+ * Ready-made military vehicles of every class: the editor's "start from" templates, and what rival
+ * nations build (so an enemy army is a mix of tanks, artillery, warships, fighters and bombers).
+ */
+const CLASS_PARTS = {
+  car: { mode: "land", name: "Scout", parts: [...CHASSIS.land, { id: "cannonV", x: 0, y: 1.1, z: 0.9 }, { id: "stripe", x: 0, y: 0.97, z: 0 }] },
+  tank: { mode: "land", name: "Rumbler", parts: [{ id: "body", x: 0, y: 0.6, z: 0 }, { id: "tread", x: 0.95, y: 0.35, z: 0, mirror: true }, { id: "cannonV", x: 0, y: 1.15, z: 1 }] },
+  artillery: { mode: "land", name: "Longshot", parts: [{ id: "body", x: 0, y: 0.6, z: 0 }, { id: "tread", x: 0.95, y: 0.35, z: 0, mirror: true }, { id: "bigGun", x: 0, y: 1.25, z: 1.1 }] },
+  warship: { mode: "sea", name: "Gunboat", parts: [...CHASSIS.sea, { id: "cannonV", x: 0, y: 0.95, z: 1 }, { id: "cabin", x: 0, y: 0.95, z: -0.5 }] },
+  torpedo: { mode: "sea", name: "Barracuda", parts: [...CHASSIS.sea, { id: "torpedoes", x: 0.5, y: 0.5, z: 0.6, mirror: true }] },
+  fighter: { mode: "air", name: "Striker", parts: [...CHASSIS.air, { id: "cannonV", x: 0, y: 0.15, z: 1.2 }, { id: "fin", x: 0, y: 0.95, z: -1.3 }] },
+  bomber: { mode: "air", name: "Thunderhead", parts: [...CHASSIS.air, { id: "bombs", x: 0, y: -0.05, z: 0 }, { id: "fin", x: 0, y: 0.95, z: -1.3 }] },
+};
+export const CLASSES_BY_MODE = { land: ["tank", "car", "artillery"], sea: ["warship", "torpedo"], air: ["fighter", "bomber"] };
+const tidy = (parts) => parts.map((p) => ({ ry: 0, s: 1, mirror: false, ...p }));
+/** A ready-made vehicle for a role and mode (and, for military vehicles, a class), in a nation's colours. */
+export function starterVehicle(role, mode, colors = { base: 0xd6a03f, accent: 0x3fa9d6, trim: 0x2a2f25 }, cls = null) {
+  // Military vehicles default to their mode's main class: a tank, a warship, a fighter.
+  const c = role === "military" ? (CLASS_PARTS[cls]?.mode === mode ? CLASS_PARTS[cls] : CLASS_PARTS[CLASSES_BY_MODE[mode][0]]) : null;
   return {
     kind: "vehicle",
     v: 1,
-    name: NAMES[role][mode],
+    name: c ? c.name : NAMES[role][mode],
     role,
+    category: mode,
     colors: { ...colors },
-    parts: [...CHASSIS[mode], ...EQUIP[role].map((p) => ({ ...p, y: p.y + LIFT[mode] }))].map((p) => ({ ry: 0, s: 1, mirror: false, ...p })),
+    parts: tidy(c ? c.parts : [...CHASSIS[mode], ...EQUIP[role].map((p) => ({ ...p, y: p.y + LIFT[mode] }))]),
   };
+}
+/** The editor's templates for a role: one per class it can be (military) or per mode (the others). */
+export function vehicleTemplates(role, colors) {
+  const list = role === "military" ? Object.entries(CLASSES_BY_MODE).flatMap(([mode, ids]) => ids.map((cls) => [mode, cls])) : ["land", "sea", "air"].map((mode) => [mode, null]);
+  return list.map(([mode, cls]) => {
+    const design = starterVehicle(role, mode, colors, cls);
+    const id = vehicleClass(design, mode);
+    return { id: cls || id, mode, name: VEHICLE_CLASSES[id].name, icon: VEHICLE_CLASSES[id].icon, design };
+  });
 }
 
 /* ---- spice --------------------------------------------------------------------------------- */
-export const SPICE_INCOME = 1.1;
+/**
+ * Spice is a resource of its own. Derricks pump it out of geysers into your stockpile; it pays for
+ * military vehicles (alongside money) and sells on the world market for money. Geysers differ in how
+ * rich they are, and a derrick can be upgraded to pump more.
+ */
+export const SPICE_RATE = 0.4; // spice a second from a level-1 derrick on a geyser of richness 1
+export const DERRICK_LEVELS = [1, 1.7, 2.5];
+export const DERRICK_UPGRADE = [0, 90, 160]; // money to reach level 2 and 3
 export const DERRICK_HP = 40;
+export const spiceYield = (g) => (g.owner ? SPICE_RATE * (g.rich || 1) * DERRICK_LEVELS[Math.max(0, Math.min(2, (g.level || 1) - 1))] : 0);
+/** Richness of the n-th geyser of a planet: some poor, most ordinary, a few rich (worth fighting over). */
+export const geyserRichness = (rand) => Math.round((rand < 0.25 ? 0.6 : rand < 0.8 ? 1 : rand < 0.95 ? 1.5 : 2.2) * 10) / 10;
+
+/** The world spice market: the price drifts around its usual level; selling a lot pushes it down. */
+export const SPICE_PRICE = { usual: 3.2, min: 1.2, max: 7 };
+export function marketStep(price, dt, rand = Math.random()) {
+  const pull = (SPICE_PRICE.usual - price) * 0.02 * dt;
+  const wobble = (rand - 0.5) * 0.12 * Math.sqrt(dt);
+  return Math.max(SPICE_PRICE.min, Math.min(SPICE_PRICE.max, price + pull + wobble));
+}
+/** Sell spice: what it fetches, and the price afterwards (each 10 spice sold knocks 2% off). */
+export function sellSpice(price, amount) {
+  if (amount <= 0) return { money: 0, price };
+  const after = Math.max(SPICE_PRICE.min, price * Math.pow(0.98, amount / 10));
+  return { money: Math.round(amount * (price + after) * 0.5), price: after };
+}
+
+/** Spice a vehicle needs to build: military vehicles burn it (aircraft most); the others need none. */
+export function spiceCost(unit) {
+  if (unit.role !== "military") return 0;
+  return Math.round(4 + unit.cost / 20 + (unit.mode === "air" ? 4 : 0));
+}
+
+/* ---- production ------------------------------------------------------------------------------ */
+/** Vehicles a city can have waiting to be built. */
+export const QUEUE_MAX = 3;
+/** Seconds a city takes to build a vehicle: factories (and better factory designs) build faster. */
+export function buildTime(unit, city, strengths = {}) {
+  const factories = city.plots.filter((p) => p === "factory").length;
+  return Math.round((unit.cost / (5 + factories * 4 * designFactor(strengths.factory))) * 10) / 10;
+}
+
+/* ---- trade runs ------------------------------------------------------------------------------- */
+/**
+ * A trade vehicle carries goods from home to a partner city and comes back for more. Each delivery
+ * pays both sides (more for longer routes and bigger cities) and moves the partnership on.
+ * @param {number} distance  of the route, in world units
+ * @param {number} pop       people in the partner city
+ */
+export function deliveryPay(distance, pop, raided = false) {
+  const pay = 8 + distance * 0.1 + pop * 0.8;
+  return Math.round(pay * (raided ? 0.5 : 1));
+}
 
 /* ---- the player's earlier stages ------------------------------------------------------------- */
 /**
@@ -225,8 +350,12 @@ export const relationWord = (r, war) => (war ? "At war" : r >= DIPLO.allyAt ? "A
 
 /**
  * What a rival nation does next. Called now and then for each living nation.
- * @param {{ type:string, relation:number, war:boolean, money:number, vehicles:number, cap:number }} n
- * @param {{ yourCities:number, freeCities:number, grace?:boolean, rand?:()=>number }} ctx  grace: early on, nobody comes for your cities
+ * @param {{ type:string, relation:number, war:boolean, money:number, vehicles:number, cap:number,
+ *   personality?:string, warAt?:number, allied?:boolean, cowed?:boolean, preachYou?:boolean }} n
+ *   warAt: the relation below which it goes to war (its leader's personality); allied: never attacks you;
+ *   cowed: you threatened it and it backed down; preachYou: its leader means to convert you.
+ * @param {{ yourCities:number, freeCities:number, grace?:boolean, power?:number, yourPower?:number, rand?:()=>number }} ctx
+ *   grace: early on, nobody comes for your cities; power/yourPower: military strength on each side
  * @returns {{ build:boolean, declareWar:boolean, target:"you"|"free"|null }}
  */
 export function nationPlan(n, ctx) {
@@ -234,14 +363,18 @@ export function nationPlan(n, ctx) {
   const vehicleCost = 110;
   const build = n.vehicles < n.cap && n.money >= vehicleCost;
   let declareWar = false;
-  if (!n.war && n.type === "military" && n.relation < -45 && rand() < 0.35) declareWar = true;
-  if (ctx.grace) declareWar = false;
+  const warlike = n.type === "military" || n.personality === "aggressive";
+  if (!n.war && warlike && n.relation < (n.warAt ?? -45) && rand() < 0.35) declareWar = true;
+  // A cautious leader only starts a war it expects to win.
+  if (n.personality === "cautious" && (ctx.power ?? 1) < (ctx.yourPower ?? 0) * 1.2) declareWar = false;
+  if (ctx.grace || n.allied || n.cowed) declareWar = false;
   const war = n.war || declareWar;
-  const yours = ctx.grace ? 0 : ctx.yourCities;
+  const yours = ctx.grace || n.allied || (n.cowed && !war) ? 0 : ctx.yourCities;
   let target = null;
   if (n.type === "military") target = war && yours ? "you" : ctx.freeCities ? "free" : null;
-  // Trading is welcome even early on.
+  // Trading is welcome even early on (and with allies).
   else if (n.type === "economic") target = ctx.yourCities && n.relation > -40 && rand() < 0.6 ? "you" : ctx.freeCities ? "free" : ctx.yourCities ? "you" : null;
+  else if (n.preachYou && yours) target = "you";
   else target = yours && n.relation < 0 && rand() < 0.6 ? "you" : ctx.freeCities ? "free" : yours && n.relation < 0 ? "you" : null;
   return { build, declareWar, target };
 }
@@ -255,7 +388,7 @@ export const SUPERWEAPONS = {
 };
 export const SUPER_COST = 400;
 export const SUPER_COOLDOWN = 150;
-/** The superweapon unlocks when you hold at least half the island's cities. */
+/** The superweapon unlocks when you hold at least half the planet's cities. */
 export const superUnlocked = (yours, total) => total > 0 && yours >= Math.ceil(total / 2);
 
 /** How you have mostly won cities: the kind of superweapon you get and the card you finish with. */
@@ -296,6 +429,12 @@ const ownerOk = (o, nations) => (o === YOU || o === null ? o : typeof o === "str
  * Read a saved Civilization Stage, tolerating anything missing or malformed. Designs are kept as they
  * are; the stage validates them before use.
  */
+/** A saved direction on the planet (a unit vector), or null. */
+function unitDir(d) {
+  if (!d || typeof d !== "object" || ![d.x, d.y, d.z].every(Number.isFinite)) return null;
+  const l = Math.hypot(d.x, d.y, d.z);
+  return l > 0.5 && l < 1.5 ? { x: d.x / l, y: d.y / l, z: d.z / l } : null;
+}
 export function readCivSave(raw) {
   let d = null;
   try {
@@ -310,7 +449,19 @@ export function readCivSave(raw) {
     relation: clampRel(num(n?.relation, -100, 100, 0)),
     war: !!n?.war,
     money: num(n?.money, 0, 1e6, 100),
+    spice: num(n?.spice, 0, 1e6, 0),
     alive: n?.alive !== false,
+    // Diplomacy (saves from before leaders had none: the nations are met afresh).
+    personality: ["aggressive", "friendly", "greedy", "religious", "cautious"].includes(n?.personality) ? n.personality : null,
+    met: !!n?.met,
+    allied: !!n?.allied && !n?.war,
+    pact: !!n?.pact && !n?.war,
+    cowedUntil: num(n?.cowedUntil, 0, 1e7, 0),
+    preachUntil: num(n?.preachUntil, 0, 1e7, 0),
+    log: (Array.isArray(n?.log) ? n.log : [])
+      .slice(-12)
+      .filter((l) => l && typeof l.text === "string")
+      .map((l) => ({ t: num(l.t, 0, 1e7, 0), who: l.who === "you" ? "you" : "them", text: l.text.slice(0, 200), summary: typeof l.summary === "string" ? l.summary.slice(0, 160) : "" })),
   }));
   const ids = nations.map((n) => n.id);
   const cities = d.cities.slice(0, 16).map((c, i) => ({
@@ -324,17 +475,34 @@ export function readCivSave(raw) {
     trade: Object.fromEntries(Object.entries(c?.trade && typeof c.trade === "object" ? c.trade : {}).filter(([k]) => k === YOU || ids.includes(k)).map(([k, v]) => [k, num(v, 0, 100, 0)])),
     conv: Object.fromEntries(Object.entries(c?.conv && typeof c.conv === "object" ? c.conv : {}).filter(([k]) => k === YOU || ids.includes(k)).map(([k, v]) => [k, num(v, 0, 100, 0)])),
     unrest: num(c?.unrest, 0, 5, 0),
+    // Vehicles being built (already paid for): the design key and how far along it is.
+    queue: (Array.isArray(c?.queue) ? c.queue : []).slice(0, QUEUE_MAX).filter((q) => typeof q?.key === "string" && /^(military|economic|religious):(land|sea|air)(:\w{1,12})?$/.test(q.key)).map((q) => ({ key: q.key, done: num(q.done, 0, 1, 0), money: num(q.money, 0, 1e5, 0), spice: num(q.spice, 0, 1e5, 0) })),
   }));
   if (!cities.some((c) => c.owner === YOU)) return null;
+  // Relations between rival nations, by pair of ids.
+  const pairs = {};
+  for (const [k, p] of Object.entries(d.pairs && typeof d.pairs === "object" ? d.pairs : {})) {
+    const [a, b] = k.split("|");
+    if (!ids.includes(a) || !ids.includes(b) || a >= b) continue;
+    pairs[k] = { rel: clampRel(num(p?.rel, -100, 100, 0)), war: !!p?.war, allied: !!p?.allied && !p?.war, pact: !!p?.pact && !p?.war, warFor: num(p?.warFor, 0, 1e7, 0) };
+  }
+  const news = (Array.isArray(d.news) ? d.news : []).slice(-20).filter((x) => typeof x?.text === "string").map((x) => ({ t: num(x.t, 0, 1e7, 0), text: x.text.slice(0, 200) }));
   const designs = d.designs && typeof d.designs === "object" ? d.designs : {};
   return {
     v: CIV_VERSION,
+    // The planet: saves from before the planet (version 1) have no seed and get the homeworld's planet.
+    pairs,
+    news,
+    seed: Number.isInteger(d.seed) && d.seed > 0 && d.seed < 2 ** 32 ? d.seed : null,
+    clock: Number.isFinite(d.clock) ? num(d.clock, 0, 1e7, 0) : null,
     money: num(d.money, 0, 1e7, START_MONEY),
+    spice: num(d.spice, 0, 1e7, 20), // saves from before spice was a resource start with a little
+    price: num(d.price, SPICE_PRICE.min, SPICE_PRICE.max, SPICE_PRICE.usual),
     startType: TYPE_IDS.includes(d.startType) ? d.startType : "economic",
     nations,
     cities,
-    geysers: (Array.isArray(d.geysers) ? d.geysers : []).slice(0, 16).map((g) => ({ owner: ownerOk(g?.owner ?? null, ids), hp: num(g?.hp, 0, 1, 1) })),
-    vehicles: (Array.isArray(d.vehicles) ? d.vehicles : []).slice(0, 60).map((v) => ({ owner: ownerOk(v?.owner, ids), design: typeof v?.design === "string" ? v.design.slice(0, 40) : null, x: num(v?.x, -400, 400, 0), z: num(v?.z, -400, 400, 0), hp: num(v?.hp, 0, 1, 1), city: Number.isInteger(v?.city) ? v.city : -1 })).filter((v) => v.owner && v.design),
+    geysers: (Array.isArray(d.geysers) ? d.geysers : []).slice(0, 16).map((g) => ({ owner: ownerOk(g?.owner ?? null, ids), hp: num(g?.hp, 0, 1, 1), level: Math.round(num(g?.level, 1, 3, 1)) })),
+    vehicles: (Array.isArray(d.vehicles) ? d.vehicles : []).slice(0, 60).map((v) => ({ owner: ownerOk(v?.owner, ids), design: typeof v?.design === "string" ? v.design.slice(0, 40) : null, d: unitDir(v?.d), hp: num(v?.hp, 0, 1, 1), city: Number.isInteger(v?.city) ? v.city : -1 })).filter((v) => v.owner && v.design),
     designs: { building: designs.building && typeof designs.building === "object" ? designs.building : {}, vehicle: designs.vehicle && typeof designs.vehicle === "object" ? designs.vehicle : {} },
     captures: Object.fromEntries(TYPE_IDS.map((t) => [t, Math.round(num(d.captures?.[t], 0, 99, 0))])),
     superCool: num(d.superCool, 0, SUPER_COOLDOWN, 0),

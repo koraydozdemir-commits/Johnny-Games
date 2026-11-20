@@ -13,7 +13,7 @@ folder `Spore OST/`), so the MP3s stay out of the repository. Its CORS rule allo
 | creature | Creature Stage Roaming | roaming (resumes) |
 | nest | At Your Nest | near the home nest (resumes) |
 | mating | Creature Mating | courtship |
-| founding | Founding A Tribe | once, from the stick throw (the Creature → Tribal cutscene, about 40 s across both scenes); hands over to `tribe` after 48 s (`maxPlay`) |
+| founding | Founding A Tribe | once, from the stick throw (the Creature → Tribal cutscene, about 24 s across both scenes), playing on into the Tribal Stage; hands over to `tribe` after 30 s (`maxPlay`) |
 | tribe | Tribal Stage Relaxed | Tribal Stage (resumes) |
 | tribeWar | Civilisation War | while raiders or a war party are at your village; holds 20 s after |
 | civ | Civilisation Stage Relaxed | Civilization Stage (resumes) |

@@ -2410,6 +2410,7 @@ function openDesignEditor(kind, design, opts = {}) {
     kind,
     design: JSON.parse(JSON.stringify(base)),
     roles: opts.roles,
+    templates: opts.templates,
     sfx: (k) => playSfx(k),
     onDone: (d, st) => {
       finish();
@@ -2423,12 +2424,15 @@ function openDesignEditor(kind, design, opts = {}) {
   return modularEditor;
 }
 /** @param {{ cinematic?:boolean, frame?:object }} [opts] arriving from the stick-throw cutscene */
+/** The species that built the village: the Civilization Stage's first city keeps its style. */
+let tribeRecord = null;
 function startTribeStage(fallbackRecord = null, opts = {}) {
   if (tribeStage) {
     opts.frame?.remove();
     return;
   }
   const record = creatureStage ? creatureStage.record : loadCreatureSave()?.record || fallbackRecord;
+  tribeRecord = record || tribeRecord;
   if (!record) {
     toast("Reach land first: the Tribal Stage starts from your creature.");
     return;
@@ -2511,11 +2515,16 @@ function startCivStage(opts = {}) {
     quality: getQuality(),
     name: ts?.look?.name || cs?.record?.name || state.cellName || "Your nation",
     color: ts?.look?.color ?? 0x3fa9d6,
+    // The village the first city grows from, and the species that built it.
+    tribe: ts,
+    record: cs?.record || tribeRecord || null,
     legacy: {
       cellDiet: progress.dietCard || dietPath(state.plants, state.meat),
       creatureCard: creatureCard ? CREATURE_CARDS[creatureCard]?.title : null,
       tribeTrait: ts?.path ? { peace: "Diplomatic", balance: "Industrious", conquest: "Warlike" }[ts.path] : null,
     },
+    // Rival leaders' faces, for the Civilization Stage's conversations.
+    portrait: (rec) => creatureSnapshot(rec, { width: 120, height: 120 }),
     sfx: playSfx,
     openEditor: (kind, design, opts) => openDesignEditor(kind, design, opts),
     onCreation: (kind, design) => {
@@ -6184,7 +6193,7 @@ function syncPedia() {
     traits: traits.join(", ") || "None yet",
     gen: progress.history.length,
     thumb: lastThumb,
-    record: cs?.record || null,
+    record: cs?.record || tribeRecord || null,
     rarity: "Unique",
     timeline: chronicle.map((e) => ({ icon: e.icon, text: e.text })),
     generations: gens,
