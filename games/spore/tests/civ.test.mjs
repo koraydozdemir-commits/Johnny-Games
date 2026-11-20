@@ -29,7 +29,7 @@ import {
   vehicleUnit,
 } from "../civ/rules.js";
 import { validateModular } from "../creations/format.js";
-import { vehicleMode } from "../creations/modular.js";
+import { designStats, vehicleMode } from "../creations/modular.js";
 
 const city = (plots = [], extra = {}) => ({ id: 0, owner: YOU, type: "economic", plots: Array.from({ length: PLOTS }, (_, i) => plots[i] || null), turrets: 0, turretHp: 1, hallHp: 1, trade: {}, conv: {}, ...extra });
 
@@ -210,4 +210,51 @@ test("planet saves keep the planet's seed, the time of day and where each vehicl
   assert.equal(s.vehicles[1].d, null);
   assert.equal(s.vehicles[2].d, null);
   assert.equal(readCivSave({ seed: -4, cities: [{ owner: "you" }] }).seed, null);
+});
+
+test("vehicle classes: every template is a working design of its class, and classes fight differently", async () => {
+  const { vehicleTemplates, hitMult, CLASS_COMBAT } = await import("../civ/rules.js");
+  const { vehicleClass, VEHICLE_CLASSES } = await import("../creations/modular.js");
+  const seen = new Set();
+  for (const role of ["military", "economic", "religious"])
+    for (const t of vehicleTemplates(role)) {
+      const d = validateModular(t.design, "vehicle");
+      const u = vehicleUnit(d);
+      assert.ok(u.ok, role + " " + t.id);
+      assert.equal(u.mode, t.mode);
+      assert.equal(d.category, t.mode, "templates keep their category");
+      assert.ok(VEHICLE_CLASSES[u.cls]);
+      assert.equal(vehicleClass(d), u.cls);
+      seen.add(u.cls);
+    }
+  assert.equal(seen.size, Object.keys(VEHICLE_CLASSES).length, "every class has a template");
+  const unit = (cls) => vehicleUnit(validateModular(vehicleTemplates("military").find((t) => t.id === cls).design, "vehicle"));
+  assert.ok(unit("artillery").range > unit("tank").range && unit("artillery").vsCity > unit("tank").vsCity);
+  assert.equal(hitMult(unit("artillery"), "air"), 0, "artillery can't hit aircraft");
+  assert.equal(hitMult(unit("bomber"), "air"), 0);
+  assert.ok(hitMult(unit("fighter"), "air") > hitMult(unit("tank"), "air"));
+  assert.ok(hitMult(unit("torpedo"), "sea") > hitMult(unit("warship"), "sea"));
+  assert.ok(unit("car").speed > unit("tank").speed && unit("tank").hp > unit("car").hp);
+  for (const k of Object.keys(CLASS_COMBAT)) assert.ok(unit(k).cls === k);
+  // Non-military vehicles never fight.
+  const truck = vehicleUnit(validateModular(starterVehicle("economic", "land"), "vehicle"));
+  assert.equal(truck.dps, 0);
+  assert.equal(hitMult(truck, "land"), 0);
+});
+
+test("vehicle parts change a design's class: a flak gun lets a tank fight aircraft, an artillery gun makes it artillery", async () => {
+  const { hitMult } = await import("../civ/rules.js");
+  const tank = validateModular(starterVehicle("military", "land", undefined, "tank"), "vehicle");
+  const flak = validateModular({ ...tank, parts: [...tank.parts, { id: "flak", x: 0, y: 1.3, z: -0.5 }] }, "vehicle");
+  assert.ok(hitMult(vehicleUnit(flak), "air") > hitMult(vehicleUnit(tank), "air"));
+  const arty = validateModular({ ...tank, parts: [...tank.parts, { id: "bigGun", x: 0, y: 1.3, z: 0.5 }] }, "vehicle");
+  assert.equal(vehicleUnit(arty).cls, "artillery");
+});
+
+test("a design's chosen category must match how it moves", () => {
+  const car = validateModular({ ...starterVehicle("economic", "land"), category: "air" }, "vehicle");
+  const s = designStats(car);
+  assert.equal(s.ok, false);
+  assert.match(s.problems.join(" "), /aircraft/);
+  assert.equal(validateModular({ ...car, category: "submarine" }, "vehicle").category, undefined);
 });

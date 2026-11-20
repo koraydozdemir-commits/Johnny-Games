@@ -5,7 +5,7 @@
  *
  * Rates are per second of play. Money is "§" (Sporebucks).
  */
-import { designStats, vehicleMode } from "../creations/modular.js";
+import { VEHICLE_CLASSES, designStats, partTotals, vehicleClass, vehicleMode } from "../creations/modular.js";
 
 export const CIV_SAVE_KEY = "johnny-spore-civ-stage";
 export const CIV_VERSION = 2;
@@ -133,19 +133,42 @@ export const COAST = 45;
  * Play values for a vehicle design.
  * @returns {{ ok:boolean, role:string, mode:string|null, speed:number, hp:number, dps:number, trade:number, preach:number, cost:number }}
  */
+/**
+ * What each class of military vehicle is good at. vsCity multiplies damage to defences and halls;
+ * vsLand/vsSea/vsAir multiply damage to vehicles that move that way (0: can't target them at all);
+ * range is added to the distance it fights from. Flak guns add to vsAir on any class.
+ */
+export const CLASS_COMBAT = {
+  car: { vsCity: 0.8, vsLand: 1.25, vsSea: 1, vsAir: 0.5, range: 0 },
+  tank: { vsCity: 1, vsLand: 1, vsSea: 1, vsAir: 0.35, range: 0 },
+  artillery: { vsCity: 1.7, vsLand: 0.5, vsSea: 0.6, vsAir: 0, range: 9 },
+  warship: { vsCity: 1.2, vsLand: 1, vsSea: 1.1, vsAir: 0.5, range: 4 },
+  torpedo: { vsCity: 0.6, vsLand: 0.4, vsSea: 2.2, vsAir: 0, range: 0 },
+  fighter: { vsCity: 0.6, vsLand: 0.9, vsSea: 0.9, vsAir: 2.2, range: 0 },
+  bomber: { vsCity: 1.9, vsLand: 0.7, vsSea: 0.7, vsAir: 0, range: 0 },
+};
+const NO_COMBAT = { vsCity: 1, vsLand: 0, vsSea: 0, vsAir: 0, range: 0 };
+
 export function vehicleUnit(design, mods = {}) {
   const s = designStats(design);
   const role = design.role;
   const mode = vehicleMode(design);
+  const cls = vehicleClass(design, mode);
   const pace = mode === "air" ? 1.25 : mode === "sea" ? 1.05 : 1;
   const power = s.stats.power;
+  const fight = role === "military" && CLASS_COMBAT[cls] ? { ...CLASS_COMBAT[cls] } : { ...NO_COMBAT };
+  // Flak guns let anything fight aircraft (artillery and torpedo boats included, if you add them).
+  const flak = role === "military" ? partTotals(design).antiAir || 0 : 0;
+  if (flak) fight.vsAir = Math.round(Math.min(2.5, fight.vsAir + 0.6 * flak) * 100) / 100;
   return {
     ok: s.ok,
     role,
     mode,
+    cls,
     speed: Math.round((4 + s.stats.speed * 1.3) * pace * 10) / 10,
     hp: Math.round((24 + s.stats.health * 9) * (1 + (mods.health || 0))),
     dps: role === "military" ? Math.round((2 + power * 0.9) * (1 + (mods.damage || 0)) * 10) / 10 : 0,
+    ...fight,
     // Trade: how much of the way to a full trade partnership one delivery takes you.
     trade: role === "economic" ? Math.round((10 + power * 1.6) * (1 + (mods.social || 0))) : 0,
     // Preaching: conversion per second before the city's faith resists.
@@ -153,6 +176,9 @@ export function vehicleUnit(design, mods = {}) {
     cost: s.cost,
   };
 }
+
+/** How hard a unit hits a vehicle that moves this way (0: it can't fight it). */
+export const hitMult = (unit, targetMode) => unit[{ land: "vsLand", sea: "vsSea", air: "vsAir" }[targetMode]] || 0;
 
 /** Which modes a nation may build, given its city count and whether the city is on the coast. */
 export function allowedModes(cityCount, coastal) {
@@ -178,16 +204,43 @@ const CHASSIS = {
 };
 const LIFT = { land: 0, sea: -0.2, air: -0.35 };
 const NAMES = { military: { land: "Rumbler", sea: "Gunboat", air: "Striker" }, economic: { land: "Hauler", sea: "Barge", air: "Courier" }, religious: { land: "Herald", sea: "Chapel Boat", air: "Seraph" } };
-/** A ready-made vehicle for a role and mode, in a nation's colours. */
-export function starterVehicle(role, mode, colors = { base: 0xd6a03f, accent: 0x3fa9d6, trim: 0x2a2f25 }) {
+/**
+ * Ready-made military vehicles of every class: the editor's "start from" templates, and what rival
+ * nations build (so an enemy army is a mix of tanks, artillery, warships, fighters and bombers).
+ */
+const CLASS_PARTS = {
+  car: { mode: "land", name: "Scout", parts: [...CHASSIS.land, { id: "cannonV", x: 0, y: 1.1, z: 0.9 }, { id: "stripe", x: 0, y: 0.97, z: 0 }] },
+  tank: { mode: "land", name: "Rumbler", parts: [{ id: "body", x: 0, y: 0.6, z: 0 }, { id: "tread", x: 0.95, y: 0.35, z: 0, mirror: true }, { id: "cannonV", x: 0, y: 1.15, z: 1 }] },
+  artillery: { mode: "land", name: "Longshot", parts: [{ id: "body", x: 0, y: 0.6, z: 0 }, { id: "tread", x: 0.95, y: 0.35, z: 0, mirror: true }, { id: "bigGun", x: 0, y: 1.25, z: 1.1 }] },
+  warship: { mode: "sea", name: "Gunboat", parts: [...CHASSIS.sea, { id: "cannonV", x: 0, y: 0.95, z: 1 }, { id: "cabin", x: 0, y: 0.95, z: -0.5 }] },
+  torpedo: { mode: "sea", name: "Barracuda", parts: [...CHASSIS.sea, { id: "torpedoes", x: 0.5, y: 0.5, z: 0.6, mirror: true }] },
+  fighter: { mode: "air", name: "Striker", parts: [...CHASSIS.air, { id: "cannonV", x: 0, y: 0.15, z: 1.2 }, { id: "fin", x: 0, y: 0.95, z: -1.3 }] },
+  bomber: { mode: "air", name: "Thunderhead", parts: [...CHASSIS.air, { id: "bombs", x: 0, y: -0.05, z: 0 }, { id: "fin", x: 0, y: 0.95, z: -1.3 }] },
+};
+export const CLASSES_BY_MODE = { land: ["tank", "car", "artillery"], sea: ["warship", "torpedo"], air: ["fighter", "bomber"] };
+const tidy = (parts) => parts.map((p) => ({ ry: 0, s: 1, mirror: false, ...p }));
+/** A ready-made vehicle for a role and mode (and, for military vehicles, a class), in a nation's colours. */
+export function starterVehicle(role, mode, colors = { base: 0xd6a03f, accent: 0x3fa9d6, trim: 0x2a2f25 }, cls = null) {
+  // Military vehicles default to their mode's main class: a tank, a warship, a fighter.
+  const c = role === "military" ? (CLASS_PARTS[cls]?.mode === mode ? CLASS_PARTS[cls] : CLASS_PARTS[CLASSES_BY_MODE[mode][0]]) : null;
   return {
     kind: "vehicle",
     v: 1,
-    name: NAMES[role][mode],
+    name: c ? c.name : NAMES[role][mode],
     role,
+    category: mode,
     colors: { ...colors },
-    parts: [...CHASSIS[mode], ...EQUIP[role].map((p) => ({ ...p, y: p.y + LIFT[mode] }))].map((p) => ({ ry: 0, s: 1, mirror: false, ...p })),
+    parts: tidy(c ? c.parts : [...CHASSIS[mode], ...EQUIP[role].map((p) => ({ ...p, y: p.y + LIFT[mode] }))]),
   };
+}
+/** The editor's templates for a role: one per class it can be (military) or per mode (the others). */
+export function vehicleTemplates(role, colors) {
+  const list = role === "military" ? Object.entries(CLASSES_BY_MODE).flatMap(([mode, ids]) => ids.map((cls) => [mode, cls])) : ["land", "sea", "air"].map((mode) => [mode, null]);
+  return list.map(([mode, cls]) => {
+    const design = starterVehicle(role, mode, colors, cls);
+    const id = vehicleClass(design, mode);
+    return { id: cls || id, mode, name: VEHICLE_CLASSES[id].name, icon: VEHICLE_CLASSES[id].icon, design };
+  });
 }
 
 /* ---- spice --------------------------------------------------------------------------------- */

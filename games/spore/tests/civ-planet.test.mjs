@@ -72,3 +72,12 @@ test("flattening makes level ground for a city", () => {
   for (const [x, z] of [[10, 0], [0, -15], [-12, 8]]) assert.ok(Math.abs(P.height(offsetDir(s.d, x, z)) - h0) < 0.6);
   assert.ok(R > 100);
 });
+
+test("harbours stay open water once the cities are built", () => {
+  for (const name of ["region:coast", "planet:42", "planet:977"]) {
+    const P = createPlanet(seedOf(name));
+    const sites = P.citySites(11, 3);
+    for (const s of sites) P.flatten(s.d, 23);
+    for (const s of sites.filter((x) => x.coastal)) assert.ok(P.height(s.anchor) < -0.3, name + ": harbour of city at " + JSON.stringify(s.d) + " is " + P.height(s.anchor));
+  }
+});

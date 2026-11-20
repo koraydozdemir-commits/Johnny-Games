@@ -46,8 +46,15 @@ export const VEHICLE_PARTS = [
   P("sail", "Sail", "Move", "box", [0.1, 2, 1.4], "accent", { sea: 0.6, speed: 0.6 }),
   P("wingPart", "Wing", "Move", "wing", [3, 0.15, 1.1], "accent", { air: 1, speed: 0.6 }),
   P("jet", "Jet engine", "Move", "cyl", [0.5, 1.2, 0.5], "metal", { air: 0.6, speed: 1.4 }, { rx: Math.PI / 2 }),
-  P("cannonV", "Cannon", "Equip", "cyl", [0.3, 1.4, 0.3], "metal", { attack: 2 }, { rx: Math.PI / 2 }),
-  P("missiles", "Missile pod", "Equip", "box", [0.6, 0.5, 1], "metal", { attack: 3, mass: 1 }),
+  P("rotor", "Rotor", "Move", "torus", [2.6, 2.6, 0.1], "metal", { air: 0.8, speed: 0.6 }, { rx: Math.PI / 2 }),
+  P("pontoon", "Pontoon", "Move", "capsule", [0.5, 0.5, 2.4], "trim", { sea: 0.7, speed: 0.4, health: 0.5 }, { rx: Math.PI / 2 }),
+  P("bigWheel", "Big wheel", "Move", "wheel", [1.2, 1.2, 0.5], "trim", { land: 1.2, speed: 0.7, health: 0.5 }),
+  P("cannonV", "Cannon", "Weapons", "cyl", [0.3, 1.4, 0.3], "metal", { attack: 2 }, { rx: Math.PI / 2 }),
+  P("missiles", "Missile pod", "Weapons", "box", [0.6, 0.5, 1], "metal", { attack: 3, mass: 1 }),
+  P("bigGun", "Artillery gun", "Weapons", "cyl", [0.45, 2.6, 0.45], "metal", { attack: 2.5, siege: 1, mass: 1.5 }, { rx: Math.PI / 2 }),
+  P("flak", "Flak gun", "Weapons", "cyl", [0.22, 1.1, 0.22], "metal", { attack: 1, antiAir: 1 }, { rx: Math.PI / 2 }),
+  P("bombs", "Bomb bay", "Weapons", "capsule", [0.7, 0.6, 1.4], "metal", { attack: 3, siege: 1, mass: 1 }, { rx: Math.PI / 2 }),
+  P("torpedoes", "Torpedo tube", "Weapons", "cyl", [0.35, 1.6, 0.35], "trim", { attack: 2, antiShip: 1 }, { rx: Math.PI / 2 }),
   P("speaker", "Loudspeaker", "Equip", "cone", [0.8, 0.8, 0.8], "trim", { preach: 2 }, { rx: Math.PI / 2 }),
   P("choir", "Chapel", "Equip", "prism", [1, 1, 1], "accent", { preach: 3, mass: 1 }),
   P("cargo", "Cargo crate", "Equip", "box", [1, 0.8, 1], "trim", { trade: 2, mass: 1 }),
@@ -56,6 +63,12 @@ export const VEHICLE_PARTS = [
   P("fin", "Fin", "Detail", "wing", [0.1, 0.8, 0.8], "accent", { style: 1 }),
   P("light", "Light", "Detail", "sphere", [0.3, 0.3, 0.3], "glass", { style: 1 }),
   P("flagV", "Flag", "Detail", "box", [0.6, 0.4, 0.05], "accent", { style: 1 }),
+  P("stripe", "Racing stripe", "Detail", "box", [0.3, 0.04, 2.6], "accent", { style: 1 }),
+  P("spoiler", "Spoiler", "Detail", "wing", [1.5, 0.1, 0.5], "accent", { style: 1 }),
+  P("exhaust", "Exhaust", "Detail", "cyl", [0.2, 0.7, 0.2], "metal", { style: 1 }),
+  P("spotlight", "Spotlight", "Detail", "cyl", [0.4, 0.3, 0.4], "glass", { style: 1 }, { rx: Math.PI / 2 }),
+  P("emblem", "Emblem", "Detail", "disc", [0.8, 0.06, 0.8], "accent", { style: 1 }),
+  P("antennaV", "Antenna", "Detail", "cyl", [0.06, 1.4, 0.06], "metal", { style: 1 }),
 ];
 
 export const SHIP_PARTS = [
@@ -105,6 +118,39 @@ export const ROLES = {
   },
 };
 
+/**
+ * What kind of vehicle a design is, from its role, how it moves and what it carries. The class is
+ * what it's good at in play (see civ/rules.js CLASS_COMBAT): artillery outranges turrets, fighters
+ * hunt aircraft, torpedo boats hunt ships, bombers flatten cities, and so on.
+ */
+export const VEHICLE_CLASSES = {
+  car: { name: "Armoured car", icon: "🚙", good: "fast; good at chasing vehicles", weak: "light armour; poor against cities" },
+  tank: { name: "Tank", icon: "🛡", good: "tough; an all-rounder", weak: "slow; can barely hit aircraft" },
+  artillery: { name: "Artillery", icon: "🎯", good: "shells cities from long range", weak: "weak against vehicles; can't hit aircraft" },
+  warship: { name: "Warship", icon: "⚓", good: "shells coastal cities from the sea", weak: "can only reach its own ocean" },
+  torpedo: { name: "Torpedo boat", icon: "🐟", good: "sinks other ships fast", weak: "poor against cities; can't hit aircraft" },
+  fighter: { name: "Fighter", icon: "✈", good: "shoots down aircraft", weak: "poor against cities" },
+  bomber: { name: "Bomber", icon: "💣", good: "flattens city defences", weak: "can't fight aircraft" },
+  truck: { name: "Freight truck", icon: "🚚", good: "carries trade by road", weak: "stays on its continent" },
+  freighter: { name: "Transport ship", icon: "🚢", good: "carries trade across its ocean", weak: "needs a coastal city" },
+  cargoPlane: { name: "Transport aircraft", icon: "🛩", good: "carries trade anywhere on the planet", weak: "costs more" },
+  missionVan: { name: "Mission van", icon: "🚐", good: "preaches to cities by road", weak: "stays on its continent" },
+  missionShip: { name: "Mission ship", icon: "⛵", good: "preaches to coastal cities", weak: "needs a coastal city" },
+  airship: { name: "Mission airship", icon: "🎈", good: "preaches anywhere on the planet", weak: "costs more" },
+};
+/** The class of a vehicle design (null if it can't move yet). */
+export function vehicleClass(design, mode = vehicleMode(design)) {
+  if (!mode) return null;
+  const t = partTotals(design);
+  const role = design.role || "military";
+  if (role === "economic") return { land: "truck", sea: "freighter", air: "cargoPlane" }[mode];
+  if (role === "religious") return { land: "missionVan", sea: "missionShip", air: "airship" }[mode];
+  if (mode === "land") return t.siege > 0 ? "artillery" : (t.health || 0) >= 5 || design.parts.some((p) => p.id === "tread") ? "tank" : "car";
+  if (mode === "sea") return t.antiShip > 0 ? "torpedo" : "warship";
+  return t.siege > 0 ? "bomber" : "fighter";
+}
+export const CATEGORIES = { land: "Land", sea: "Sea", air: "Air" };
+
 /** A design's sum of part contributions (mirrored parts count twice). */
 export function partTotals(design) {
   const t = {};
@@ -147,13 +193,15 @@ export function designStats(design) {
     const role = design.role || "military";
     const mode = vehicleMode(design);
     if (!design.parts.some((p) => partOf("vehicle", p.id)?.chassis)) problems.push("Add a chassis: a car body, boat hull or fuselage.");
-    if (!mode) problems.push("Add something to move with: wheels, treads, a propeller, a sail, wings or a jet.");
+    if (!mode) problems.push("Add something to move with: wheels, treads, a propeller, a sail, wings, a rotor or a jet.");
+    else if (design.category && design.category !== mode)
+      problems.push({ land: "This is a land vehicle: give it more wheels or treads than anything else.", sea: "This is a sea vehicle: give it more propellers, sails or pontoons than anything else.", air: "This is an aircraft: give it more wings, jets or rotors than anything else." }[design.category]);
     const power = role === "military" ? t.attack || 0 : role === "economic" ? t.trade || 0 : t.preach || 0;
     if (!(power > 0)) problems.push({ military: "Military vehicles need a weapon.", economic: "Economic vehicles need cargo.", religious: "Religious vehicles need a loudspeaker or chapel." }[role]);
     const mass = Math.max(1, t.mass || 1);
     const drive = (t.speed || 0) * (mode === "air" ? 1.3 : mode === "sea" ? 1.1 : 1);
     const stats = { speed: clamp(1 + (drive / mass) * 5), power: clamp(1 + power * 1.1), health: clamp(1 + (t.health || 0) * 0.9) };
-    return { ok: !problems.length, problems, stats, mode, cost: Math.round(30 + stats.power * 8 + stats.health * 6 + stats.speed * 4 + (mode === "air" ? 40 : mode === "sea" ? 15 : 0)) };
+    return { ok: !problems.length, problems, stats, mode, cls: vehicleClass(design, mode), cost: Math.round(30 + stats.power * 8 + stats.health * 6 + stats.speed * 4 + (mode === "air" ? 40 : mode === "sea" ? 15 : 0) + (t.siege > 0 ? 15 : 0)) };
   }
   // Spaceships.
   if (!design.parts.some((p) => partOf("ship", p.id)?.chassis)) problems.push("Add a hull: a hull, saucer or pod.");

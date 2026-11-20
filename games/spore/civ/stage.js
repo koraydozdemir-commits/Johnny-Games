@@ -18,7 +18,7 @@ import { regionById } from "../creature/regions.js";
 import { getHomeworld } from "../ecolib/homeworld.js";
 import { buildDesignMesh, designMaterials } from "../creations/mesh.js";
 import { validateModular } from "../creations/format.js";
-import { ROLES, STARTER_DESIGNS, designStats, vehicleMode } from "../creations/modular.js";
+import { ROLES, STARTER_DESIGNS, VEHICLE_CLASSES, designStats, vehicleMode } from "../creations/modular.js";
 import { speciesStyle } from "../tribe/life.js";
 import { createVillage } from "../tribe/village.js";
 import { R, angle, arc, createPlanet, frameAt, offsetDir, seedOf, step, towards } from "./planet.js";
@@ -65,6 +65,9 @@ import {
   tradeIncome,
   transferCity,
   vehicleUnit,
+  vehicleTemplates,
+  CLASSES_BY_MODE,
+  hitMult,
 } from "./rules.js";
 
 const TAU = Math.PI * 2;
@@ -73,6 +76,9 @@ const cap = (t) => t[0].toUpperCase() + t.slice(1);
 const hex = (n) => "#" + (n >>> 0).toString(16).padStart(6, "0");
 const MODE_ICON = { land: "🚙", sea: "🚤", air: "✈" };
 const MODE_NAME = { land: "Land", sea: "Sea", air: "Air" };
+/** Most extra vehicle designs you can keep for each role, beside the standard land, sea and air ones. */
+const DESIGNS_PER_ROLE = 6;
+const clsOf = (unit) => VEHICLE_CLASSES[unit.cls] || null;
 const ROLE_ICON = { house: "🏠", factory: "🏭", fun: "🎡", temple: "⛪", turret: "🗼", hall: "🏛" };
 /** The three rival nations: one of each kind, from the three tribes that lived nearest. */
 const NATION_KINDS = ["military", "economic", "religious"];
@@ -179,6 +185,26 @@ export function createCivStage(o) {
       const saved = tryDesign(save?.designs.vehicle[key], "vehicle");
       T.designs.vehicle[key] = saved && saved.role === role && vehicleMode(saved) === mode ? saved : starterVehicle(role, mode, myColors);
     }
+  // Your own extra designs ("military:air:2"): a library of as many as DESIGNS_PER_ROLE per role.
+  for (const [key, raw] of Object.entries(save?.designs.vehicle || {})) {
+    const m = /^(military|economic|religious):(land|sea|air):(\d{1,2})$/.exec(key);
+    const d = m && tryDesign(raw, "vehicle");
+    if (!d || d.role !== m[1] || vehicleMode(d) !== m[2] || customKeys(m[1]).length >= DESIGNS_PER_ROLE) continue;
+    T.designs.vehicle[key] = d;
+  }
+  /** Your vehicle designs for a role: the three standard ones (land, sea, air), then your own. */
+  function designKeys(role) {
+    return Object.keys(T.designs.vehicle)
+      .filter((k) => k.startsWith(role + ":"))
+      .sort((a, b) => (a.split(":").length - b.split(":").length) || ["land", "sea", "air"].indexOf(a.split(":")[1]) - ["land", "sea", "air"].indexOf(b.split(":")[1]) || a.localeCompare(b, "en", { numeric: true }));
+  }
+  function customKeys(role) {
+    return Object.keys(T.designs.vehicle).filter((k) => k.startsWith(role + ":") && k.split(":").length === 3);
+  }
+  function freeKey(role, mode) {
+    for (let i = 1; i < 99; i++) if (!T.designs.vehicle[`${role}:${mode}:${i}`]) return `${role}:${mode}:${i}`;
+    return null;
+  }
   const myStrengths = () => {
     const s = {};
     for (const [role, d] of Object.entries(T.designs.building)) s[role] = designStats(d).stats.strength;
@@ -729,9 +755,10 @@ export function createCivStage(o) {
 
   /* ---- vehicles ------------------------------------------------------------------------------------ */
   const vehicleDesign = (owner, key) => {
-    if (owner === YOU) return T.designs.vehicle[key];
-    const [role, mode] = key.split(":");
-    return starterVehicle(role, mode, nationOf(owner)?.colors);
+    const [role, mode, extra] = key.split(":");
+    if (owner === YOU) return T.designs.vehicle[key] || T.designs.vehicle[role + ":" + mode];
+    // Rival nations build from the ready-made classes ("military:land:artillery").
+    return starterVehicle(role, mode, nationOf(owner)?.colors, extra);
   };
   /** Where a new vehicle appears for a city: boats at its anchorage, others by its gate. */
   function startFor(city, mode) {
@@ -900,7 +927,7 @@ export function createCivStage(o) {
       sent = 0;
     for (const v of list) {
       if (v.dead || v.owner !== YOU) continue;
-      const ok = order.type === "city" ? reachCity(v, order.city) : order.type === "vehicle" ? true : reachable(v, order.d);
+      const ok = order.type === "city" ? reachCity(v, order.city) : order.type === "vehicle" ? hitMult(v.unit, order.target.mode) > 0 : reachable(v, order.d);
       if (!ok) {
         refused++;
         continue;
@@ -909,7 +936,8 @@ export function createCivStage(o) {
       v.route = null;
       sent++;
     }
-    if (refused) toast(sent ? `${refused} of them can't get there: land vehicles stay on their continent, boats on their sea.` : "They can't get there: land vehicles can't cross the sea. Build boats at a coastal city, or aircraft once you have " + AIR_AT + " cities.", 4.5);
+    if (refused && order.type === "vehicle") toast(sent ? `${refused} of them can't fight ${order.target.mode === "air" ? "aircraft" : order.target.mode === "sea" ? "ships" : "land vehicles"}.` : `They can't fight ${order.target.mode === "air" ? "aircraft: build fighters, or add flak guns" : order.target.mode === "sea" ? "ships" : "land vehicles"}.`, 4);
+    else if (refused) toast(sent ? `${refused} of them can't get there: land vehicles stay on their continent, boats on their sea.` : "They can't get there: land vehicles can't cross the sea. Build boats at a coastal city, or aircraft once you have " + AIR_AT + " cities.", 4.5);
     o.sfx("click");
     flash(order.type === "city" ? order.city.d : order.d, order.type === "city" ? 5 : 1);
   }
@@ -1184,7 +1212,7 @@ export function createCivStage(o) {
           { type: "vehicle", target: hit.v, d: hit.v.d },
         );
         declareOn(hit.v.owner, "Your vehicles attacked theirs");
-      } else toast(`A ${CITY_TYPES[hit.v.role].name.toLowerCase()} vehicle of the ${ownerName(hit.v.owner)}.`);
+      } else toast(`${clsOf(hit.v.unit) ? "A " + clsOf(hit.v.unit).name.toLowerCase() : `A ${CITY_TYPES[hit.v.role].name.toLowerCase()} vehicle`} of the ${ownerName(hit.v.owner)}${clsOf(hit.v.unit) ? ": " + clsOf(hit.v.unit).good : ""}.`, 3.5);
       return;
     }
     if (hit.type === "city") {
@@ -1264,7 +1292,7 @@ export function createCivStage(o) {
     let best = null,
       bd = radius;
     for (const u of T.vehicles) {
-      if (u.dead || !hostile(v.owner, u.owner)) continue;
+      if (u.dead || !hostile(v.owner, u.owner) || !hitMult(v.unit, u.mode)) continue;
       const d = arc(v.d, u.d);
       if (d < bd) (best = u), (bd = d);
     }
@@ -1290,7 +1318,7 @@ export function createCivStage(o) {
         const n = nationOf(v.owner);
         if (n && !n.war) return void (v.order = null);
       }
-      const r = damageCity(c, v.unit.dps * dt, cityDefence(c, c.owner === YOU ? strengths : {}));
+      const r = damageCity(c, v.unit.dps * v.unit.vsCity * dt, cityDefence(c, c.owner === YOU ? strengths : {}));
       if ((v.cool -= dt) <= 0) {
         v.cool = 0.5;
         shot(from, to, v.owner === YOU ? "you" : "foe");
@@ -1339,13 +1367,15 @@ export function createCivStage(o) {
     const ord = v.order;
     // Military vehicles fight hostile vehicles that come near, whatever their orders.
     if (v.role === "military") {
-      const foe = ord?.type === "vehicle" && !ord.target.dead ? ord.target : nearestFoeVehicle(v, 16);
+      const chase = ord?.type === "vehicle" && !ord.target.dead && hitMult(v.unit, ord.target.mode) ? ord.target : null;
+      const reach = 10 + v.unit.range * 0.6;
+      const foe = chase || nearestFoeVehicle(v, 6 + reach);
       if (foe) {
         const d = arc(v.d, foe.d);
-        if (d > 10) {
-          if (drive(v, foe.d, dt, 9) === Infinity) v.order = null;
+        if (d > reach) {
+          if (drive(v, foe.d, dt, reach - 1) === Infinity) v.order = null;
         } else {
-          hurtVehicle(foe, v.unit.dps * dt, v.owner);
+          hurtVehicle(foe, v.unit.dps * hitMult(v.unit, foe.mode) * dt, v.owner);
           if ((v.cool -= dt) <= 0) {
             v.cool = 0.45;
             shot(vehiclePos(v, 1.5, _a), vehiclePos(foe, 1.2, _b), v.owner === YOU ? "you" : "foe");
@@ -1360,9 +1390,11 @@ export function createCivStage(o) {
       if (c.owner === v.owner) return void (v.order = null);
       const goal = v.mode === "sea" ? c.anchor : c.d;
       if (!goal) return void (v.order = null);
-      const left = drive(v, goal, dt, RANGE[v.mode] + (v.mode === "sea" ? 0 : 3));
+      // Artillery and warships fight from further out (out of the turrets' reach, for artillery).
+      const reach = RANGE[v.mode] + (v.role === "military" ? v.unit.range : 0);
+      const left = drive(v, goal, dt, reach + (v.mode === "sea" ? 0 : 3));
       if (left === Infinity) return void (v.order = null);
-      const inRange = v.mode === "sea" ? left <= RANGE.sea + 0.5 : left <= RANGE[v.mode] + 3.5;
+      const inRange = v.mode === "sea" ? left <= reach + 0.5 : left <= reach + 3.5;
       if (inRange) actAt(v, c, dt);
       return;
     }
@@ -1429,13 +1461,17 @@ export function createCivStage(o) {
         if (v.dead || v.owner === c.owner) continue;
         const d = arc(v.d, c.d);
         const attacking = v.order?.city === c;
-        const range = attacking ? Math.max(TURRET_RANGE, d + 1) : TURRET_RANGE;
+        // Turrets reach further against attackers. Ships attack from their anchorage, so the guns reach
+        // that far out to sea. Artillery shells from beyond the guns' close range, where they hit less.
+        const close = v.mode === "sea" && c.anchor ? Math.max(TURRET_RANGE + 1, arc(c.anchor, c.d) + RANGE.sea + 5) : TURRET_RANGE + 1;
+        const range = attacking ? close + 10 : TURRET_RANGE;
         if (d > range) continue;
         const atWar = c.owner === null ? v.role === "military" && attacking : hostile(c.owner, v.owner) || (v.role === "military" && attacking);
         if (atWar && d < bd) (target = v), (bd = d);
       }
       if (!target) continue;
-      hurtVehicle(target, def.dps * c.turretHp * dt * 0.6, c.owner);
+      const far = bd > (target.mode === "sea" && c.anchor ? Math.max(TURRET_RANGE + 1, arc(c.anchor, c.d) + RANGE.sea + 5) : TURRET_RANGE + 1);
+      hurtVehicle(target, def.dps * c.turretHp * dt * 0.6 * (far ? 0.35 : 1), c.owner);
       c.shotCool = (c.shotCool || 0) - dt;
       if (c.shotCool <= 0) {
         c.shotCool = 0.6;
@@ -1495,7 +1531,9 @@ export function createCivStage(o) {
         // Overseas targets need boats or aircraft: a nation alone on its continent builds them more.
         const lonely = !T.cities.some((x) => x !== c && x.landmass === c.landmass && x.owner !== n.id);
         const mode = modes.length > 1 && Math.random() < (lonely ? 0.8 : 0.35) ? modes[1 + Math.floor(Math.random() * (modes.length - 1))] : "land";
-        const key = c.type + ":" + mode;
+        // A military nation builds a mix of classes: mostly the main one, some artillery, bombers, torpedo boats.
+        const classes = CLASSES_BY_MODE[mode];
+        const key = c.type + ":" + mode + (c.type === "military" ? ":" + classes[Math.random() < 0.6 ? 0 : 1 + Math.floor(Math.random() * (classes.length - 1))] : "");
         n.money -= vehicleUnit(vehicleDesign(n.id, key)).cost;
         spawnVehicle(n.id, key, c);
       }
@@ -1581,19 +1619,20 @@ export function createCivStage(o) {
         have = vehiclesOf(YOU).length;
       const modes = allowedModes(yourCities().length, c.coastal);
       const role = c.type;
-      const builds = ["land", "sea", "air"]
-        .map((mode) => {
-          const key = role + ":" + mode;
+      const builds = designKeys(role)
+        .map((key) => {
+          const mode = key.split(":")[1];
           const u = vehicleUnit(T.designs.vehicle[key], mods);
           const locked = !modes.includes(mode);
           const why = mode === "sea" && !c.coastal ? "Inland city" : mode === "air" && locked ? `Needs ${AIR_AT} cities` : "";
-          return `<button class="tsTradeBtn" data-vehicle="${mode}" ${dis(locked || have >= cap || T.money < u.cost || !u.ok)}><span>${MODE_ICON[mode]}</span><b>${esc(T.designs.vehicle[key].name)}<small>${why || MODE_NAME[mode]}</small></b><em>§${u.cost}</em></button>`;
+          const k = clsOf(u);
+          return `<button class="tsTradeBtn" data-vehicle="${key}" ${dis(locked || have >= cap || T.money < u.cost || !u.ok)}><span>${k ? k.icon : MODE_ICON[mode]}</span><b>${esc(T.designs.vehicle[key].name)}<small>${why || (k ? k.name : MODE_NAME[mode])}</small></b><em>§${u.cost}</em></button>`;
         })
         .join("");
       return `${head}
         <h5 class="tsKind">Buildings · tap a plot</h5><div class="cvPlots">${plots}</div>${choices}
         <div class="tsBtns cvRow"><button id="cvTurret" ${dis(c.turrets >= MAX_TURRETS || T.money < BUILD_COST.turret)}>🗼 Turret · §${BUILD_COST.turret} (${c.turrets}/${MAX_TURRETS})</button><button id="cvFocus">📍 Look here</button></div>
-        <h5 class="tsKind">${CITY_TYPES[role].icon} ${CITY_TYPES[role].name} vehicles · ${have}/${cap}</h5><div class="tsTrade">${builds}</div>
+        <h5 class="tsKind">${CITY_TYPES[role].icon} ${CITY_TYPES[role].name} vehicles · ${have}/${cap}</h5><div class="tsTrade cvBuilds">${builds}</div>
         <p class="tsHint">${CITY_TYPES[role].desc}${econ.riot ? " <b>This city is rioting:</b> build entertainment, or fewer factories." : ""}</p>`;
     }
     const nat = nationOf(c.owner);
@@ -1632,19 +1671,25 @@ export function createCivStage(o) {
       })
       .join("");
     const owned = new Set(yourCities().map((c) => c.type));
-    const vehicles = TYPE_IDS.map((role) =>
-      ["land", "sea", "air"]
-        .map((mode) => {
-          const key = role + ":" + mode;
-          const u = vehicleUnit(T.designs.vehicle[key], mods);
-          return row("vehicle", key, T.designs.vehicle[key], CITY_TYPES[role].icon + MODE_ICON[mode], `${owned.has(role) ? "" : "(no city of this kind yet) "}speed ${designStats(T.designs.vehicle[key]).stats.speed} · §${u.cost}`);
+    const vehicles = TYPE_IDS.map((role) => {
+      const rows = designKeys(role)
+        .map((key) => {
+          const d = T.designs.vehicle[key];
+          const u = vehicleUnit(d, mods);
+          const k = clsOf(u);
+          const st = designStats(d).stats;
+          const custom = key.split(":").length === 3;
+          return `<div class="cvDesignRow">${row("vehicle", key, d, k ? k.icon : MODE_ICON[u.mode], `${k ? k.name : ""} · speed ${st.speed} · health ${st.health} · ${role === "military" ? "attack" : role === "economic" ? "trade" : "preaching"} ${st.power} · §${u.cost}`)}<div class="cvDesignOps"><button data-copy="${key}" aria-label="Copy ${esc(d.name)}" title="Copy" ${dis(customKeys(role).length >= DESIGNS_PER_ROLE)}>⧉</button>${custom ? `<button data-del="${key}" aria-label="Delete ${esc(d.name)}" title="Delete">🗑</button>` : ""}</div></div>`;
         })
-        .join(""),
-    ).join("");
+        .join("");
+      return `<h5 class="tsKind">${CITY_TYPES[role].icon} ${CITY_TYPES[role].name} vehicles${owned.has(role) ? "" : " · no city of this kind yet"}</h5>
+        <div class="tsTrade cvDesigns cvVehDesigns">${rows}</div>
+        <div class="tsBtns"><button class="good" data-new="${role}" ${dis(customKeys(role).length >= DESIGNS_PER_ROLE)}>＋ New ${CITY_TYPES[role].name.toLowerCase()} design (${customKeys(role).length}/${DESIGNS_PER_ROLE})</button></div>`;
+    }).join("");
     return `<div class="tsHead"><b>🎨 Designs</b><button class="tsClose" aria-label="Close">✕</button></div>
-      <p class="tsHint">Your cities are built from your designs, and your vehicles too. A better design does its job better: more income, stronger turrets, faster or tougher vehicles.</p>
+      <p class="tsHint">Your cities are built from your designs, and your vehicles too. A better design does its job better: more income, stronger turrets, faster or tougher vehicles. What a vehicle carries decides its class: tanks, artillery, warships, torpedo boats, fighters and bombers each fight differently. Every design here can be built at a city of its kind.</p>
       <h5 class="tsKind">Buildings</h5><div class="tsTrade cvDesigns">${buildings}</div>
-      <h5 class="tsKind">Vehicles</h5><div class="tsTrade cvDesigns">${vehicles}</div>`;
+      ${vehicles}`;
   }
   function wonHtml() {
     const card = CIV_CARDS[T.card] || civArchetype(T.captures, T.startType);
@@ -1709,6 +1754,9 @@ export function createCivStage(o) {
     );
     el.querySelectorAll("[data-vehicle]").forEach((b) => (b.onclick = () => (b.getAttribute("aria-disabled") === "true" ? vehicleRefusal(sheet.city, b.dataset.vehicle) : buyVehicle(sheet.city, b.dataset.vehicle))));
     el.querySelectorAll("[data-design]").forEach((b) => (b.onclick = () => editDesign(...b.dataset.design.split("|"))));
+    el.querySelectorAll("[data-new]").forEach((b) => (b.onclick = () => (b.getAttribute("aria-disabled") === "true" ? toast(`You can keep ${DESIGNS_PER_ROLE} designs of your own per kind: delete one first.`) : newDesign(b.dataset.new))));
+    el.querySelectorAll("[data-copy]").forEach((b) => (b.onclick = () => (b.getAttribute("aria-disabled") === "true" ? toast(`You can keep ${DESIGNS_PER_ROLE} designs of your own per kind: delete one first.`) : copyDesign(b.dataset.copy))));
+    el.querySelectorAll("[data-del]").forEach((b) => (b.onclick = () => deleteDesign(b.dataset.del)));
     on("#cvTurret", () => {
       const c = sheet.city;
       T.money -= BUILD_COST.turret;
@@ -1748,16 +1796,17 @@ export function createCivStage(o) {
     on("#cvKeep", closeSheet);
     on("#cvRestart", () => o.onRestart());
   }
-  function vehicleRefusal(c, mode) {
-    const u = vehicleUnit(T.designs.vehicle[c.type + ":" + mode], mods);
+  function vehicleRefusal(c, key) {
+    const mode = key.split(":")[1];
+    const u = vehicleUnit(vehicleDesign(YOU, key), mods);
     if (mode === "sea" && !c.coastal) return toast("This city is inland: only coastal cities build boats.");
     if (mode === "air" && yourCities().length < AIR_AT) return toast(`Aircraft need ${AIR_AT} cities.`);
     if (!u.ok) return toast("That design can't be used: open 🎨 Designs and fix it.");
     if (vehiclesOf(YOU).length >= vehicleCap(YOU)) return toast(`Each city supports ${VEHICLES_PER_CITY} vehicles. Take more cities for more.`);
     toast("Not enough money.");
   }
-  function buyVehicle(c, mode) {
-    const key = c.type + ":" + mode;
+  function buyVehicle(c, key) {
+    if (!T.designs.vehicle[key] || !key.startsWith(c.type + ":")) return;
     const u = vehicleUnit(T.designs.vehicle[key], mods);
     T.money -= u.cost;
     const v = spawnVehicle(YOU, key, c);
@@ -1769,28 +1818,78 @@ export function createCivStage(o) {
   }
   function editDesign(kind, key) {
     const current = kind === "building" ? T.designs.building[key] : T.designs.vehicle[key];
+    if (!current) return;
     const role = kind === "building" ? key : key.split(":")[0];
-    const mode = kind === "vehicle" ? key.split(":")[1] : null;
+    openEditorFor(kind, current, role, (design) => {
+      if (kind === "building") {
+        T.designs.building[role] = design;
+        strengths = myStrengths();
+        yourCities().forEach((c) => buildCity(c));
+        return;
+      }
+      const mode = key.split(":")[1];
+      const actual = vehicleMode(design) || mode;
+      if (actual === mode) {
+        T.designs.vehicle[key] = design;
+        // Vehicles already built keep their health share and take the new design.
+        for (const v of vehiclesOf(YOU).filter((x) => x.key === key)) refitVehicle(v);
+        return;
+      }
+      // It moves another way now: keep it as a new design of that kind, and leave this one as it was.
+      const fresh = freeKey(role, actual);
+      if (!fresh || customKeys(role).length >= DESIGNS_PER_ROLE) return toast(`This design ${actual === "air" ? "flies" : actual === "sea" ? "sails" : "drives"}, but you already keep ${DESIGNS_PER_ROLE} designs of your own: it wasn't saved. Delete one, then try again.`, 5);
+      T.designs.vehicle[fresh] = design;
+      toast(`This design ${actual === "air" ? "flies" : actual === "sea" ? "sails" : "drives"}, so it's saved as a new ${MODE_NAME[actual].toLowerCase()} design.`, 4.5);
+    });
+  }
+  /** A new vehicle design of your own for a role, starting from its standard land design. */
+  function newDesign(role) {
+    if (customKeys(role).length >= DESIGNS_PER_ROLE) return;
+    const start = { ...JSON.parse(JSON.stringify(T.designs.vehicle[role + ":land"])), name: "New " + CITY_TYPES[role].name.toLowerCase() + " vehicle", category: "land" };
+    openEditorFor("vehicle", start, role, (design) => {
+      const mode = vehicleMode(design) || "land";
+      const key = freeKey(role, mode);
+      if (key) T.designs.vehicle[key] = design;
+      toast(`${design.name} saved: build it at any ${CITY_TYPES[role].name.toLowerCase()} city${mode === "sea" ? " on the coast" : mode === "air" ? ` once you have ${AIR_AT} cities` : ""}.`, 4.5);
+    });
+  }
+  function copyDesign(key) {
+    const [role, mode] = key.split(":");
+    const fresh = customKeys(role).length < DESIGNS_PER_ROLE && freeKey(role, mode);
+    if (!fresh) return;
+    const d = JSON.parse(JSON.stringify(T.designs.vehicle[key]));
+    d.name = (d.name + " II").slice(0, 32);
+    T.designs.vehicle[fresh] = d;
+    o.sfx("click");
+    saveState();
+    renderSheet();
+  }
+  function deleteDesign(key) {
+    const parts = key.split(":");
+    if (parts.length !== 3 || !T.designs.vehicle[key]) return;
+    // Vehicles of this design stay in service: they keep their looks until they're rebuilt as the standard design.
+    const base = parts[0] + ":" + parts[1];
+    for (const v of vehiclesOf(YOU).filter((x) => x.key === key)) {
+      v.key = base;
+      refitVehicle(v);
+    }
+    const name = T.designs.vehicle[key].name;
+    delete T.designs.vehicle[key];
+    toast(`${name} deleted. Vehicles built from it were refitted to your standard ${MODE_NAME[parts[1]].toLowerCase()} design.`, 4);
+    saveState();
+    renderSheet();
+  }
+  function openEditorFor(kind, current, role, store) {
     closeSheet();
     paused = true;
     hud.hidden = true;
     o.openEditor(kind, current, {
       roles: [role],
+      templates: kind === "vehicle" ? vehicleTemplates(role, myColors) : undefined,
       onDone: (design) => {
         paused = false;
         hud.hidden = false;
-        if (kind === "building") {
-          T.designs.building[role] = design;
-          strengths = myStrengths();
-          yourCities().forEach(buildCity);
-        } else {
-          const actual = vehicleMode(design) || mode;
-          const newKey = role + ":" + actual;
-          if (actual !== mode) toast(`This design ${actual === "air" ? "flies" : actual === "sea" ? "sails" : "drives"}, so it is now your ${MODE_NAME[actual].toLowerCase()} design.`, 4.5);
-          T.designs.vehicle[newKey] = design;
-          // Vehicles already built keep their health share and take the new design.
-          for (const v of vehiclesOf(YOU).filter((x) => x.key === newKey)) refitVehicle(v);
-        }
+        store(design);
         o.onCreation?.(kind, design);
         saveState();
         openSheet("designs");
@@ -1955,7 +2054,7 @@ export function createCivStage(o) {
       .forEach((b) => (b.onclick = () => openSheet("nation", { nation: nationOf(b.dataset.nation) })));
     const mineV = vehiclesOf(YOU);
     $h("#cvUnits").innerHTML = mineV
-      .map((v) => `<button class="trUnit cvUnit ${T.selected.has(v) ? "sel" : ""} ${v.hp / v.unit.hp < 0.35 ? "low" : ""}" role="listitem" data-veh="${v.id}" aria-label="${CITY_TYPES[v.role].name} ${MODE_NAME[v.mode].toLowerCase()} vehicle${T.selected.has(v) ? ", selected" : ""}" aria-pressed="${T.selected.has(v)}"><span class="noPic">${MODE_ICON[v.mode]}</span><em>${CITY_TYPES[v.role].icon}</em><i><b style="width:${Math.round((v.hp / v.unit.hp) * 100)}%"></b></i></button>`)
+      .map((v) => `<button class="trUnit cvUnit ${T.selected.has(v) ? "sel" : ""} ${v.hp / v.unit.hp < 0.35 ? "low" : ""}" role="listitem" data-veh="${v.id}" aria-label="${esc(clsOf(v.unit)?.name || CITY_TYPES[v.role].name + " " + MODE_NAME[v.mode].toLowerCase() + " vehicle")}${T.selected.has(v) ? ", selected" : ""}" aria-pressed="${T.selected.has(v)}"><span class="noPic">${clsOf(v.unit)?.icon || MODE_ICON[v.mode]}</span><em>${CITY_TYPES[v.role].icon}</em><i><b style="width:${Math.round((v.hp / v.unit.hp) * 100)}%"></b></i></button>`)
       .join("");
     $h("#cvUnits")
       .querySelectorAll("[data-veh]")

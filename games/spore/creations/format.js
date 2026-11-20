@@ -40,6 +40,8 @@ export function validateModular(raw, kind) {
     role: ROLES[kind]?.[raw.role] ? raw.role : Object.keys(ROLES[kind] || {})[0] || null,
     colors: { base: n(raw.colors?.base, 0, 0xffffff, 0xcfd8dc) | 0, accent: n(raw.colors?.accent, 0, 0xffffff, 0x3fa9d6) | 0, trim: n(raw.colors?.trim, 0, 0xffffff, 0x263238) | 0 },
     parts,
+    // Vehicles: the category the player chose in the editor (land, sea or air), if any.
+    ...(kind === "vehicle" && ["land", "sea", "air"].includes(raw.category) ? { category: raw.category } : {}),
   };
 }
 

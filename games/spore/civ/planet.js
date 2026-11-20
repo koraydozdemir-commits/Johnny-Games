@@ -206,6 +206,8 @@ function buildPlanet(seed, o) {
     return 0.4 + c * 26 + inland * inland * ridge ** 3 * 18 * relief + detailN(d) * 0.9 * (0.4 + inland);
   }
   /** Flat ground for city centres, blended into the land around them. */
+  // Cities flatten a radius of 23 (civ/stage.js CITY_FLAT); the fully flat core is the inner 55%.
+  const CORE = 23 * 0.55 + 1.5;
   const flats = [];
   function height(d) {
     let h = rawHeight(d);
@@ -213,6 +215,8 @@ function buildPlanet(seed, o) {
       const a = dot(d, f.d);
       if (a < f.cos) continue;
       const k = 1 - arc(d, f.d) / f.r;
+      // The sea stays sea outside the city's core, so harbours stay open water.
+      if (k < 0.45 && h < 0) continue;
       const s = k >= 0.45 ? 1 : (k / 0.45) ** 2 * (3 - 2 * (k / 0.45));
       h = h + (f.h - h) * s;
     }
@@ -438,7 +442,8 @@ function buildPlanet(seed, o) {
   function describeSite(d, home) {
     const i = nearestNode(d, (k) => land[k]);
     // Boats anchor at the nearest open water within reach of the city.
-    const s = nearestNode(d, (k) => sea[k] && seaC.sizes[seaC.comp[k]] > 40);
+    // (Outside the flat core a city stands on, which fills in any water: see height().)
+    const s = nearestNode(d, (k) => sea[k] && seaC.sizes[seaC.comp[k]] > 40 && arc(dirs[k], d) > CORE);
     const coastal = s >= 0 && arc(dirs[s], d) < 40;
     return { d, home, landmass: landC.comp[i], coastal, anchor: coastal ? dirs[s] : null, ocean: coastal ? seaC.comp[s] : -1 };
   }

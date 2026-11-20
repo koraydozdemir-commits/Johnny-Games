@@ -2410,6 +2410,7 @@ function openDesignEditor(kind, design, opts = {}) {
     kind,
     design: JSON.parse(JSON.stringify(base)),
     roles: opts.roles,
+    templates: opts.templates,
     sfx: (k) => playSfx(k),
     onDone: (d, st) => {
       finish();
