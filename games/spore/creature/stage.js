@@ -2266,7 +2266,7 @@ export function createCreatureStage(o) {
       lie,
       vel: null,
       spin: 0,
-      beats: beatClock({ pick: CUTSCENES.stickThrow.gather, raise: CUTSCENES.stickThrow.pickUp, throw: CUTSCENES.stickThrow.raise, flash: CUTSCENES.stickThrow.flash }),
+      beats: beatClock({ pick: CUTSCENES.stickThrow.gather, raise: CUTSCENES.stickThrow.pickUp, throw: CUTSCENES.stickThrow.throw, untitle: CUTSCENES.stickThrow.throw + 8, fall: CUTSCENES.stickThrow.fall, bonk: CUTSCENES.stickThrow.bonk, laugh: CUTSCENES.stickThrow.bonk + 1.6, shrug: CUTSCENES.stickThrow.shrug, flash: CUTSCENES.stickThrow.flash }),
       frame: openFrame({ kicker: "Creature Stage complete", title: P.record.name, onSkip: () => (cine ? (cine.t = Math.max(cine.t, CUTSCENES.stickThrow.flash)) : null), flash: "#fff3d6" }),
       cam0: camera.position.clone(),
       // Family gather round in a loose half circle facing you.
@@ -2275,14 +2275,55 @@ export function createCreatureStage(o) {
         return { n, x: P.pos.x + Math.cos(a) * (4 + P.scale), z: P.pos.z - Math.sin(a) * (4 + P.scale) };
       }),
     };
+    // The sun's glare, over the picture while the stick hangs in the sky.
+    const glare = document.createElement("div");
+    glare.className = "cfGlare";
+    glare.innerHTML = '<i class="cfSun"></i><i class="cfRay"></i><i class="cfRing r1"></i><i class="cfRing r2"></i><i class="cfRing r3"></i>';
+    cine.frame.el.appendChild(glare);
+    cine.glare = glare;
+    // Two minutes of story: start it in the morning so the sun is high for the glare and it's still
+    // daylight when the stick comes down.
+    world.setTimeOfDay(0.06);
     hud.classList.add("intro");
     o.sfx("growth");
+    o.onFoundingMusic?.();
   }
+  /**
+   * Where the camera is in each shot while the stick hangs in the sky (it cuts between them): looking up
+   * at the stick against the sun, the thrower's upturned face, the family watching, and from high above.
+   */
+  const SHOTS = ["sky", "face", "family", "aerial", "sky", "face"];
+  function stickShot(c, name, t, s, head) {
+    const drift = t * 0.035;
+    const yaw = c.yaw + drift;
+    const fx = Math.cos(P.heading),
+      fz = -Math.sin(P.heading);
+    const pos = new THREE.Vector3(),
+      look = new THREE.Vector3();
+    if (name === "sky") {
+      pos.set(P.pos.x - Math.cos(yaw) * c.dist * 0.6, P.pos.y + 0.6, P.pos.z + Math.sin(yaw) * c.dist * 0.6);
+      look.copy(s.position);
+    } else if (name === "face") {
+      const d = 2.2 + P.scale * 1.6;
+      pos.set(head.x + fx * d - fz * 0.8, head.y - 0.2, head.z + fz * d + fx * 0.8);
+      look.set(head.x, head.y + 0.5, head.z);
+    } else if (name === "family") {
+      const back = P.heading + Math.PI;
+      const d = c.dist * 1.7;
+      pos.set(P.pos.x + Math.cos(back + 0.5 + drift) * d, P.pos.y + 2.2, P.pos.z - Math.sin(back + 0.5 + drift) * d);
+      look.set(P.pos.x, P.pos.y + 3 + P.scale, P.pos.z);
+    } else {
+      // From above the stick, looking down past it at the little family far below.
+      pos.set(s.position.x + Math.cos(yaw) * 3, s.position.y + 7, s.position.z - Math.sin(yaw) * 3);
+      look.set(P.pos.x, P.pos.y, P.pos.z);
+    }
+    return { pos, look };
+  }
+  const shotPos = new THREE.Vector3(),
+    shotLook = new THREE.Vector3();
   function updateStickThrow(dt) {
     const c = cine;
-    // Slow motion at the top of the throw: the moment hangs.
-    const slow = c.t > c.T.throw + 0.6 && c.t < c.T.apex + 0.4 ? 0.45 : 1;
-    c.t += dt * c.k * slow;
+    c.t += dt * c.k;
     const t = c.t,
       T = c.T;
     for (const b of c.beats.crossed(t)) {
@@ -2298,62 +2339,169 @@ export function createCreatureStage(o) {
       }
       if (b === "throw") {
         o.sfx("charge");
-        c.vel = new THREE.Vector3(Math.cos(P.heading) * 1.2, 15, -Math.sin(P.heading) * 1.2);
+        c.release = c.stick.position.clone();
         c.frame.title(true);
         c.ring.forEach(({ n }) => !n.dead && act(n, "dance"));
+      }
+      if (b === "untitle") c.frame.title(false);
+      if (b === "fall") o.sfx("glide");
+      if (b === "bonk") {
+        // The classic ending: it comes straight back down on the thrower's head.
+        o.sfx("damage");
+        o.sfx("land", { pitch: 0.7 });
+        P.body.hit();
+        P.body.setCrouch(0.7);
+        pop(P, "💫", "bad");
+        c.bounce = new THREE.Vector3(Math.cos(P.heading + 1.4) * 2.6, 5.5, -Math.sin(P.heading + 1.4) * 2.6);
+      }
+      if (b === "laugh") c.ring.forEach(({ n }, i) => !n.dead && (act(n, i % 2 ? "dance" : "charm"), i < 2 && pop(n, "❓", "")));
+      if (b === "shrug") {
+        // Dazed, it shakes it off and strikes a proud pose anyway.
+        P.body.setCrouch(0);
+        act(P, "pose");
+        voice(P, "pose");
       }
       if (b === "flash") {
         c.frame.flash(true);
         o.sfx("unlock");
       }
     }
-    // The family gathers.
+    // The family gathers, and watches the stick.
     for (const r of c.ring) {
       if (r.n.dead) continue;
       r.n.pos.x += (r.x - r.n.pos.x) * Math.min(1, dt * 2);
       r.n.pos.z += (r.z - r.n.pos.z) * Math.min(1, dt * 2);
       r.n.heading = Math.atan2(-(P.pos.z - r.n.pos.z), P.pos.x - r.n.pos.x);
       r.n.calm = 5;
+      if (t > T.throw && t < T.bonk) r.n.body?.lookAt?.(c.stick.position);
+      else if (t >= T.bonk) r.n.body?.lookAt?.(null);
     }
-    // The stick: on the ground, in the mouth, held high, then away into the sky.
-    // Held in a hand if it has arms, otherwise in its jaws.
     const hand = P.body.handAnchor?.();
     const mouth = hand ? hand.getWorldPosition(lookTmp) : lookTmp.copy(P.body.mouthLocal).multiplyScalar(P.scale).applyAxisAngle(UP, P.heading).add(P.pos);
+    // The top of its head: just behind and above the mouth.
+    const headLocal = P.body.mouthLocal.clone().multiplyScalar(P.scale);
+    headLocal.x *= 0.7;
+    headLocal.y += 0.45 * P.scale + 0.2;
+    const head = headLocal.applyAxisAngle(UP, P.heading).add(P.pos);
     const s = c.stick;
+    const top = (c.release?.y ?? P.pos.y + 3) + 36 + P.scale * 4;
     if (t < T.raise) {
       const k = ease(span(t, T.gather, T.pickUp));
       s.position.set(mix(c.lie.x, mouth.x, k), mix(heightAt(c.lie.x, c.lie.z) + 0.08, mouth.y + 0.1, k), mix(c.lie.z, mouth.z, k));
       s.rotation.set(0, -P.heading, (Math.PI / 2) * (1 - k * 0.6));
-      // Lifting it overhead.
       const up = ease(span(t, T.pickUp, T.raise));
       s.position.y += up * P.body.height * P.scale * 0.9;
       s.rotation.z = mix(s.rotation.z, 0.15, up);
-    } else if (c.vel) {
-      c.vel.y -= 9 * dt * slow;
-      s.position.addScaledVector(c.vel, dt * slow);
-      c.spin += dt * slow * 7;
+      c.held = s.position.clone();
+    } else if (t < T.throw) {
+      // Held high, a little shake of anticipation.
+      s.position.copy(c.held);
+      s.position.y += Math.sin(t * 9) * 0.04;
+    } else if (t < T.bonk) {
+      const r = c.release || c.held;
+      if (t < T.apex) {
+        // Up, slowing as it climbs.
+        const k = span(t, T.throw, T.apex);
+        s.position.set(r.x, mix(r.y, top, 1 - (1 - k) ** 3), r.z);
+        c.spin += dt * c.k * mix(11, 1.2, k);
+      } else if (t < T.fall) {
+        // Hanging up there, turning slowly against the sun.
+        const k = t - T.apex;
+        s.position.set(r.x + Math.sin(k * 0.21) * 1.2, top + Math.sin(k * 0.13) * 1.5 + 1.5, r.z + Math.cos(k * 0.17) * 1.2 - 1.2);
+        c.spin += dt * c.k * 1.1;
+        c.hang = s.position.clone();
+      } else {
+        // And down, faster and faster, straight onto its head.
+        const k = span(t, T.fall, T.bonk) ** 2.2;
+        const h = c.hang || s.position;
+        s.position.set(mix(h.x, head.x, k), mix(h.y, head.y + 1, k), mix(h.z, head.z, k));
+        c.spin += dt * c.k * 9;
+      }
       s.rotation.set(c.spin, -P.heading, c.spin * 0.7);
+    } else if (c.bounce) {
+      // Off its head and onto the ground beside it.
+      const g = heightAt(s.position.x, s.position.z) + 0.1;
+      c.bounce.y -= 14 * dt;
+      s.position.addScaledVector(c.bounce, dt);
+      c.spin += dt * 8;
+      s.rotation.set(c.spin, -P.heading, c.spin * 0.7);
+      if (s.position.y <= g) {
+        s.position.y = g;
+        s.rotation.set(0, -P.heading + 0.6, Math.PI / 2);
+        c.bounce = null;
+        o.sfx("dig");
+      }
     }
+    // Dazed: a little wobble until it shakes it off.
+    const daze = t > T.bonk && t < T.shrug ? Math.sin(t * 5) * 0.25 * (1 - span(t, T.bonk, T.shrug)) : 0;
     P.body.root.position.copy(P.pos);
-    P.body.root.rotation.y = P.heading;
+    P.body.root.rotation.y = P.heading + daze;
     P.body.update(dt, 0);
     if (t < T.throw) P.body.lookAt(lookTmp.set(s.position.x, s.position.y, s.position.z));
-    else P.body.lookAt(lookTmp.set(s.position.x, s.position.y + 4, s.position.z));
-    // Camera: low and in front, then tilting up after the stick into the sky.
-    const yaw = c.yaw,
-      dist = c.dist * (1 - 0.25 * ease(span(t, T.throw, T.apex))); // closer and lower as it looks up
-    const look = ease(span(t, T.throw, T.apex));
-    tmp.set(P.pos.x - Math.cos(yaw) * dist, P.pos.y + 1.1 - look * 0.5, P.pos.z + Math.sin(yaw) * dist);
-    const settle = ease(span(t, 0, T.gather));
-    camera.position.lerpVectors(c.cam0, tmp, settle);
-    const focusY = mix(P.pos.y + 1.2 * P.scale, s.position.y, look);
-    camera.lookAt(mix(P.pos.x, s.position.x, look * 0.6), focusY, mix(P.pos.z, s.position.z, look * 0.6));
+    else if (t < T.bonk) P.body.lookAt(lookTmp.set(s.position.x, s.position.y + 2, s.position.z));
+    else P.body.lookAt(null);
+    // Camera.
+    const yaw = c.yaw;
+    tmp.set(P.pos.x - Math.cos(yaw) * c.dist, P.pos.y + 1.1, P.pos.z + Math.sin(yaw) * c.dist);
+    const focus = lookTmp.set(P.pos.x, P.pos.y + 1.2 * P.scale, P.pos.z);
+    if (t < T.throw) {
+      // Low and in front while it picks the stick up and raises it.
+      camera.position.lerpVectors(c.cam0, tmp, ease(span(t, 0, T.gather)));
+      camera.lookAt(focus);
+    } else if (t < T.apex) {
+      // Tilting up after the stick.
+      const look = ease(span(t, T.throw, T.throw + 6));
+      const near = tmp.clone();
+      const dist = c.dist * (1 - 0.35 * look);
+      near.set(P.pos.x - Math.cos(yaw) * dist, P.pos.y + 1.1 - look * 0.5, P.pos.z + Math.sin(yaw) * dist);
+      camera.position.copy(near);
+      camera.lookAt(mix(focus.x, s.position.x, look * 0.7), mix(focus.y, s.position.y, look), mix(focus.z, s.position.z, look * 0.7));
+    } else if (t < T.fall) {
+      // Cutting between shots while it hangs, easing over the cut.
+      const len = (T.fall - T.apex) / SHOTS.length;
+      const i = Math.min(SHOTS.length - 1, Math.floor((t - T.apex) / len));
+      const a = stickShot(c, SHOTS[i], t, s, head);
+      const k = i > 0 ? ease(span(t, T.apex + i * len, T.apex + i * len + 1.5)) : ease(span(t, T.apex, T.apex + 3));
+      const b = i > 0 ? stickShot(c, SHOTS[i - 1], t, s, head) : { pos: camera.position.clone(), look: s.position.clone() };
+      shotPos.lerpVectors(b.pos, a.pos, k);
+      shotLook.lerpVectors(b.look, a.look, k);
+      camera.position.copy(shotPos);
+      camera.lookAt(shotLook);
+    } else if (t < T.bonk + 0.3) {
+      // Low, looking up as it comes back down, then down with it onto the head.
+      const sky = stickShot(c, "sky", t, s, head);
+      shotPos.lerpVectors(camera.position, sky.pos, Math.min(1, dt * 3));
+      camera.position.copy(shotPos);
+      const k = ease(span(t, T.fall + 2, T.bonk));
+      camera.lookAt(mix(s.position.x, head.x, k * 0.6), mix(s.position.y, head.y, k * 0.85), mix(s.position.z, head.z, k * 0.6));
+    } else {
+      // The aftermath: a slow push in on the dazed thrower and its family.
+      const k = ease(span(t, T.bonk, T.flash));
+      const d = c.dist * mix(1.15, 0.75, k);
+      camera.position.set(P.pos.x - Math.cos(yaw) * d, P.pos.y + 1.6, P.pos.z + Math.sin(yaw) * d);
+      camera.lookAt(head.x, head.y - 0.2, head.z);
+    }
+    // The glare: where the stick is against the sky (it passes in front of the sun), brightest while it hangs.
+    const g = span(t, T.glare, T.apex + 4) * (1 - span(t, T.glareOut, T.fall + 2));
+    if (c.glare) {
+      lookTmp.copy(s.position).project(camera);
+      const onScreen = lookTmp.z < 1 && Math.abs(lookTmp.x) < 1.2 && Math.abs(lookTmp.y) < 1.2;
+      const gx = onScreen ? (lookTmp.x * 0.5 + 0.5) * 100 : 50,
+        gy = onScreen ? (-lookTmp.y * 0.5 + 0.5) * 100 - 6 : -8;
+      c.glare.style.opacity = (g * (onScreen ? 1 : 0.45) * (0.92 + 0.08 * Math.sin(t * 2.3))).toFixed(3);
+      c.glare.style.setProperty("--gx", gx + "%");
+      c.glare.style.setProperty("--gy", gy + "%");
+      // Flare rings run from the sun through the middle of the picture.
+      c.glare.style.setProperty("--fx", 50 - gx + "%");
+      c.glare.style.setProperty("--fy", 50 - gy + "%");
+    }
     if (t >= T.end) finishStickThrow();
   }
   function finishStickThrow() {
     const c = cine;
     if (!c) return;
     scene.remove(c.stick);
+    c.glare?.remove();
     o.onChronicle?.({ key: "creature:tribe", stage: "creature", icon: "🔥", text: "Picked up a stick and threw it high: the first step towards a tribe." });
     cine = null;
     tribeReady = false;

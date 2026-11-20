@@ -146,13 +146,13 @@ test("save slots park and restore a whole game without touching settings", () =>
 
 test("settings load with safe defaults and survive bad data", () => {
   const s = fakeStore();
-  assert.deepEqual(loadSettings(s), { sfx: 0.85, ambience: 0.7, reducedMotion: false });
+  assert.deepEqual(loadSettings(s), { sfx: 0.85, ambience: 0.7, music: 0.55, reducedMotion: false });
   s.setItem("johnny-spore-settings", "{not json");
   assert.equal(loadSettings(s).sfx, 0.85);
-  saveSettings(s, { sfx: 0.2, ambience: 0, reducedMotion: true });
-  assert.deepEqual(loadSettings(s), { sfx: 0.2, ambience: 0, reducedMotion: true });
+  saveSettings(s, { sfx: 0.2, ambience: 0, music: 0.3, reducedMotion: true });
+  assert.deepEqual(loadSettings(s), { sfx: 0.2, ambience: 0, music: 0.3, reducedMotion: true });
   s.setItem("johnny-spore-settings", JSON.stringify({ sfx: 7, ambience: "loud" }));
-  assert.deepEqual(loadSettings(s), { sfx: 1, ambience: 0.7, reducedMotion: false });
+  assert.deepEqual(loadSettings(s), { sfx: 1, ambience: 0.7, music: 0.55, reducedMotion: false });
 });
 
 test("timeAgo reads naturally", () => {

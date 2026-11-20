@@ -3,6 +3,8 @@
  * unit tested. The campaign's rivals, economy and diplomacy live in campaign.js.
  */
 
+import { JOB_IDS, readLife } from "./life.js";
+
 export const TRIBE_SAVE_KEY = "johnny-spore-tribe-stage";
 
 export const START_FOOD = 15;
@@ -88,7 +90,7 @@ export function readTribeSave(raw) {
   }
   if (!d || typeof d !== "object" || !Array.isArray(d.units)) return null;
   const tool = (t) => (TOOLS[t] ? t : null);
-  const units = d.units.slice(0, 30).map((u) => ({ tool: tool(u?.tool), chief: !!u?.chief, from: Number.isInteger(u?.from) && u.from >= 0 && u.from < 5 ? u.from : -1, role: u?.role === "gather" || u?.role === "guard" ? u.role : "free" }));
+  const units = d.units.slice(0, 30).map((u) => ({ tool: tool(u?.tool), chief: !!u?.chief, from: Number.isInteger(u?.from) && u.from >= 0 && u.from < 5 ? u.from : -1, role: JOB_IDS.includes(u?.role) ? u.role : "free" }));
   if (!units.some((u) => u.chief)) units.unshift({ tool: null, chief: true, from: -1 });
   const shacks = {};
   if (d.shacks && typeof d.shacks === "object")
@@ -115,9 +117,11 @@ export function readTribeSave(raw) {
     time: num(d.time, 0, 1e7, 0),
     // Dwellings and decorations (v2.1): where each stands.
     structures: (Array.isArray(d.structures) ? d.structures : [])
-      .filter((st) => st && ["house", "totem", "banner", "flowers"].includes(st.id) && Number.isFinite(Number(st.x)) && Number.isFinite(Number(st.z)))
-      .slice(0, 12)
+      .filter((st) => st && ["house", "totem", "banner", "flowers", "lookout", "garden", "dance"].includes(st.id) && Number.isFinite(Number(st.x)) && Number.isFinite(Number(st.z)))
+      .slice(0, 16)
       .map((st) => ({ id: st.id, x: num(st.x, -300, 300, 0), z: num(st.z, -300, 300, 0) })),
+    // Tribes and Tribulations: food priority, the tribe's lived history, and its self-built village.
+    ...readLife(d),
     region: typeof d.region === "string" && /^[a-z]{2,16}$/.test(d.region) ? d.region : null,
     tribes: (Array.isArray(d.tribes) ? d.tribes : []).slice(0, 5).map((t) => ({
       relation: clampRelation(Number(t?.relation) || 0),

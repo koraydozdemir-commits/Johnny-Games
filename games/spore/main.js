@@ -2211,6 +2211,8 @@ function startCreatureStage(resume = false, intro = false) {
     isTouch: isTouchUI,
     onMate: (d) => openCreatureEditorFor({ ...d, mated: true }, false),
     onCourtship: (active) => audio.setMusic(active ? "mating" : creatureAtNest ? "nest" : "creature"),
+    // The stick throw is timed to "Founding A Tribe", which plays on into the Tribal Stage.
+    onFoundingMusic: () => audio.setMusic("founding", { now: true }),
     onNestProximity: (near) => {
       creatureAtNest = near;
       if (!creatureEditor) audio.setMusic(near ? "nest" : "creature");
@@ -2455,6 +2457,8 @@ function startTribeStage(fallbackRecord = null, opts = {}) {
     sfx: playSfx,
     onSettings: openGameSettings,
     onSaved: () => markSaved(localStorage),
+    // The soundtrack turns to war while raiders are at the village.
+    onDanger: (on) => tribeStage !== null && audio.setMusic(on ? "tribeWar" : "tribe"),
     portrait: (rec) => creatureSnapshot(rec, { width: 96, height: 96 }),
     intro: opts.cinematic ? "campfire" : null,
     frame: opts.frame || null,
@@ -6299,6 +6303,7 @@ document.querySelectorAll("#uvLinks [data-open]").forEach((b) => (b.onclick = ()
 initUniverse().then(openStartScreen);
 if (new URLSearchParams(location.search).has("debug")) {
   window.__spore = {
+    audio,
     get universe() {
       return universe;
     },
