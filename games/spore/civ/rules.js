@@ -350,8 +350,12 @@ export const relationWord = (r, war) => (war ? "At war" : r >= DIPLO.allyAt ? "A
 
 /**
  * What a rival nation does next. Called now and then for each living nation.
- * @param {{ type:string, relation:number, war:boolean, money:number, vehicles:number, cap:number }} n
- * @param {{ yourCities:number, freeCities:number, grace?:boolean, rand?:()=>number }} ctx  grace: early on, nobody comes for your cities
+ * @param {{ type:string, relation:number, war:boolean, money:number, vehicles:number, cap:number,
+ *   personality?:string, warAt?:number, allied?:boolean, cowed?:boolean, preachYou?:boolean }} n
+ *   warAt: the relation below which it goes to war (its leader's personality); allied: never attacks you;
+ *   cowed: you threatened it and it backed down; preachYou: its leader means to convert you.
+ * @param {{ yourCities:number, freeCities:number, grace?:boolean, power?:number, yourPower?:number, rand?:()=>number }} ctx
+ *   grace: early on, nobody comes for your cities; power/yourPower: military strength on each side
  * @returns {{ build:boolean, declareWar:boolean, target:"you"|"free"|null }}
  */
 export function nationPlan(n, ctx) {
@@ -359,14 +363,18 @@ export function nationPlan(n, ctx) {
   const vehicleCost = 110;
   const build = n.vehicles < n.cap && n.money >= vehicleCost;
   let declareWar = false;
-  if (!n.war && n.type === "military" && n.relation < -45 && rand() < 0.35) declareWar = true;
-  if (ctx.grace) declareWar = false;
+  const warlike = n.type === "military" || n.personality === "aggressive";
+  if (!n.war && warlike && n.relation < (n.warAt ?? -45) && rand() < 0.35) declareWar = true;
+  // A cautious leader only starts a war it expects to win.
+  if (n.personality === "cautious" && (ctx.power ?? 1) < (ctx.yourPower ?? 0) * 1.2) declareWar = false;
+  if (ctx.grace || n.allied || n.cowed) declareWar = false;
   const war = n.war || declareWar;
-  const yours = ctx.grace ? 0 : ctx.yourCities;
+  const yours = ctx.grace || n.allied || (n.cowed && !war) ? 0 : ctx.yourCities;
   let target = null;
   if (n.type === "military") target = war && yours ? "you" : ctx.freeCities ? "free" : null;
-  // Trading is welcome even early on.
+  // Trading is welcome even early on (and with allies).
   else if (n.type === "economic") target = ctx.yourCities && n.relation > -40 && rand() < 0.6 ? "you" : ctx.freeCities ? "free" : ctx.yourCities ? "you" : null;
+  else if (n.preachYou && yours) target = "you";
   else target = yours && n.relation < 0 && rand() < 0.6 ? "you" : ctx.freeCities ? "free" : yours && n.relation < 0 ? "you" : null;
   return { build, declareWar, target };
 }
@@ -443,6 +451,17 @@ export function readCivSave(raw) {
     money: num(n?.money, 0, 1e6, 100),
     spice: num(n?.spice, 0, 1e6, 0),
     alive: n?.alive !== false,
+    // Diplomacy (saves from before leaders had none: the nations are met afresh).
+    personality: ["aggressive", "friendly", "greedy", "religious", "cautious"].includes(n?.personality) ? n.personality : null,
+    met: !!n?.met,
+    allied: !!n?.allied && !n?.war,
+    pact: !!n?.pact && !n?.war,
+    cowedUntil: num(n?.cowedUntil, 0, 1e7, 0),
+    preachUntil: num(n?.preachUntil, 0, 1e7, 0),
+    log: (Array.isArray(n?.log) ? n.log : [])
+      .slice(-12)
+      .filter((l) => l && typeof l.text === "string")
+      .map((l) => ({ t: num(l.t, 0, 1e7, 0), who: l.who === "you" ? "you" : "them", text: l.text.slice(0, 200), summary: typeof l.summary === "string" ? l.summary.slice(0, 160) : "" })),
   }));
   const ids = nations.map((n) => n.id);
   const cities = d.cities.slice(0, 16).map((c, i) => ({
@@ -460,10 +479,20 @@ export function readCivSave(raw) {
     queue: (Array.isArray(c?.queue) ? c.queue : []).slice(0, QUEUE_MAX).filter((q) => typeof q?.key === "string" && /^(military|economic|religious):(land|sea|air)(:\w{1,12})?$/.test(q.key)).map((q) => ({ key: q.key, done: num(q.done, 0, 1, 0), money: num(q.money, 0, 1e5, 0), spice: num(q.spice, 0, 1e5, 0) })),
   }));
   if (!cities.some((c) => c.owner === YOU)) return null;
+  // Relations between rival nations, by pair of ids.
+  const pairs = {};
+  for (const [k, p] of Object.entries(d.pairs && typeof d.pairs === "object" ? d.pairs : {})) {
+    const [a, b] = k.split("|");
+    if (!ids.includes(a) || !ids.includes(b) || a >= b) continue;
+    pairs[k] = { rel: clampRel(num(p?.rel, -100, 100, 0)), war: !!p?.war, allied: !!p?.allied && !p?.war, pact: !!p?.pact && !p?.war, warFor: num(p?.warFor, 0, 1e7, 0) };
+  }
+  const news = (Array.isArray(d.news) ? d.news : []).slice(-20).filter((x) => typeof x?.text === "string").map((x) => ({ t: num(x.t, 0, 1e7, 0), text: x.text.slice(0, 200) }));
   const designs = d.designs && typeof d.designs === "object" ? d.designs : {};
   return {
     v: CIV_VERSION,
     // The planet: saves from before the planet (version 1) have no seed and get the homeworld's planet.
+    pairs,
+    news,
     seed: Number.isInteger(d.seed) && d.seed > 0 && d.seed < 2 ** 32 ? d.seed : null,
     clock: Number.isFinite(d.clock) ? num(d.clock, 0, 1e7, 0) : null,
     money: num(d.money, 0, 1e7, START_MONEY),
