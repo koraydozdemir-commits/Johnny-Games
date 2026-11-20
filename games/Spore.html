@@ -626,13 +626,11 @@ html body.cutscene .moveStick,html body.cutscene .mobileControls{display:none!im
 .cineFrame .cfRing.r1{left:calc(var(--gx) + var(--fx) * .7);top:calc(var(--gy) + var(--fy) * .7);width:46px;height:46px}
 .cineFrame .cfRing.r2{left:calc(var(--gx) + var(--fx) * 1.3);top:calc(var(--gy) + var(--fy) * 1.3);width:110px;height:110px;border-color:#b8e4ff40}
 .cineFrame .cfRing.r3{left:calc(var(--gx) + var(--fx) * 1.8);top:calc(var(--gy) + var(--fy) * 1.8);width:26px;height:26px;background:#ffcf8a44}
-.cineFrame .cfBar{z-index:1}.cineFrame .cfTitle,.cineFrame .cfSkip{z-index:2}
+.cineFrame .cfBar{z-index:1}.cineFrame .cfTitle{z-index:2}
 .cineFrame .cfTitle{position:absolute;left:0;right:0;bottom:calc(11vh + 4vh);text-align:center;opacity:0;transform:translateY(12px);transition:opacity 1s,transform 1s;text-shadow:0 3px 20px #000b}
 .cineFrame.titled .cfTitle{opacity:1;transform:none}
 .cineFrame .cfTitle small{display:block;font-size:12px;letter-spacing:.45em;text-transform:uppercase;color:#ffe6a8}
 .cineFrame .cfTitle b{display:block;font-size:clamp(30px,7vw,58px);font-weight:900;margin-top:4px}
-.cineFrame .cfSkip{pointer-events:auto;position:absolute;right:14px;bottom:calc(11vh + 12px);min-height:40px;border:1px solid #ffffff44;background:#0007;color:#fff;border-radius:18px;padding:8px 14px;font:inherit;font-size:13px;cursor:pointer;opacity:0;transition:opacity .6s .6s}
-.cineFrame.show .cfSkip{opacity:1}
 .tribeHUD.cine{visibility:hidden}
 .creatureHUD .chMate.final{background:linear-gradient(#ffd27a,#f0a23a);color:#2a1500;box-shadow:0 0 0 3px #fff6,0 0 22px 6px #ffb44a99;animation:chBlink 1.4s infinite}
 /* Brain growth: Spore's bubble beside the head, a dotted line to it, the brain inside */
