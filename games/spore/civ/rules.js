@@ -479,10 +479,20 @@ export function readCivSave(raw) {
     queue: (Array.isArray(c?.queue) ? c.queue : []).slice(0, QUEUE_MAX).filter((q) => typeof q?.key === "string" && /^(military|economic|religious):(land|sea|air)(:\w{1,12})?$/.test(q.key)).map((q) => ({ key: q.key, done: num(q.done, 0, 1, 0), money: num(q.money, 0, 1e5, 0), spice: num(q.spice, 0, 1e5, 0) })),
   }));
   if (!cities.some((c) => c.owner === YOU)) return null;
+  // Relations between rival nations, by pair of ids.
+  const pairs = {};
+  for (const [k, p] of Object.entries(d.pairs && typeof d.pairs === "object" ? d.pairs : {})) {
+    const [a, b] = k.split("|");
+    if (!ids.includes(a) || !ids.includes(b) || a >= b) continue;
+    pairs[k] = { rel: clampRel(num(p?.rel, -100, 100, 0)), war: !!p?.war, allied: !!p?.allied && !p?.war, pact: !!p?.pact && !p?.war, warFor: num(p?.warFor, 0, 1e7, 0) };
+  }
+  const news = (Array.isArray(d.news) ? d.news : []).slice(-20).filter((x) => typeof x?.text === "string").map((x) => ({ t: num(x.t, 0, 1e7, 0), text: x.text.slice(0, 200) }));
   const designs = d.designs && typeof d.designs === "object" ? d.designs : {};
   return {
     v: CIV_VERSION,
     // The planet: saves from before the planet (version 1) have no seed and get the homeworld's planet.
+    pairs,
+    news,
     seed: Number.isInteger(d.seed) && d.seed > 0 && d.seed < 2 ** 32 ? d.seed : null,
     clock: Number.isFinite(d.clock) ? num(d.clock, 0, 1e7, 0) : null,
     money: num(d.money, 0, 1e7, START_MONEY),

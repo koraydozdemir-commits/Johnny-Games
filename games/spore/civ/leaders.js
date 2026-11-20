@@ -345,3 +345,65 @@ export function leaderName(rand) {
   const pick = (l) => l[Math.floor(rand() * l.length) % l.length];
   return pick(a) + pick(b) + (rand() < 0.35 ? " " + pick(a) + pick(b).slice(0, 2) : "");
 }
+
+/* ---- rivals among themselves -------------------------------------------------------------------- */
+/**
+ * Rival nations have relations with each other too, kept per pair. Relations drift toward a resting
+ * point (their personalities, neighbourhood, agreements, a common enemy or a common threat), and now and
+ * then a pair goes to war, makes peace, allies or signs a trade agreement. The stage carries it out.
+ */
+export const pairKey = (a, b) => (a < b ? a + "|" + b : b + "|" + a);
+/**
+ * Where a pair's relations settle.
+ * @param {{personality:string}} A @param {{personality:string}} B
+ * @param {{ pact?:boolean, allied?:boolean, neighbours?:boolean, commonEnemy?:boolean, commonThreat?:boolean, fear?:boolean, trading?:boolean }} ctx
+ *   commonThreat: a third nation dominates the planet; fear: one of this pair is that nation
+ */
+export function pairRest(A, B, ctx = {}) {
+  const pa = PERSONALITIES[A.personality] || PERSONALITIES.cautious,
+    pb = PERSONALITIES[B.personality] || PERSONALITIES.cautious;
+  let r = (pa.rest + pb.rest) / 2;
+  if (ctx.neighbours) r -= 12; // sharing a continent means rubbing up against each other
+  if (ctx.pact) r += 8;
+  if (ctx.allied) r += 12;
+  if (ctx.trading) r += 5;
+  if (ctx.commonEnemy) r += 15;
+  if (ctx.commonThreat) r += 15; // a rising power drives the rest together…
+  if (ctx.fear) r -= 20; // …and turns them against it
+  return Math.max(-90, Math.min(90, r));
+}
+/**
+ * What a pair of rivals does next, if anything.
+ * @param {{personality:string, type:string, power:number}} A @param {{personality:string, type:string, power:number}} B
+ * @param {{rel:number, war:boolean, allied:boolean, pact:boolean, warFor?:number}} pair
+ * @param {{ commonThreat?:boolean }} [ctx]
+ * @returns {null | { kind:"war"|"peace"|"ally"|"pact"|"break", by:"A"|"B" }}
+ */
+export function pairDecision(A, B, pair, ctx = {}, rand = Math.random) {
+  const P = (x) => PERSONALITIES[x.personality] || PERSONALITIES.cautious;
+  const warlike = (x) => x.type === "military" || x.personality === "aggressive";
+  if (pair.allied && pair.rel < 10) return { kind: "break", by: pair.rel < 0 ? "A" : "B" };
+  if (pair.war) {
+    // Wars end when one side is losing badly, or when tempers have cooled.
+    const weaker = A.power < B.power ? "A" : "B";
+    const ratio = Math.min(A.power, B.power) / Math.max(1, Math.max(A.power, B.power));
+    if ((pair.warFor || 0) > 90 && (ratio < 0.6 || pair.rel > -35) && rand() < 0.3) return { kind: "peace", by: weaker };
+    return null;
+  }
+  // War: started by the more warlike side, if relations are bad enough for it (and, if cautious, it would win).
+  for (const [x, y, by] of [
+    [A, B, "A"],
+    [B, A, "B"],
+  ]) {
+    if (pair.allied || !warlike(x) || pair.rel >= P(x).warAt) continue;
+    if (x.personality === "cautious" && x.power < y.power * 1.2) continue;
+    if (ctx.commonThreat) continue; // not while a bigger danger looms
+    if (rand() < 0.3) return { kind: "war", by };
+  }
+  const allyAt = Math.max(P(A).allyAt, P(B).allyAt) - (ctx.commonThreat ? 25 : 0);
+  if (!pair.allied && pair.rel >= allyAt && rand() < 0.3) return { kind: "ally", by: "A" };
+  if (!pair.pact && pair.rel >= Math.max(P(A).pactAt, P(B).pactAt) && rand() < 0.3) return { kind: "pact", by: "A" };
+  return null;
+}
+/** The share of the planet's cities above which a nation is a threat everyone else unites against. */
+export const DOMINANT_SHARE = 0.4;

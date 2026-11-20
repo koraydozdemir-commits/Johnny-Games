@@ -99,3 +99,28 @@ test("personalities change what nations do, not just what they say", () => {
   // A devout leader who means to convert you sends its missionaries your way.
   assert.equal(nationPlan({ ...base, type: "religious", relation: 20, personality: "religious", preachYou: true }, { ...world, rand: never }).target, "you");
 });
+
+test("rivals among themselves: neighbours bicker, common enemies and threats unite, the warlike start wars", async () => {
+  const { pairRest, pairDecision, pairKey } = await import("../civ/leaders.js");
+  const A = { personality: "aggressive", type: "military", power: 20 },
+    B = { personality: "greedy", type: "economic", power: 10 },
+    C = { personality: "cautious", type: "military", power: 10 };
+  assert.equal(pairKey("n2", "n0"), "n0|n2");
+  assert.ok(pairRest(A, B, { neighbours: true }) < pairRest(A, B));
+  assert.ok(pairRest(A, B, { commonEnemy: true }) > pairRest(A, B));
+  assert.ok(pairRest(A, B, { commonThreat: true }) > pairRest(A, B));
+  assert.ok(pairRest(A, B, { fear: true }) < pairRest(A, B));
+  // War: the aggressive side starts it when relations are bad; never between allies or under a common threat.
+  assert.deepEqual(pairDecision(A, B, { rel: -40, war: false, allied: false, pact: false }, {}, always), { kind: "war", by: "A" });
+  assert.equal(pairDecision(A, B, { rel: -40, war: false, allied: false, pact: false }, { commonThreat: true }, always)?.kind === "war", false);
+  assert.equal(pairDecision(A, B, { rel: -40, war: false, allied: true, pact: false }, {}, always)?.kind, "break", "a soured alliance breaks first");
+  // A cautious nation doesn't start a war it would lose.
+  assert.equal(pairDecision(C, A, { rel: -90, war: false, allied: false, pact: false }, {}, always).by, "B", "the aggressive side starts it, not the outgunned cautious one");
+  assert.equal(pairDecision(C, { ...B, power: 1 }, { rel: -90, war: false, allied: false, pact: false }, {}, always).by, "A", "but a cautious nation picks on the weak");
+  // Peace when one side is losing badly after a while.
+  assert.equal(pairDecision(A, { ...B, power: 2 }, { rel: -80, war: true, warFor: 120 }, {}, always).kind, "peace");
+  assert.equal(pairDecision(A, B, { rel: -80, war: true, warFor: 10 }, {}, always), null, "not straight away");
+  // Alliances form sooner against a common threat.
+  assert.equal(pairDecision(B, C, { rel: 30, war: false, allied: false, pact: true }, {}, always), null);
+  assert.equal(pairDecision(B, C, { rel: 30, war: false, allied: false, pact: true }, { commonThreat: true }, always).kind, "ally");
+});
