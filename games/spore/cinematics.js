@@ -46,9 +46,12 @@ export function beatClock(beats) {
  * an animation it can't finish, and Skip always works.
  */
 export const CUTSCENES = {
-  // Creature → Tribal: the stick picked up, raised and thrown high; it falls into the tribe's fire.
-  stickThrow: { gather: 1.4, pickUp: 2.3, raise: 3.3, throw: 3.5, apex: 4.9, flash: 6.0, end: 6.8 },
-  campfire: { land: 1.7, gathered: 4.6, end: 6.4 },
+  // Creature → Tribal, timed to "Founding A Tribe" (134 s across both scenes): the stick picked up,
+  // raised and thrown high; it hangs against the sun's glare while the family looks on; then it falls
+  // straight back down on the thrower's head. White-out; in the Tribal Stage a stick falls into the
+  // tribe's first fire.
+  stickThrow: { gather: 6, pickUp: 11, raise: 16, throw: 19, glare: 25, apex: 33, glareOut: 92, fall: 98, bonk: 104, shrug: 110, flash: 117, end: 120 },
+  campfire: { land: 2.4, gathered: 9, end: 13 },
   // Tribal → Civilization: night falls on the village; it rises in stone; dawn over a city.
   civRise: { gather: 1.0, rise: 1.8, risen: 5.2, crane: 5.4, dawn: 6.6, flash: 7.6, end: 8.2 },
   civArrive: { end: 3.6 },

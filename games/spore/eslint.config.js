@@ -9,7 +9,7 @@ export default [
         requestAnimationFrame: "readonly", cancelAnimationFrame: "readonly", setTimeout: "readonly", clearTimeout: "readonly",
         setInterval: "readonly", clearInterval: "readonly", innerWidth: "readonly", innerHeight: "readonly", devicePixelRatio: "readonly",
         matchMedia: "readonly", performance: "readonly", console: "readonly", URL: "readonly", URLSearchParams: "readonly", Blob: "readonly",
-        AudioContext: "readonly", webkitAudioContext: "readonly", Image: "readonly", Uint8Array: "readonly", Float32Array: "readonly",
+        Audio: "readonly", btoa: "readonly", DataView: "readonly", AudioContext: "readonly", webkitAudioContext: "readonly", Image: "readonly", Uint8Array: "readonly", Float32Array: "readonly",
       },
     },
     rules: {

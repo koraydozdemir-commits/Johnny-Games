@@ -171,6 +171,6 @@ test("village structures, decorations and roles", async () => {
   assert.equal(spiritHeal(0), 1);
   assert.ok(spiritHeal(3) > spiritHeal(1));
   assert.equal(spiritHeal(20), spiritHeal(6), "capped");
-  assert.deepEqual(Object.keys(ROLES), ["free", "gather", "guard"]);
+  assert.deepEqual(Object.keys(ROLES).slice(0, 1).concat(["gather", "guard"].filter((r) => ROLES[r])), ["free", "gather", "guard"], "older saves' roles still exist");
   assert.ok(TOOLS.club.cost < TOOLS.axe.cost && DAMAGE.club > DAMAGE.none && DAMAGE.club < DAMAGE.axe, "clubs: the cheap first weapon");
 });

@@ -24,8 +24,18 @@ const GLYPHS = {
     ["✦", "#fff3a8"],
     ["★", "#ffd25e"],
   ],
+  // Village life (Tribal Stage): chatter, sleep, alarm, worry, a meal.
+  talk: [
+    ["…", "#ffffff"],
+    ["!", "#ffe27a"],
+    ["?", "#9ff0ff"],
+  ],
+  sleep: [["z", "#cfe0ff"]],
+  alarm: [["!", "#ff6a5a"]],
+  worry: [["~", "#c9b8ff"]],
+  eat: [["✦", "#ffcf8a"]],
 };
-const COUNT = { sing: 5, dance: 5, charm: 4, pose: 6 };
+const COUNT = { sing: 5, dance: 5, charm: 4, pose: 6, talk: 1, sleep: 1, alarm: 1, worry: 1, eat: 1 };
 
 /** One texture per glyph and colour, drawn once. */
 const textures = new Map();
@@ -61,7 +71,7 @@ export function createEmotes(scene) {
   function spawn(q) {
     const at = q.where();
     if (!at) return;
-    const [glyph, color] = q.set[q.i % q.set.length];
+    const [glyph, color] = q.set[(q.kind === "talk" ? Math.floor(Math.random() * 3) : q.i) % q.set.length];
     const mat = new THREE.SpriteMaterial({ map: glyphTexture(glyph, color), transparent: true, depthWrite: false });
     const sp = new THREE.Sprite(mat);
     const side = (q.i % 2 ? 1 : -1) * (0.25 + Math.random() * 0.5) * q.size;

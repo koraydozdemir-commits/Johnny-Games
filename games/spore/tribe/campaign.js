@@ -4,6 +4,7 @@
  * tuned in one place.
  */
 import { GIFT, SOCIAL_GAIN, SOCIAL_MISS, TOOLS, TOOL_IDS, clampRelation } from "./rules.js";
+import { JOBS } from "./life.js";
 
 /**
  * The five rivals. Each one wants something different, which makes each one a different problem:
@@ -130,6 +131,9 @@ export const STRUCTURES = {
   totem: { name: "Totem pole", icon: "🗿", cost: [15, 25], max: 2, decor: true, desc: "Carved ancestors watch over the village." },
   banner: { name: "Tribe banner", icon: "🚩", cost: [10, 15], max: 2, decor: true, desc: "Your colours, flying high." },
   flowers: { name: "Flower bed", icon: "🌼", cost: [8, 10, 12], max: 3, decor: true, desc: "Bright blooms by the paths." },
+  lookout: { name: "Lookout", icon: "🗼", cost: [25, 35], max: 2, desc: "Defenders keep watch from it and spot raiders sooner." },
+  garden: { name: "Garden", icon: "🌱", cost: [18, 26], max: 2, desc: "A tended patch: foragers harvest it again and again." },
+  dance: { name: "Dancing ground", icon: "🥁", cost: [20], max: 1, decor: true, desc: "A ring of drums where the tribe celebrates." },
 };
 export const STRUCTURE_IDS = Object.keys(STRUCTURES);
 /** What the next one of a structure costs, or null at the limit. */
@@ -137,12 +141,8 @@ export const structureCost = (id, built) => (built >= STRUCTURES[id].max ? null 
 /** Healing at home: +15% per decoration, up to +90%. */
 export const spiritHeal = (decorations) => 1 + 0.15 * Math.min(6, Math.max(0, decorations));
 
-/** Jobs a member can be given. Gatherers fetch food on their own when idle; guards hold the village. */
-export const ROLES = {
-  free: { name: "Free", icon: "·", desc: "Waits for your orders." },
-  gather: { name: "Gatherer", icon: "🧺", desc: "Fetches food on their own whenever idle." },
-  guard: { name: "Guard", icon: "🛡", desc: "Stays by the fire and fights anything that comes near the village." },
-};
+/** Jobs a member can be given (see life.js): kept here under their old name for the HUD and tests. */
+export const ROLES = JOBS;
 
 /** Equipment: every shack starts at tier 1 and can be upgraded once. */
 export const TIER_NAMES = ["", "Stone", "Bronze"];

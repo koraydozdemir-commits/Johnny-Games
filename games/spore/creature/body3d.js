@@ -109,7 +109,7 @@ function orient(obj, outward, fallbackUp) {
 }
 
 /** How long each move's animation lasts, in seconds. Social moves are little performances. */
-export const ABILITY_TIME = { bite: 0.6, strike: 0.6, charge: 0.6, spit: 0.6, sing: 1.5, dance: 1.7, charm: 1.5, pose: 1.4 };
+export const ABILITY_TIME = { bite: 0.6, strike: 0.6, charge: 0.6, spit: 0.6, sing: 1.5, dance: 1.7, charm: 1.5, pose: 1.4, talk: 1.6, eat: 1.4, dig: 1.2, wave: 1.1 };
 
 /**
  * @param {object} record creature record
@@ -350,6 +350,20 @@ export function buildCreatureBody(record, opts = {}) {
         splay += held * 0.35;
       } else if (ability === "spit") {
         u += swell * 0.4;
+      } else if (ability === "talk") {
+        // One hand gestures while it speaks.
+        if (s > 0) (u += held * (0.9 + Math.sin(k * Math.PI * 5) * 0.35)), (kk -= held * 0.5);
+      } else if (ability === "eat") {
+        // Food brought up to the mouth, again and again.
+        u += held * (1 + Math.max(0, Math.sin(k * Math.PI * 6)) * 0.5);
+        kk += held * 0.9;
+      } else if (ability === "dig") {
+        // Paws scrabbling at the ground, left and right in turn.
+        u -= held * 0.2;
+        u += Math.sin(k * Math.PI * 8 + (s > 0 ? 0 : Math.PI)) * 0.5 * held;
+      } else if (ability === "wave") {
+        // One arm up and waving.
+        if (s > 0) (u += held * 2.3), (kk -= held * 0.3), (w += held * Math.sin(k * Math.PI * 6) * 0.6);
       }
       // While sneaking the arms stay drawn in; in the air they spread for balance.
       u -= anim.crouch * 0.25;
@@ -597,6 +611,22 @@ export function buildCreatureBody(record, opts = {}) {
           roll = held * Math.sin(k * Math.PI * 3.5) * 0.12;
           if (k > 0.72) bob += Math.sin(((k - 0.72) / 0.28) * Math.PI) * 0.4;
           pulse = 1 + held * 0.04;
+        } else if (anim.ability === "talk") {
+          // Little nods and tilts of the head.
+          lean = held * (0.08 + Math.sin(k * Math.PI * 6) * 0.06);
+          roll = held * Math.sin(k * Math.PI * 2) * 0.06;
+        } else if (anim.ability === "eat") {
+          // Head dips to the food in quick bites.
+          lean = -held * (0.12 + Math.max(0, Math.sin(k * Math.PI * 6)) * 0.12);
+        } else if (anim.ability === "dig") {
+          // Nose down, rocking as it digs.
+          lean = -held * 0.3;
+          lunge = held * 0.12;
+          roll = held * Math.sin(k * Math.PI * 8) * 0.07;
+          bob -= held * 0.06;
+        } else if (anim.ability === "wave") {
+          lean = held * 0.12;
+          roll = held * Math.sin(k * Math.PI * 3) * 0.05;
         } else if (anim.ability === "pose") {
           // Rear up tall, puff out and hold it with a proud shiver.
           lean = held * 0.62;

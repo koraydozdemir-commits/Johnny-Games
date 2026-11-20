@@ -616,6 +616,17 @@ html body.cutscene .moveStick,html body.cutscene .mobileControls{display:none!im
 .cineFrame.show .cfBar{transform:none}
 .cineFrame .cfFlash{position:absolute;inset:0;background:var(--flash,#fff);opacity:0;transition:opacity .9s ease}
 .cineFrame.flashing .cfFlash{opacity:1}
+/* The sun's glare in the stick throw: a blazing disc where the stick crosses the sun, its wash over the
+   whole picture, a horizontal streak, and lens-flare rings on the line through the centre. */
+.cineFrame .cfGlare{position:absolute;inset:0;pointer-events:none;opacity:0;mix-blend-mode:screen;--gx:50%;--gy:20%;--fx:0%;--fy:0%;background:radial-gradient(circle at var(--gx) var(--gy),#fffbe8 0,#fff3c4 3%,#ffd98a55 14%,#ffb85a22 34%,transparent 62%)}
+.cineFrame .cfGlare i{position:absolute;display:block;border-radius:50%;transform:translate(-50%,-50%)}
+.cineFrame .cfSun{left:var(--gx);top:var(--gy);width:min(30vw,190px);height:min(30vw,190px);background:radial-gradient(circle,#fff 0 22%,#fff6d0 30%,#ffe39a88 46%,transparent 70%);filter:blur(1px)}
+.cineFrame .cfRay{left:var(--gx);top:var(--gy);width:180vw;height:5px;border-radius:3px!important;background:linear-gradient(90deg,transparent,#fff3c799 35%,#fff 50%,#fff3c799 65%,transparent);filter:blur(2px)}
+.cineFrame .cfRing{width:60px;height:60px;border:2px solid #ffe7b066;background:radial-gradient(circle,#ffd9a018,#b8e4ff22 60%,transparent 72%)}
+.cineFrame .cfRing.r1{left:calc(var(--gx) + var(--fx) * .7);top:calc(var(--gy) + var(--fy) * .7);width:46px;height:46px}
+.cineFrame .cfRing.r2{left:calc(var(--gx) + var(--fx) * 1.3);top:calc(var(--gy) + var(--fy) * 1.3);width:110px;height:110px;border-color:#b8e4ff40}
+.cineFrame .cfRing.r3{left:calc(var(--gx) + var(--fx) * 1.8);top:calc(var(--gy) + var(--fy) * 1.8);width:26px;height:26px;background:#ffcf8a44}
+.cineFrame .cfBar{z-index:1}.cineFrame .cfTitle,.cineFrame .cfSkip{z-index:2}
 .cineFrame .cfTitle{position:absolute;left:0;right:0;bottom:calc(11vh + 4vh);text-align:center;opacity:0;transform:translateY(12px);transition:opacity 1s,transform 1s;text-shadow:0 3px 20px #000b}
 .cineFrame.titled .cfTitle{opacity:1;transform:none}
 .cineFrame .cfTitle small{display:block;font-size:12px;letter-spacing:.45em;text-transform:uppercase;color:#ffe6a8}
@@ -928,7 +939,7 @@ html body.tribeMode.creatureMode .mobileControls,html body.tribeMode.creatureMod
 .tribeHUD .trUnit em{position:absolute;right:-5px;top:-6px;font-style:normal;font-size:15px;filter:drop-shadow(0 1px 2px #000)}
 .tribeHUD .trUnit i{position:absolute;left:8px;right:8px;bottom:-5px;height:5px;border-radius:3px;background:#000c;overflow:hidden;border:1px solid #ffffff2a}
 .tribeHUD .trUnit i b{display:block;height:100%;background:#3fc26e}.tribeHUD .trUnit.low i b{background:#ef4b48}
-.tribeHUD .trActions{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;max-width:600px;width:100%;margin:0 auto}
+.tribeHUD .trActions{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;max-width:640px;width:100%;margin:0 auto}
 .tribeHUD .trActions button{min-height:54px;border-radius:14px;border:1px solid #ffffff2a;background:linear-gradient(#21485ef0,#10293af0);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;box-shadow:0 4px 12px #0006}
 .tribeHUD .trActions button span{font-size:20px;line-height:1}.tribeHUD .trActions button small{font-size:11px;font-weight:700;color:#d5e8ee}
 .tribeHUD .trActions button[aria-disabled=true]{opacity:.5}
@@ -1167,6 +1178,19 @@ body.creatureMode #depthShade,body.tribeMode #depthShade,body.cellEditorMode #de
 .tribeHUD .tsRole button{height:44px;border-radius:10px;border:1px solid #ffffff2a;background:#ffffff1a;font:800 20px system-ui;color:#fff}
 .tribeHUD .tsRole button[aria-disabled=true]{opacity:.35}
 .tribeHUD .trUnit .trRole{position:absolute;left:-4px;top:-4px;text-decoration:none;font-size:12px;background:#0d2232;border-radius:50%;padding:1px 2px;line-height:1}
+/* Tribes and Tribulations: what each member is doing, food priority, the overview */
+.tribeHUD .trUnit .trAct{position:absolute;left:-5px;bottom:-3px;text-decoration:none;font-size:12px;background:#0d2232e6;border-radius:50%;padding:2px;line-height:1;border:1px solid #ffffff30}
+.tribeHUD .tsPrio{display:grid;grid-template-columns:repeat(auto-fit,minmax(58px,1fr));gap:6px;margin:8px 0 4px}
+.tribeHUD .tsPrio button{min-height:54px;border-radius:12px;border:1px solid #ffffff2a;background:#ffffff10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:#fff}
+.tribeHUD .tsPrio button span{font-size:20px;line-height:1}.tribeHUD .tsPrio button small{font-size:10.5px;font-weight:700;color:#d5e8ee}
+.tribeHUD .tsPrio button[aria-checked=true]{border-color:#8ff0a8;background:#3fc26e33;box-shadow:inset 0 0 0 1px #8ff0a8}
+.tribeHUD .tsWide{grid-template-columns:1fr}
+.tribeHUD #tsHomeAll[aria-pressed=true]{background:#3fc26e33!important;color:#d9ffe6!important}
+.tribeHUD .tsDoing{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.tribeHUD .tsDoing span{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;background:#ffffff12;font-size:12px;color:#d9e8ee}
+.tribeHUD .tsDoing i{font-style:normal}
+.tribeHUD .tsLean{margin-top:4px}
+@media (max-width:430px){.tribeHUD .trActions{gap:4px}.tribeHUD .trActions button small{font-size:9.5px;letter-spacing:-.01em}}
 /* ==== Reduced motion ==== */
 body.reduceMotion *,body.reduceMotion *::before,body.reduceMotion *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
 body.reduceMotion .creatureHUD .chPop{animation-duration:1.2s!important}
@@ -1425,6 +1449,12 @@ body.cellEditorMode #partsPanel .catalog{overflow-y:auto;overflow-x:hidden;min-h
 .creatureHUD .chMini:focus-visible{outline:2px solid #ffe7a6;outline-offset:3px}
 @media (max-width:900px){.creatureHUD .chMini{top:calc(max(10px,env(safe-area-inset-top)) + 50px);right:10px;width:92px;height:92px}.creatureHUD.arcOn .chMini{opacity:0;pointer-events:none}}
 @media (max-height:520px){.creatureHUD .chMini{width:78px;height:78px;top:calc(max(6px,env(safe-area-inset-top)) + 48px)}}
+/* The Tribal Stage's minimap: bottom right, above the tribe's chips (the top row holds the tribes) */
+.tribeHUD .chMini{pointer-events:auto;position:absolute;right:12px;bottom:calc(env(safe-area-inset-bottom) + 158px);width:128px;height:128px;padding:0;border-radius:50%;border:2px solid #e8f3ee99;background:#0d2232;box-shadow:0 6px 20px #0008,inset 0 0 0 1px #0006;overflow:visible}
+.tribeHUD .chMini canvas{display:block;width:100%;height:100%;border-radius:50%}
+.tribeHUD .chMiniN{position:absolute;transform:translate(-50%,-50%);width:17px;height:17px;border-radius:50%;background:#0d2232;border:1px solid #e8f3ee99;font:900 9px/15px system-ui,sans-serif;text-align:center;color:#fff;pointer-events:none}
+.tribeHUD.cine .chMini,.tribeHUD.playing .chMini{display:none}
+@media (max-width:900px){.tribeHUD .chMini{width:88px;height:88px;right:10px}}
 .chMap{position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom));background:#03111bcc;backdrop-filter:blur(3px);animation:chMapIn .2s ease-out}
 @keyframes chMapIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
 .chMapCard{width:min(560px,94vw);max-height:100%;overflow:auto;background:#0d2232f2;border:1px solid #ffffff2a;border-radius:18px;padding:12px;box-shadow:0 18px 60px #000b;color:#eef7f4}

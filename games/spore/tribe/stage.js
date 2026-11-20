@@ -16,10 +16,11 @@ import * as THREE from "three";
 import { buildCreatureBody } from "../creature/body3d.js";
 import { createEmotes } from "../creature/emotes.js";
 import { validateCreature } from "../creature/format.js";
-import { dietOfParts } from "../creature/parts.js";
+import { abilitiesOf, dietOfParts } from "../creature/parts.js";
 import { RELATION_INFO } from "../creature/relations.js";
 import { generateSpecies } from "../creature/species.js";
 import { ISLAND, createIsland, heightAt } from "../creature/world.js";
+import { createMinimap, islandPicture, openIslandMap } from "../creature/minimap.js";
 import { CUTSCENES, beatClock, ease, mix, openFrame, span } from "../cinematics.js";
 import {
   HUT_LEVELS,
@@ -73,6 +74,9 @@ import {
   readTribeSave,
   relationFace,
 } from "./rules.js";
+import { ACTIVITIES, JOBS, LEANINGS, LOAD, PRIORITIES, SOURCE_INFO, emptyCulture, foodSources, jobsFor, speciesStyle, tribePersonality } from "./life.js";
+import { createVillage } from "./village.js";
+import { createVillagers } from "./villagers.js";
 
 const TAU = Math.PI * 2;
 const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -101,6 +105,7 @@ export function loadTribeSave() {
  * @param {object} [o.legacy]          from lineage.tribeLegacy(): what earlier stages hand the tribe
  * @param {(ev:object) => void} [o.onChronicle]  a moment for the species' chronicle
  * @param {() => void} [o.onHistory]   open the species history screen
+ * @param {(on:boolean) => void} [o.onDanger]  raiders at the village (true) or gone (false), for the music
  */
 export function createTribeStage(o) {
   const canvas = o.renderer.domElement;
@@ -143,9 +148,15 @@ export function createTribeStage(o) {
     carcasses: [],
     spears: [],
     chiefRespawn: 0,
+    // Tribes and Tribulations: what the tribe leans toward for food, and how it has lived so far.
+    priority: save?.priority || "balanced",
+    culture: { ...emptyCulture(), ...(save?.culture || {}) },
+    homeHold: 0,
+    parties: [],
   };
   let paused = false,
-    nextId = 1;
+    nextId = 1,
+    frameNo = 0;
 
   /* ---- village buildings ----------------------------------------------------------------- */
   const disposables = [];
@@ -166,7 +177,6 @@ export function createTribeStage(o) {
     stoneGeo = geo(new THREE.DodecahedronGeometry(0.32, 0)),
     flameGeo = geo(new THREE.ConeGeometry(0.42, 1.2, 7)),
     logGeo = geo(new THREE.CylinderGeometry(0.12, 0.12, 1.3, 6).rotateZ(Math.PI / 2)),
-    foodGeo = geo(new THREE.SphereGeometry(0.34, 8, 6)),
     eggGeo = geo(new THREE.SphereGeometry(0.42, 12, 10).scale(1, 1.3, 1)),
     shackPostGeo = geo(new THREE.CylinderGeometry(0.09, 0.09, 1.8, 6)),
     shackRoofGeo = geo(new THREE.BoxGeometry(2.6, 0.16, 2)),
@@ -186,7 +196,6 @@ export function createTribeStage(o) {
   const selMat = new THREE.MeshBasicMaterial({ color: 0x8ff0a8, transparent: true, opacity: 0.9, depthWrite: false });
   const goMat = new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.9, depthWrite: false });
   disposables.push(flameMat, rippleMat, selMat, goMat);
-  const foodMats = [mat(0xff5a7a, { flatShading: false }), mat(0xf2b75a, { flatShading: false }), mat(0xc76a4a, { flatShading: false })];
 
   const domeGeo = geo(new THREE.SphereGeometry(3, 12, 8, 0, TAU, 0, Math.PI / 2)),
     longWallGeo = geo(new THREE.BoxGeometry(6.4, 2.3, 3.8)),
@@ -314,30 +323,8 @@ export function createTribeStage(o) {
   const KIND_ROOF = { fight: 0xb5523a, music: 0xd9a441, village: 0x6aa84f };
   const fires = [makeFire(FIRE.x, FIRE.z)];
 
-  // The food pile grows as the stock does.
-  const pile = new THREE.Group();
-  pile.position.set(PILE.x, heightAt(PILE.x, PILE.z), PILE.z);
-  scene.add(pile);
-  const pileSpots = [];
-  for (let layer = 0, k = 0; layer < 3; layer++) {
-    const n = [9, 5, 2][layer];
-    for (let i = 0; i < n; i++, k++) {
-      const a = (i / n) * TAU + layer,
-        r = [1, 0.55, 0.2][layer];
-      const m = new THREE.Mesh(foodGeo, foodMats[k % 3]);
-      m.position.set(Math.cos(a) * r, 0.25 + layer * 0.42, Math.sin(a) * r);
-      m.visible = false;
-      pile.add(m);
-      pileSpots.push(m);
-    }
-  }
-  let pileShown = -1;
-  function syncPile() {
-    const n = Math.min(pileSpots.length, Math.ceil(T.food / 5));
-    if (n === pileShown) return;
-    pileShown = n;
-    pileSpots.forEach((m, i) => (m.visible = i < n));
-  }
+  // The food store (baskets, a drying rack, a granary as the tribe grows) is part of the village:
+  // see village.js. What's in it shows how much food there is, and what kind.
 
   const shackMeshes = {};
   function buildShack(tool) {
@@ -547,6 +534,7 @@ export function createTribeStage(o) {
   }
   function removeUnit(u) {
     if (u.removed) return;
+    if (u.act) life?.stop(u);
     u.removed = true;
     scene.remove(u.body.root);
     u.body.dispose();
@@ -667,10 +655,27 @@ export function createTribeStage(o) {
     }
     return { species: sp, center: { x, z }, respawn: 0 };
   });
+  /* Big game: a pair of huge, horned grazers further inland. A whole carcass of meat, but they fight
+     back, so the tribe only goes after them in a proper party. */
+  {
+    const sp = generateSpecies(27182, "plant", 3);
+    const a0 = Math.atan2(-HOME.z, -HOME.x);
+    let best = null;
+    for (let r = 82; r > 50 && !best; r -= 4)
+      for (const off of [0, 0.35, -0.35, 0.7, -0.7]) {
+        const x = HOME.x + Math.cos(a0 + off) * r,
+          z = HOME.z + Math.sin(a0 + off) * r;
+        if (heightAt(x, z) > 0.8 && heightAt(x, z) < 9) {
+          best = { x, z };
+          break;
+        }
+      }
+    if (best) HERDS.push({ species: sp, center: best, respawn: 0, fierce: true, scale: 1.6, health: 150, food: 30, count: 2, every: 100 });
+  }
   function spawnAnimal(herd) {
     const at = around(herd.center, 0, 7);
     const body = buildCreatureBody(herd.species.record, { quality: "low", seed: nextId++ });
-    const scale = 0.85;
+    const scale = herd.scale || 0.85;
     body.root.scale.setScalar(scale);
     scene.add(body.root);
     const a = {
@@ -681,9 +686,10 @@ export function createTribeStage(o) {
       pos: new THREE.Vector3(at.x, heightAt(at.x, at.z), at.z),
       heading: Math.random() * TAU,
       speed: 0,
-      health: 40,
-      maxHealth: 40,
+      health: herd.health || 40,
+      maxHealth: herd.health || 40,
       fleeT: 0,
+      angry: null, // big game turns on whoever hurt it
       think: Math.random() * 3,
       wander: null,
       dead: false,
@@ -692,23 +698,36 @@ export function createTribeStage(o) {
     T.animals.push(a);
     return a;
   }
-  HERDS.forEach((h) => [0, 1, 2].forEach(() => spawnAnimal(h)));
+  HERDS.forEach((h) => Array.from({ length: h.count || 3 }, () => spawnAnimal(h)));
   const carcassGeo = geo(new THREE.SphereGeometry(0.55, 10, 7).scale(1.4, 0.55, 1));
   const meatMat = mat(0xb3473a, { flatShading: false, roughness: 0.6 });
-  function hurtAnimal(a, dmg) {
+  function hurtAnimal(a, dmg, by) {
     if (a.dead) return;
     a.health -= dmg;
     a.hurtAt = T.time;
     a.body.hit();
-    a.fleeT = 3.5; // bolt away from whoever hit it
+    if (a.herd.fierce && by && !by.dead && a.health > a.maxHealth * 0.3) {
+      // Big game stands its ground and turns on its attacker, until it's badly hurt.
+      if (!a.angry) o.sfx("roar", { pitch: 0.6, gain: 0.5 });
+      a.angry = by;
+      a.fleeT = 0;
+    } else {
+      a.fleeT = 3.5; // bolt away from whoever hit it
+      a.angry = null;
+    }
     if (a.health > 0) return;
     a.dead = true;
+    if (by?.mine) {
+      T.culture.hunts++;
+      if (a.herd.fierce) T.culture.bigHunts++;
+    }
     a.body.die();
     o.sfx("death", { pitch: 1.2 });
     const m = new THREE.Mesh(carcassGeo, meatMat);
     m.position.set(a.pos.x, Math.max(heightAt(a.pos.x, a.pos.z), 0) + 0.2, a.pos.z);
     scene.add(m);
-    T.carcasses.push({ from: a, x: a.pos.x, z: a.pos.z, food: 12, full: 12, mesh: m, life: 120 });
+    m.scale.setScalar(a.scale / 0.85);
+    T.carcasses.push({ from: a, x: a.pos.x, z: a.pos.z, food: a.herd.food || 12, full: a.herd.food || 12, mesh: m, life: a.herd.fierce ? 180 : 120, big: !!a.herd.fierce, size: a.scale / 0.85 });
     pop(a.pos.x, a.pos.z, "🍖", "good");
     tipOnce("carcass", "Your hunters will carry the meat home.");
     setTimeout(() => {
@@ -718,7 +737,7 @@ export function createTribeStage(o) {
     }, 2200);
   }
   function syncCarcass(c) {
-    c.mesh.scale.setScalar(0.35 + (0.65 * c.food) / c.full);
+    c.mesh.scale.setScalar((c.size || 1) * (0.35 + (0.65 * c.food) / c.full));
     if (c.food <= 0) {
       scene.remove(c.mesh);
       T.carcasses.splice(T.carcasses.indexOf(c), 1);
@@ -730,7 +749,21 @@ export function createTribeStage(o) {
         a.body.update(dt, 0);
         continue;
       }
-      if (a.fleeT > 0) {
+      if (a.angry) {
+        // Charging its attacker: gores whoever is in reach, gives up if they get away.
+        const t = a.angry;
+        if (t.dead || t.removed || distTo(t, a.herd.center) > 60 || dist(a, t) > 26) a.angry = null;
+        else {
+          a.cool = Math.max(0, (a.cool || 0) - dt);
+          if (walk(a, t.pos.x, t.pos.z, 4.8, dt, 1.4 + (a.scale + (t.scale || 1)) * 0.6) && a.cool <= 0) {
+            a.cool = 1.5;
+            face(a, t.pos.x, t.pos.z);
+            a.body.playAbility("charge");
+            o.sfx("creatureBite", { pitch: 0.6, gain: 0.6 });
+            hurt(t, 11, a);
+          }
+        }
+      } else if (a.fleeT > 0) {
         a.fleeT -= dt;
         // Away from the nearest of your tribe.
         let near = null,
@@ -751,8 +784,8 @@ export function createTribeStage(o) {
     }
     // Herds grow back slowly.
     for (const h of HERDS) {
-      if (T.animals.filter((a) => a.herd === h && !a.dead).length >= 3) continue;
-      if ((h.respawn += dt) > 45) {
+      if (T.animals.filter((a) => a.herd === h && !a.dead).length >= (h.count || 3)) continue;
+      if ((h.respawn += dt) > (h.every || 45)) {
         h.respawn = 0;
         spawnAnimal(h);
       }
@@ -854,6 +887,7 @@ export function createTribeStage(o) {
         <button id="trBoxBtn" aria-label="Drag a box to select" aria-pressed="false"><span>⬚</span><small>Box</small></button>
         <button id="trRetreat" aria-label="Retreat to the village"><span>↩</span><small>Retreat</small></button>
         <button id="trBaby" aria-label="Have a baby, costs ${BABY_COST} food"><span>🥚</span><small>Baby · ${BABY_COST}</small></button>
+        <button id="trLife" aria-label="Your tribe: food priority and jobs"><span>🧭</span><small>Tribe</small></button>
         <button id="trBuild" aria-label="Build and upgrade"><span>🔨</span><small>Build</small></button>
         <button id="trHome" aria-label="Go to your village"><span>⌂</span><small>Village</small></button>
       </div>
@@ -869,6 +903,42 @@ export function createTribeStage(o) {
     </div>`;
   document.body.appendChild(hud);
   const $h = (q) => hud.querySelector(q);
+
+  /* ---- the minimap: every tribe, your village, your people, and raiders on the way ------------
+     The Creature Stage's map, north up (the tribe camera always looks north). Tap for the island. */
+  const minimap = createMinimap(hud, { onOpen: () => toggleMap() });
+  let islandPic = null,
+    islandMap = null,
+    mapClock = 0;
+  const picTimer = setTimeout(() => {
+    islandPic = islandPicture(320);
+    minimap.setPicture(islandPic);
+  }, 300);
+  function mapMarkers(full) {
+    const out = [];
+    for (const tr of T.tribes) {
+      const state = tr.status === "conquered" ? "extinct" : tr.status === "allied" ? "allied" : tr.war > 0 || tr.relation <= -50 ? "angry" : tr.relation < -10 ? "wary" : "neutral";
+      out.push({ kind: "nest", x: tr.center.x, z: tr.center.z, state, known: true, edge: true, label: full ? tr.rival.icon + " " + tr.name + " · " + tr.rival.name : null });
+    }
+    out.push({ kind: "home", x: HOME.x, z: HOME.z, edge: true, label: full ? look.name + " (you)" : null });
+    for (const u of T.units) {
+      if (u.dead) continue;
+      if (u.mine) out.push({ kind: "pack", x: u.pos.x, z: u.pos.z });
+      else if (u.raid || u.warParty) out.push({ kind: "hunter", x: u.pos.x, z: u.pos.z, edge: true });
+    }
+    return out;
+  }
+  function toggleMap() {
+    if (islandMap) return islandMap.close();
+    if (!islandPic || cine) return;
+    islandMap = openIslandMap(document.body, {
+      picture: islandPic,
+      markers: mapMarkers(true),
+      you: { x: cam.sx, z: cam.sz, heading: Math.PI / 2 },
+      title: world.region.name,
+      onClose: () => (islandMap = null),
+    });
+  }
   const setName = () => ($h("#trName").textContent = look.name + " tribe");
   setName();
   let toastTimer = 0;
@@ -948,6 +1018,7 @@ export function createTribeStage(o) {
   $h("#trPlaceCancel").onclick = () => stopPlacing();
   hud.querySelectorAll("#trBand [data-play]").forEach((b) => (b.onclick = () => playInstrument(b.dataset.play)));
   $h("#trBuild").onclick = () => openSheet("build");
+  $h("#trLife").onclick = () => openSheet("life");
 
   function setBoxMode(on) {
     T.boxMode = on;
@@ -983,6 +1054,19 @@ export function createTribeStage(o) {
   }
   const hex = (c) => "#" + c.toString(16).padStart(6, "0");
   const dis = (off) => (off ? 'aria-disabled="true"' : "");
+  /** Who is doing what, grouped: "🎣 Fishing · 2". */
+  function doingHTML() {
+    const groups = new Map();
+    for (const u of mine()) {
+      const k = life.activityOf(u) || (u.holdUntil > T.time ? "wait" : "idle");
+      const icon = life.iconOf(u) || (k === "wait" ? "📍" : "·");
+      const name = ACTIVITIES[k]?.name || { fight: "Fighting", retreat: "Heading home", greet: "Welcoming", hide: "Sheltering", guard: "Standing guard", home: "Heading home", wait: "Waiting where sent", idle: "Idle", move: "On the move", equip: "Fetching tools", perform: "Playing music", raid: "Raiding", attack: "Attacking", repair: "Repairing" }[k] || k;
+      const g = groups.get(name) || { icon, n: 0 };
+      g.n++;
+      groups.set(name, g);
+    }
+    return [...groups].map(([name, g]) => `<span><i>${g.icon}</i>${name} · <b>${g.n}</b></span>`).join("");
+  }
   function renderSheet() {
     const el = $h("#trSheet");
     if (!sheet) return;
@@ -1022,15 +1106,7 @@ export function createTribeStage(o) {
         html += `<button class="tsTool village${built ? " built" : ""}" data-structure="${id}" ${dis(cost === null || T.food < cost)}><span>${st.icon}</span><b>${st.name}${built ? " · " + built + "/" + st.max : ""}</b><small>${st.desc}${st.decor ? " Members heal faster at home." : ""}</small><em>${cost === null ? "Full" : "🍖 " + cost}</em></button>`;
       }
       html += `</div>`;
-      // Roles: how many gatherers and guards.
-      const adults = mine().filter((u) => !u.child);
-      const count = (r) => adults.filter((u) => u.role === r).length;
-      html += `<h5 class="tsKind">Roles</h5><div class="tsRoles">${["gather", "guard"]
-        .map(
-          (r) =>
-            `<div class="tsRole"><span aria-hidden="true">${ROLES[r].icon}</span><div><b>${ROLES[r].name}s · ${count(r)}</b><small>${ROLES[r].desc}</small></div><button data-role-less="${r}" aria-label="One fewer ${ROLES[r].name.toLowerCase()}" ${dis(!count(r))}>−</button><button data-role-more="${r}" aria-label="One more ${ROLES[r].name.toLowerCase()}" ${dis(!count("free"))}>+</button></div>`,
-        )
-        .join("")}<p class="tsHint">${count("free")} free for your orders.</p></div>`;
+      html += `<p class="tsHint">The village also builds for itself as your tribe grows: shelters, a bigger store, racks, a training ground and more, in your species' own style. Jobs and food are under 🧭 Tribe.</p>`;
       html += `<p class="tsHint">New shacks and buildings go where you tap near the village. Select members and tap a shack to pick its tool up.</p>`;
     } else if (sheet.kind === "tribe") {
       const tr = sheet.tribe;
@@ -1070,6 +1146,27 @@ export function createTribeStage(o) {
               : "Select some of your tribe to play, raid or attack."
         }</p>`;
       else if (tr.status === "allied") html += `<p class="tsHint">Allies send food now and then, help you see off raiders, and trade at half price.</p>`;
+    } else if (sheet.kind === "life") {
+      const adults = mine().filter((u) => !u.child);
+      const count = (r) => adults.filter((u) => u.role === r).length;
+      const lean = tribePersonality(T.culture).leaning;
+      const mood = life.L.mood;
+      html = `<div class="tsHead"><b>🧭 ${esc(look.name)} tribe</b><button class="tsClose" aria-label="Close">✕</button></div>
+        <p class="tsHint tsLean">${lean ? LEANINGS[lean].icon + " <b>" + LEANINGS[lean].name + " village.</b> " + LEANINGS[lean].text : "A young village: its character will grow out of how your tribe lives."}</p>
+        <h5 class="tsKind">Food · 🍖 ${Math.floor(T.food)} · ${mood === "short" ? "running short" : mood === "plenty" ? "plenty" : "enough for now"}</h5>
+        <div class="tsPrio" role="radiogroup" aria-label="What the tribe should go for first">${PRIORITIES.filter((id) => id === "balanced" || foodSources(diet).includes(id))
+          .map((id) => `<button role="radio" aria-checked="${T.priority === id}" data-prio="${id}"><span>${id === "balanced" ? "⚖" : SOURCE_INFO[id].icon}</span><small>${id === "balanced" ? "Balanced" : SOURCE_INFO[id].name}</small></button>`)
+          .join("")}</div>
+        <p class="tsHint">Your tribe gathers on its own. A priority sends more of the free hands that way; they still drop everything for danger.</p>
+        <div class="tsBtns tsWide"><button id="tsHomeAll" ${T.homeHold > 0 ? 'aria-pressed="true"' : ""}>↩ ${T.homeHold > 0 ? "Staying home…" : "Everyone back to the village"}</button></div>
+        <h5 class="tsKind">Jobs</h5><div class="tsRoles">${jobsFor(diet)
+          .filter((r) => r !== "free")
+          .map(
+            (r) =>
+              `<div class="tsRole"><span aria-hidden="true">${JOBS[r].icon}</span><div><b>${JOBS[r].name}s · ${count(r)}</b><small>${JOBS[r].desc}</small></div><button data-role-less="${r}" aria-label="One fewer ${JOBS[r].name.toLowerCase()}" ${dis(!count(r))}>−</button><button data-role-more="${r}" aria-label="One more ${JOBS[r].name.toLowerCase()}" ${dis(!count("free"))}>+</button></div>`,
+          )
+          .join("")}<p class="tsHint">${count("free")} unassigned: they do whatever the tribe needs most. Jobs are priorities: everyone still defends the village.</p></div>
+        <h5 class="tsKind">Right now</h5><div class="tsDoing" id="tsDoing">${doingHTML()}</div>`;
     } else if (sheet.kind === "custom") {
       html = `<div class="tsHead"><b>Customise your tribe</b><button class="tsClose" aria-label="Close">✕</button></div>
         <label class="tsField"><span>Tribe name</span><input id="tsName" maxlength="22" value="${esc(look.name)}" autocomplete="off" spellcheck="false"></label>
@@ -1095,6 +1192,7 @@ export function createTribeStage(o) {
           <li><b>Select:</b> tap a member, use All, or ⬚ Box and drag. Then tap where to go: they march in formation.</li>
           <li><b>Food:</b> tap ${diet === "meat" ? "the ripples in the sea to fish" : diet === "plant" ? "a fruit bush to pick fruit" : "a fruit bush, or the ripples in the sea to fish"}. Each adult eats one food a minute.</li>
           ${diet !== "plant" ? "<li><b>Hunt:</b> tap a grazing animal. Your hunters bring the meat home.</li>" : ""}
+          <li><b>Your tribe lives its own life:</b> members gather, hunt in groups, work, train, chat by the fire and sleep at night without being told. 🧭 Tribe sets jobs and what to go for first; any order you give comes first.</li>
           <li><b>Grow:</b> 🥚 Baby costs ${BABY_COST} food. 🔨 Build places shacks, upgrades tools to bronze, and enlarges the chief's hut for more room.</li>
           <li><b>Five rivals:</b> tap a village to see what it wants. Play the instrument they call for (or press 1-3), send gifts, trade, or make peace.</li>
           <li><b>Allies</b> send food, help against raiders, trade cheaply and let you recruit their people.</li>
@@ -1107,6 +1205,32 @@ export function createTribeStage(o) {
     el.querySelector(".tsClose").onclick = closeSheet;
     el.querySelectorAll(".tsTool[data-tool]").forEach((b) => (b.onclick = () => (T.tools[b.dataset.tool] ? upgradeTool(b.dataset.tool) : startPlacing(b.dataset.tool))));
     el.querySelectorAll("[data-structure]").forEach((b) => (b.onclick = () => startPlacing("s:" + b.dataset.structure)));
+    el.querySelectorAll("[data-prio]").forEach(
+      (b) =>
+        (b.onclick = () => {
+          T.priority = b.dataset.prio;
+          // The free hands reconsider straight away.
+          mine().forEach((u) => {
+            if (u.role === "free" || u.role === "work") u.decide = Math.random() * 1.5;
+          });
+          o.sfx("click");
+          saveState();
+          renderSheet();
+        }),
+    );
+    const homeAll = el.querySelector("#tsHomeAll");
+    if (homeAll)
+      homeAll.onclick = () => {
+        T.homeHold = 45;
+        T.parties.length = 0;
+        T.selected.clear();
+        retreat();
+        mine().forEach((u) => {
+          if (u.task?.type === "retreat") u.task.auto = true;
+          life.stop(u);
+        });
+        renderSheet();
+      };
     el.querySelectorAll("[data-role-more]").forEach(
       (b) =>
         (b.onclick = () => {
@@ -1114,7 +1238,9 @@ export function createTribeStage(o) {
           const free = mine().filter((u) => !u.child && u.role === "free").sort((a, z) => a.chief - z.chief || distTo(a, FIRE) - distTo(z, FIRE));
           if (!free.length) return;
           free[0].role = b.dataset.roleMore;
-          free[0].task = null;
+          if (free[0].task?.auto) free[0].task = null;
+          life.stop(free[0]);
+          free[0].decide = 0;
           o.sfx("click");
           saveState();
           renderSheet();
@@ -1126,7 +1252,9 @@ export function createTribeStage(o) {
           const u = mine().find((x) => !x.child && x.role === b.dataset.roleLess);
           if (!u) return;
           u.role = "free";
-          u.task = null;
+          if (u.task?.auto) u.task = null;
+          life.stop(u);
+          u.decide = 0;
           o.sfx("click");
           saveState();
           renderSheet();
@@ -1215,15 +1343,18 @@ export function createTribeStage(o) {
   /* ---- building: placing shacks, upgrades, the chief's hut ---------------------------------- */
   const room = () => villageRoom(settled(), T.hutLevel, T.structures.filter((st) => st.id === "house").length);
   const decorCount = () => T.structures.filter((st) => STRUCTURES[st.id].decor).length;
-  function takenSpots() {
+  /** Spots taken by the hut, fire, store, shacks and your own buildings. */
+  function baseTaken() {
     return [
       { x: HOME.x, z: HOME.z, r: 5.5 + T.hutLevel * 0.4 },
       { ...FIRE, r: 3 },
       { ...PILE, r: 3 },
       ...Object.values(SHACK).map((s) => ({ x: s.x, z: s.z, r: 3.6 })),
-      ...T.structures.map((st) => ({ x: st.x, z: st.z, r: st.id === "house" ? 3.8 : 2.4 })),
+      ...T.structures.map((st) => ({ x: st.x, z: st.z, r: st.id === "house" ? 3.8 : st.id === "dance" ? 4 : st.id === "garden" ? 2.6 : 2.4 })),
     ];
   }
+  /** …and everything the village built for itself (and its forage patches). */
+  const takenSpots = () => [...baseTaken(), ...(village ? [...village.pieces.map((p) => ({ x: p.x, z: p.z, r: (p.r || 2) + 0.6 })), ...village.nodes.filter((n) => !n.garden).map((n) => ({ x: n.x, z: n.z, r: 1.6 }))] : [])];
   function startPlacing(id) {
     const sid = id.startsWith("s:") ? id.slice(2) : null;
     const t = sid ? { name: STRUCTURES[sid].name, cost: structureCost(sid, T.structures.filter((st) => st.id === sid).length) } : TOOLS[id];
@@ -1343,6 +1474,55 @@ export function createTribeStage(o) {
       const flag = new THREE.Mesh(bannerGeo, flagMat2);
       flag.position.set(0.5, 3, 0);
       g.add(pole, flag);
+    } else if (s.id === "lookout") {
+      // A watchtower: four legs, a platform with a rail, a roof in the tribe's colour.
+      for (const [x, z] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]]) {
+        const leg = new THREE.Mesh(poleGeo, poleMat);
+        leg.position.set(x, 2, z);
+        leg.scale.set(1.6, 1.35, 1.6);
+        g.add(leg);
+      }
+      const deck = new THREE.Mesh(shackRoofGeo, logMat);
+      deck.position.y = 3.9;
+      deck.scale.set(0.8, 1, 1);
+      const roof2 = new THREE.Mesh(roofGeo, mat(look.color));
+      roof2.position.y = 5.7;
+      roof2.scale.set(0.45, 0.45, 0.45);
+      const flag2 = new THREE.Mesh(tierFlagGeo, new THREE.MeshBasicMaterial({ color: look.color, side: THREE.DoubleSide }));
+      disposables.push(flag2.material);
+      flag2.position.set(0.3, 6.5, 0);
+      g.add(deck, roof2, flag2);
+    } else if (s.id === "garden") {
+      const soil = new THREE.Mesh(shackRoofGeo, mat(0x4a3324));
+      soil.position.y = 0.05;
+      soil.scale.set(1.2, 0.8, 1.1);
+      g.add(soil);
+      const crop = [];
+      for (let i = 0; i < 12; i++) {
+        const pl = new THREE.Group();
+        pl.position.set(-1.2 + (i % 4) * 0.8, 0.12, -0.7 + Math.floor(i / 4) * 0.7);
+        const stem = new THREE.Mesh(stemGeo, stemMat);
+        stem.scale.setScalar(1.3);
+        const bloom = new THREE.Mesh(bloomGeo, i % 3 ? stemMat : flowerMats[i % flowerMats.length]);
+        bloom.position.y = 0.5;
+        pl.add(stem, bloom);
+        g.add(pl);
+        crop.push(pl);
+      }
+      s.crop = crop;
+    } else if (s.id === "dance") {
+      // A beaten circle ringed with drums.
+      const floor = new THREE.Mesh(new THREE.CircleGeometry(3.2, 20).rotateX(-Math.PI / 2), mat(0xb89a6a));
+      disposables.push(floor.geometry);
+      floor.position.y = 0.04;
+      g.add(floor);
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * TAU;
+        const drum = new THREE.Mesh(totemGeo, totemMats[i % 3]);
+        drum.position.set(Math.cos(a) * 3.4, 0.3, Math.sin(a) * 3.4);
+        drum.scale.set(0.8, 0.75, 0.8);
+        g.add(drum);
+      }
     } else {
       for (let i = 0; i < 9; i++) {
         const a = (i / 9) * TAU,
@@ -1357,8 +1537,150 @@ export function createTribeStage(o) {
     g.rotation.y = Math.atan2(-(HOME.z - s.z), HOME.x - s.x) || 0;
     scene.add(g);
     structureMeshes.set(s, g);
+    if (s.id === "house") syncHouseSpots();
+    // A garden is a forage patch the tribe tends.
+    if (s.id === "garden" && village) village.gardenNodeFor({ x: s.x, z: s.z, mesh: g, crop: s.crop });
+    refreshObstacles();
   }
+
+  /* ---- the village and its people (Tribes and Tribulations) ------------------------------------
+     The species' own look decides how it builds; the village grows with the tribe; members run their
+     own lives when you aren't giving orders. See life.js, village.js and villagers.js. */
+  const chiefBody = (T.units.find((u) => u.mine && u.chief) || T.units.find((u) => u.mine))?.body;
+  const style = speciesStyle({
+    diet,
+    dims: { length: chiefBody?.length || 3, height: chiefBody?.height || 1.6 },
+    arms: (record.arms || []).length,
+    parts: record.parts.map((p) => p.id),
+    abilities: abilitiesOf(
+      record.parts.map((p) => p.id),
+      (record.legs || []).length,
+      (record.arms || []).length,
+    ),
+    colors: record.colors,
+    legacy: legacy.lines.map((l) => l.name),
+  });
+  // How much this species enjoys company: its social parts, and its history.
+  const sociable = Math.min(1, 0.35 + (style.social ? 0.4 : 0) + (diet === "plant" ? 0.1 : 0));
+  let village = null,
+    life = null;
+  const houseSpots = [];
+  village = createVillage({
+    scene,
+    heightAt,
+    mat,
+    geo,
+    world,
+    HOME,
+    FIRE,
+    PILE,
+    style,
+    diet,
+    regionId,
+    bodyLength: chiefBody?.length || 3,
+    taken: baseTaken,
+    toolMesh,
+    weapons: () => TOOL_IDS.filter((id) => T.tools[id] && DAMAGE[id]).map((id) => ({ id, tier: T.tools[id] })),
+  });
   T.structures.forEach(buildStructure);
+  if (save?.auto?.length) village.load(save.auto);
+  village.scatterNodes();
+  /** Everything solid in the village, for members to walk around. */
+  function refreshObstacles() {
+    if (!village) return;
+    const hutR = 2.15 * (1 + (T.hutLevel - 1) * 0.14);
+    const SOLID = { house: 1.35, totem: 0.55, lookout: 1.25, banner: 0.2 };
+    village.setFixed([
+      { x: HOME.x, z: HOME.z, r: hutR },
+      { x: FIRE.x, z: FIRE.z, r: 1.05 },
+      ...Object.values(SHACK).map((sh) => ({ x: sh.x, z: sh.z, r: 1.5 })),
+      ...T.structures.filter((st) => SOLID[st.id]).map((st) => ({ x: st.x, z: st.z, r: SOLID[st.id] })),
+      ...T.tribes.map((tr) => ({ x: tr.center.x, z: tr.center.z, r: 2.1 })),
+    ]);
+  }
+  refreshObstacles();
+  let flareT = 0;
+  life = createVillagers({
+    T,
+    world,
+    village,
+    HOME,
+    FIRE,
+    PILE,
+    diet,
+    sociable,
+    culture: T.culture,
+    fishSpots,
+    heightAt,
+    mine,
+    around,
+    walk,
+    nearestFruit,
+    nearestFoe,
+    perform,
+    pop,
+    sfx: (k, opt) => o.sfx(k, opt),
+    onDanger: (on) => o.onDanger?.(on),
+    face: (u, x, z) => face(u, x, z),
+    headPos: (u) => headOf(u)(),
+    v3: (x, y, z) => new THREE.Vector3(x, y, z),
+    emote: (u, kind) => emotes.emit(kind, headOf(u), Math.max(0.8, u.scale)),
+    near: (u) => Math.hypot(cam.sx - u.pos.x, cam.sz - u.pos.z) < 36,
+    flare: () => (flareT = 0.8),
+    isWeapon: (tool) => !!(tool && DAMAGE[tool]),
+    lookouts: () => T.structures.filter((st) => st.id === "lookout").length,
+    lookoutAt: (u) => T.structures.filter((st) => st.id === "lookout").sort((a, b) => Math.hypot(a.x - u.pos.x, a.z - u.pos.z) - Math.hypot(b.x - u.pos.x, b.z - u.pos.z))[0] || null,
+    /** Sleeping places at the doors of your dwellings (three each). */
+    houseSpots: () => houseSpots,
+    repairsNeeded: () => (T.hutHp < 1 ? 1 : 0) + Object.values(SHACK).filter((sh) => sh.hp < 1).length,
+    firstRepair: () => (T.hutHp < 1 ? "hut" : Object.keys(SHACK).find((id) => SHACK[id].hp < 1) || null),
+    /** Something worth a glance: a passing animal, a member walking by, or the fire. */
+    nearSomething(u) {
+      const a = T.animals.find((x) => !x.dead && dist(x, u) < 18);
+      if (a) return new THREE.Vector3(a.pos.x, a.pos.y + 1, a.pos.z);
+      const v = T.units.find((x) => x !== u && !x.dead && x.speed > 1 && dist(x, u) < 10);
+      if (v) return new THREE.Vector3(v.pos.x, v.pos.y + 1, v.pos.z);
+      return new THREE.Vector3(FIRE.x, heightAt(FIRE.x, FIRE.z) + 0.6, FIRE.z);
+    },
+  });
+  function syncHouseSpots() {
+    const keep = new Map(houseSpots.map((sp) => [sp.key, sp]));
+    houseSpots.length = 0;
+    T.structures
+      .filter((st) => st.id === "house")
+      .forEach((st, i) => {
+        const a = Math.atan2(HOME.z - st.z, HOME.x - st.x);
+        for (const k of [-1, 0, 1]) {
+          const key = i + ":" + k;
+          const sp = keep.get(key) || { key, by: null };
+          sp.x = st.x + Math.cos(a) * 2.3 - Math.sin(a) * k * 0.9;
+          sp.z = st.z + Math.sin(a) * 2.3 + Math.cos(a) * k * 0.9;
+          houseSpots.push(sp);
+        }
+      });
+  }
+  syncHouseSpots();
+  // A warm light at the fire, brightest at night.
+  const fireLight = new THREE.PointLight(0xffa04a, 0, 34, 1.6);
+  fireLight.position.set(FIRE.x, heightAt(FIRE.x, FIRE.z) + 2.2, FIRE.z);
+  scene.add(fireLight);
+  const LEAN_DECOR = { aggressive: ["skulls", "bones"], peaceful: ["blooms", "streamers"], defensive: ["thorns", "stones"], prosperous: ["lanterns", "drums", "streamers"] };
+  let growClock = 0;
+  function growVillage() {
+    const lean = tribePersonality(T.culture).leaning;
+    const made = village.grow(mine().length + T.eggs.length, {
+      houses: T.structures.filter((st) => st.id === "house").length,
+      hutLevel: T.hutLevel,
+      weapons: TOOL_IDS.some((id) => T.tools[id] && DAMAGE[id]),
+      trophies: T.culture.bigHunts * 2 + Math.floor(T.culture.hunts / 4),
+      leaning: lean,
+      decorKinds: lean ? [...LEAN_DECOR[lean], ...style.decor] : style.decor,
+    });
+    if (made.length) {
+      refreshObstacles();
+      if (Math.hypot(cam.x - HOME.x, cam.z - HOME.z) < 50 && (made.includes("shelter") || made.includes("storage+") || made.includes("training"))) o.sfx("build", { gain: 0.4 });
+    }
+  }
 
   function upgradeTool(id) {
     if (T.tools[id] !== 1) return;
@@ -1443,7 +1765,7 @@ export function createTribeStage(o) {
     frame.title(false);
     frame.setSkip(() => cine && (cine.t = Math.max(cine.t, CUTSCENES.campfire.end)));
     stick.scale.setScalar(1.8);
-    cine = { kind: "campfire", t: 0, k: reduced ? 1 / 0.6 : 1, T: CUTSCENES.campfire, stick, gy, frame, beats: beatClock({ clear: 0.15, land: CUTSCENES.campfire.land, title: 2.2, untitle: 4.9 }) };
+    cine = { kind: "campfire", t: 0, k: reduced ? 1 / 0.6 : 1, T: CUTSCENES.campfire, stick, gy, frame, beats: beatClock({ clear: 0.15, land: CUTSCENES.campfire.land, title: 3.2, untitle: 9.5 }) };
     hud.classList.add("cine");
   }
   function playCivRise() {
@@ -1928,6 +2250,15 @@ export function createTribeStage(o) {
   /* ---- unit behaviour ----------------------------------------------------------------- */
   /** Walk toward a point; true once within `stop` of it. */
   function walk(u, x, z, pace, dt, stop = 0.4) {
+    // Stuck behind something: a short sidestep first.
+    if (u.detour) {
+      if (T.time > u.detour.until || Math.hypot(u.detour.x - u.pos.x, u.detour.z - u.pos.z) < 0.5) u.detour = null;
+      else {
+        x = u.detour.x;
+        z = u.detour.z;
+        stop = 0.3;
+      }
+    }
     const dx = x - u.pos.x,
       dz = z - u.pos.z,
       d = Math.hypot(dx, dz);
@@ -1935,7 +2266,8 @@ export function createTribeStage(o) {
       u.speed += (0 - u.speed) * Math.min(1, dt * 8);
       return true;
     }
-    const want = Math.atan2(-dz, dx);
+    const want = village ? steer(u, x, z, dx / d, dz / d, d) : Math.atan2(-dz, dx);
+    u.walkFrame = frameNo;
     let da = want - u.heading;
     da = Math.atan2(Math.sin(da), Math.cos(da));
     u.heading += Math.max(-dt * 7, Math.min(dt * 7, da));
@@ -1944,6 +2276,7 @@ export function createTribeStage(o) {
     let nx = u.pos.x + Math.cos(u.heading) * step,
       nz = u.pos.z - Math.sin(u.heading) * step;
     ({ x: nx, z: nz } = world.resolve(nx, nz, 0.7));
+    if (village) ({ x: nx, z: nz } = pushOut(nx, nz, 0.45 * (u.scale || 1)));
     // Nobody swims in this stage: deep water stops them.
     if (heightAt(nx, nz) < -0.8) {
       u.speed = 0;
@@ -1952,6 +2285,46 @@ export function createTribeStage(o) {
     u.pos.x = nx;
     u.pos.z = nz;
     return false;
+  }
+  /**
+   * Steer round the village's solid things: anything close ahead and in the way bends the path
+   * toward its nearer edge (unless the goal is right at it, like a door or a workbench).
+   */
+  function steer(u, x, z, ax, az, d) {
+    const px = -az,
+      pz = ax;
+    let sx = ax,
+      sz = az;
+    const me = 0.45 * (u.scale || 1) + 0.35;
+    for (const ob of village.obstacles) {
+      const ox = ob.x - u.pos.x,
+        oz = ob.z - u.pos.z;
+      const along = ox * ax + oz * az;
+      if (along <= 0 || along > Math.min(d, 7.5)) continue;
+      const lat = ox * px + oz * pz,
+        R = ob.r + me;
+      if (Math.abs(lat) >= R) continue;
+      if (Math.hypot(x - ob.x, z - ob.z) < ob.r + me) continue;
+      const side = lat > 0.05 ? -1 : lat < -0.05 ? 1 : u.id % 2 ? 1 : -1;
+      const k = ((R - Math.abs(lat)) / R) * (1.15 - along / 9) * 2.2;
+      sx += side * px * k;
+      sz += side * pz * k;
+    }
+    return Math.atan2(-sz, sx);
+  }
+  /** Nudge a point out of anything solid. */
+  function pushOut(x, z, r) {
+    for (const ob of village.obstacles) {
+      const dx = x - ob.x,
+        dz = z - ob.z,
+        d = Math.hypot(dx, dz),
+        min = ob.r + r;
+      if (d < min && d > 1e-4) {
+        x = ob.x + (dx / d) * min;
+        z = ob.z + (dz / d) * min;
+      }
+    }
+    return { x, z };
   }
   const face = (u, x, z) => (u.heading = Math.atan2(-(z - u.pos.z), x - u.pos.x));
   const dist = (a, b) => Math.hypot(a.pos.x - b.pos.x, a.pos.z - b.pos.z);
@@ -2023,7 +2396,19 @@ export function createTribeStage(o) {
     u.body.hit();
     // Fight back, unless running home with loot or retreating.
     const fleeing = (u.raid && u.carry) || (u.task?.type === "raid" && u.carry) || u.task?.type === "retreat";
-    if (by && !by.dead && (!u.task || (u.task.type !== "fight" && u.task.type !== "attack")) && !u.child && !fleeing) u.task = { type: "fight", target: by };
+    if (by && !by.dead && (!u.task || (u.task.type !== "fight" && u.task.type !== "attack")) && !u.child && !fleeing) {
+      if (u.mine && u.act) life.stop(u);
+      const own = u.mine && (u.task?.auto ?? !u.task);
+      // A fight the member picked up itself is given up if it drags them far from where it started.
+      u.task = { type: "fight", target: by, auto: u.mine ? own : undefined, leash: own ? { x: u.pos.x, z: u.pos.z } : undefined };
+    }
+    // Your tribe looks after its own: anyone close by and not under orders joins in.
+    if (u.mine && by && !by.dead && !by.mine && !u.child)
+      for (const v of T.units)
+        if (v.mine && !v.dead && !v.child && v !== u && (!v.task || (v.task.auto && v.task.type !== "fight")) && dist(v, u) < 11) {
+          if (v.act) life.stop(v);
+          v.task = { type: "fight", target: by, auto: true, leash: { x: v.pos.x, z: v.pos.z } };
+        }
     // Hitting a tribe at home is an act of war; seeing off raiders is not.
     if (u.tribe && !u.raid && by?.mine) {
       const tr = u.tribe;
@@ -2038,7 +2423,13 @@ export function createTribeStage(o) {
         }
       }
     }
-    if (u.health <= 0) kill(u);
+    if (u.health <= 0) {
+      if (by?.mine && !u.mine) {
+        T.culture.kills++;
+        if ((u.raid || u.warParty) && distTo(u, HOME) < 45) T.culture.defended++;
+      }
+      kill(u);
+    }
   }
   function kill(u) {
     u.dead = true;
@@ -2058,19 +2449,96 @@ export function createTribeStage(o) {
     setTimeout(() => removeUnit(u), 2200);
   }
 
-  /** A gatherer's next job: the nearest fruit near the village, or fishing if the tribe eats meat. */
-  function autoJob(u) {
-    if (canGather(diet, "fruit")) {
-      const f = nearestFruit(HOME, 48);
-      if (f) return { type: "gather", origin: { x: f.x, z: f.z }, fruit: null };
+  /** Bring a load home to the store. True once it's in. */
+  function deliverHome(u, dt, task) {
+    if (!walk(u, PILE.x, PILE.z, 4.6, dt, 2.4)) return false;
+    if (u.carry) {
+      T.food += u.carry;
+      pop(PILE.x, PILE.z, "+" + u.carry + " 🍖", "good");
+      o.sfx("eat");
+      village.delivered(u.carryKind || "loot");
+      // Hunters home with meat: the village comes out to meet them.
+      if (task?.carcass && !task.carcass.greeted) {
+        task.carcass.greeted = true;
+        life.event("hunt", PILE, u);
+      }
     }
-    if (canGather(diet, "fish") && fishSpots.length) {
-      const spot = [...fishSpots].sort((a, b) => distTo(u, a.stand) - distTo(u, b.stand))[0];
-      return { type: "fish", spot };
+    u.carry = 0;
+    u.carryKind = null;
+    return true;
+  }
+  /** What a member is carrying, on its back where you can see it. */
+  function syncCarry(u) {
+    const kind = u.carry > 0 && !u.dead ? u.carryKind || (u.raid || u.task?.type === "raid" ? "loot" : u.task?.type === "fish" ? "fish" : u.task?.type === "haul" ? "meat" : "fruit") : null;
+    const key = kind ? kind + Math.min(4, Math.ceil(u.carry / (kind === "loot" ? 2 : 1))) : "";
+    if (key === (u.carryKey || "")) return;
+    u.carryKey = key;
+    if (u.carryMesh) u.carryMesh.removeFromParent();
+    u.carryMesh = null;
+    if (!kind) return;
+    const m = village.carryBundle(kind, Math.min(4, Math.ceil(u.carry / (kind === "loot" ? 2 : 1))));
+    m.position.set(-u.body.length * 0.05, u.body.height * 0.92, 0);
+    u.body.root.add(m);
+    u.carryMesh = m;
+  }
+  /**
+   * Members that keep walking without getting anywhere sidestep; after a few tries they give up on
+   * whatever they were doing (a food run is marked unreachable for a while), so nobody stays stuck.
+   */
+  function checkStuck(u, dt) {
+    if (u.walkFrame !== frameNo) {
+      u.stuckT = 0;
+      u.stuckFrom = null;
+      return;
     }
-    return null;
+    if (!u.stuckFrom) u.stuckFrom = { x: u.pos.x, z: u.pos.z };
+    if ((u.stuckT = (u.stuckT || 0) + dt) < 2.5) return;
+    const moved = Math.hypot(u.pos.x - u.stuckFrom.x, u.pos.z - u.stuckFrom.z);
+    u.stuckT = 0;
+    u.stuckFrom = { x: u.pos.x, z: u.pos.z };
+    if (moved > 0.8) {
+      u.stuckN = Math.max(0, (u.stuckN || 0) - 1);
+      return;
+    }
+    u.stuckN = (u.stuckN || 0) + 1;
+    const side = u.stuckN % 2 ? 1 : -1,
+      a = u.heading + (side * Math.PI) / 2 + (Math.random() - 0.5) * 0.6;
+    u.detour = { x: u.pos.x + Math.cos(a) * 3, z: u.pos.z - Math.sin(a) * 3, until: T.time + 1.4 };
+    if (u.stuckN >= 3) {
+      u.stuckN = 0;
+      u.detour = null;
+      const kind = life.activityOf(u);
+      if (u.task && !u.task.auto) {
+        u.task = null;
+        pop(u.pos.x, u.pos.z, "?");
+      } else life.giveUp(u, kind);
+    }
+  }
+  /** A fish leaps out of the water and into the fisher's grasp. */
+  const leaping = [];
+  function leapFish(spot, u) {
+    const m = new THREE.Mesh(fishGeo, fishMat);
+    m.position.set(spot.x, 0, spot.z);
+    scene.add(m);
+    leaping.push({ m, from: { x: spot.x, z: spot.z }, u, t: 0 });
+  }
+  function updateLeaps(dt) {
+    for (let i = leaping.length - 1; i >= 0; i--) {
+      const L = leaping[i];
+      L.t += dt / 0.6;
+      const k = Math.min(1, L.t);
+      const to = L.u.pos;
+      L.m.position.set(L.from.x + (to.x - L.from.x) * k, Math.sin(k * Math.PI) * 2.2 + (to.y + 1) * k, L.from.z + (to.z - L.from.z) * k);
+      L.m.rotation.z = Math.sin(L.t * 25) * 0.6;
+      if (k >= 1) {
+        scene.remove(L.m);
+        leaping.splice(i, 1);
+      }
+    }
   }
   function updateMine(u, dt) {
+    // An order (or a food run) replaces whatever the member was doing for itself.
+    if (u.task && u.act) life.stop(u);
     if (u.child) {
       u.child -= dt;
       if (u.child <= 0) {
@@ -2079,49 +2547,34 @@ export function createTribeStage(o) {
         u.body.root.scale.setScalar(1);
         pop(u.pos.x, u.pos.z, "✦", "good");
         o.sfx("unlock");
-      }
-      return idle(u, HOME, dt, 3, 7);
+      } else return life.member(u, dt);
     }
     const task = u.task;
-    if (!task) {
-      // Stand guard: anything hostile close by gets chased off (guards watch further, from the fire).
-      const foe = nearestFoe(u, u.role === "guard" ? 18 : 9);
-      if (foe) {
-        u.task = { type: "fight", target: foe, guard: true };
-        return;
-      }
-      if (u.role === "gather" && (u.roleClock = (u.roleClock || 0) - dt) <= 0) {
-        u.roleClock = 1.5;
-        const job = autoJob(u);
-        if (job) {
-          u.task = job;
-          return;
-        }
-      }
-      if (u.role === "guard" && distTo(u, FIRE) > 7) {
-        walk(u, FIRE.x + Math.cos(u.id) * 4, FIRE.z + Math.sin(u.id) * 4, 4.4, dt, 1);
-        return;
-      }
-      u.speed += (0 - u.speed) * Math.min(1, dt * 8);
-      return;
-    }
+    if (!task) return life.member(u, dt);
     if (task.type === "move") {
-      if (walk(u, task.x, task.z, 5, dt)) u.task = null;
+      // Where you sent them, they stay a while before going back to their own business.
+      if (walk(u, task.x, task.z, 5, dt)) {
+        u.task = null;
+        u.holdUntil = T.time + 25;
+      }
     } else if (task.type === "retreat") {
       // Running home: no stopping to fight. Whatever they carried goes on the pile.
       if (walk(u, task.x, task.z, 6, dt, 1)) {
         if (u.carry) {
           T.food += u.carry;
           pop(PILE.x, PILE.z, "+" + u.carry + " 🍖", "good");
+          village.delivered(u.carryKind || "loot");
           u.carry = 0;
+          u.carryKind = null;
         }
         u.task = null;
+        if (!task.auto) u.holdUntil = T.time + 12;
       }
     } else if (task.type === "repair") {
       const at = task.what === "hut" ? HOME : SHACK[task.what];
       const hp = () => (task.what === "hut" ? T.hutHp : SHACK[task.what]?.hp ?? 1);
       if (!at || hp() >= 1) {
-        u.task = task.what !== "hut" && SHACK[task.what] ? { type: "equip", tool: task.what } : null;
+        u.task = task.what !== "hut" && SHACK[task.what] && !task.auto ? { type: "equip", tool: task.what } : null;
         return;
       }
       if (!walk(u, at.x, at.z, 5, dt, task.what === "hut" ? 4 : 2.4)) return;
@@ -2131,6 +2584,7 @@ export function createTribeStage(o) {
         u.work = 0;
         u.body.playAbility("strike");
         o.sfx("chop", { pitch: 1.2, gain: 0.4 });
+        T.culture.repairs += 0.1;
         if (task.what === "hut") {
           T.hutHp = Math.min(1, T.hutHp + 0.06 / hutLevel(T.hutLevel).hp);
           styleMyHut();
@@ -2199,15 +2653,11 @@ export function createTribeStage(o) {
     } else if (task.type === "gather" || task.type === "fish") {
       const kind = task.type === "gather" ? "fruit" : "fish";
       if (u.carry >= carryOf(u, kind) || task.deliver) {
-        // Home with the food, then straight back out.
-        if (walk(u, PILE.x, PILE.z, 4.6, dt, 2.4)) {
-          if (u.carry) {
-            T.food += u.carry;
-            pop(PILE.x, PILE.z, "+" + u.carry + " 🍖", "good");
-            o.sfx("eat");
-            u.carry = 0;
-          }
+        // Home with the food; ordered gatherers head straight back out, the tribe's own pick again.
+        u.body.setCrouch(0);
+        if (deliverHome(u, dt, task)) {
           task.deliver = false;
+          if (task.auto) u.task = null;
         }
         return;
       }
@@ -2218,13 +2668,17 @@ export function createTribeStage(o) {
           len = Math.hypot(s.x, s.z) || 1;
         if (!walk(u, s.stand.x + (-s.z / len) * side, s.stand.z + (s.x / len) * side, 5, dt, 1)) return;
         face(u, s.x, s.z);
+        // Crouched at the water's edge, eyes on the ripples, then a lunge.
+        u.body.setCrouch(0.4);
+        u.body.lookAt(v3.set(s.x, 0, s.z));
         u.work += dt * (u.tool === "staff" ? 2 : 1);
         if (u.work >= 2.4) {
           u.work = 0;
           u.body.playAbility(u.tool === "staff" ? "strike" : "bite");
           o.sfx("splash");
           u.carry += u.tool === "staff" ? 3 : 2;
-          pop(s.x, s.z, "🐟");
+          u.carryKind = "fish";
+          leapFish(s, u);
         }
         return;
       }
@@ -2234,9 +2688,30 @@ export function createTribeStage(o) {
         if (task.fruit) task.fruit.claimed = true;
         u.work = 0;
       }
+      // No fruit on the bushes: shake a fruit tree, then pick up what falls.
+      if (!task.fruit && !task.shaken) {
+        task.tree = task.tree || world.fruitTreeNear(task.origin.x, task.origin.z, 22);
+        if (task.tree) {
+          const t = task.tree;
+          if (!walk(u, t.x, t.z, 5, dt, 1.1 + 0.9 * (t.s || 1))) return;
+          face(u, t.x, t.z);
+          u.work += dt;
+          if (u.work >= 0.9) {
+            u.work = 0;
+            u.body.playAbility(u.body.armCount ? "strike" : "charge");
+            o.sfx("chop", { pitch: 0.7, gain: 0.35 });
+            if (world.shakeTree(u.pos.x, u.pos.z, 2.8) || (task.tries = (task.tries || 0) + 1) > 3) {
+              task.shaken = true;
+              task.origin = { x: t.x, z: t.z };
+            }
+          }
+          return;
+        }
+      }
       if (!task.fruit) {
         // Picked clean: bring back what there is, then rest.
         if (u.carry) task.deliver = true;
+        else if (task.auto) life.giveUp(u, "fruit");
         else {
           u.task = null;
           pop(u.pos.x, u.pos.z, "…");
@@ -2246,7 +2721,10 @@ export function createTribeStage(o) {
       }
       if (!walk(u, task.fruit.x, task.fruit.z, 5, dt, 1.7)) return;
       face(u, task.fruit.x, task.fruit.z);
-      if (u.work === 0) u.body.playAbility(u.tool === "staff" ? "strike" : "bite");
+      u.body.lookAt(v3.set(task.fruit.x, task.fruit.y, task.fruit.z));
+      // Fallen fruit is picked up off the ground; bush fruit is reached for.
+      u.body.setCrouch(task.fruit.tree ? 0.6 : 0.15);
+      if (u.work === 0) u.body.playAbility(u.tool === "staff" ? "strike" : u.body.armCount ? "eat" : "bite");
       u.work += dt * (u.tool === "staff" ? 2 : 1);
       if (u.work >= 1.1) {
         u.work = 0;
@@ -2256,7 +2734,42 @@ export function createTribeStage(o) {
         task.fruit = null;
         world.syncFruit();
         u.carry++;
+        u.carryKind = "fruit";
+        u.body.setCrouch(0);
         o.sfx("eat", { gain: 0.5 });
+      }
+    } else if (task.type === "forage") {
+      // Mushrooms, roots, nuts, edible plants (or grubs and eggs): dig them up and carry them home.
+      if (u.carry >= carryOf(u, "forage") || task.deliver) {
+        u.body.setCrouch(0);
+        if (deliverHome(u, dt, task)) u.task = task.auto ? null : { ...task, deliver: false };
+        return;
+      }
+      let n = task.node;
+      if (!n || n.stock <= 0) {
+        // This patch is bare: the next one close by, or home with what there is.
+        const next = village.nodes.filter((m) => m.stock > 0 && Math.hypot(m.x - u.pos.x, m.z - u.pos.z) < 16).sort((a, b) => Math.hypot(a.x - u.pos.x, a.z - u.pos.z) - Math.hypot(b.x - u.pos.x, b.z - u.pos.z))[0];
+        if (next) n = task.node = next;
+        else if (u.carry) return void (task.deliver = true);
+        else return task.auto ? life.giveUp(u, "forage") : void (u.task = null);
+      }
+      if (task.party && life.follow(u, dt, n)) return;
+      // Several foragers spread round a patch.
+      const ang = (u.id % 5) * 1.25;
+      if (!walk(u, n.x + Math.cos(ang) * 1.3, n.z + Math.sin(ang) * 1.3, 4.8, dt, 0.5)) return;
+      face(u, n.x, n.z);
+      u.body.setCrouch(0.55);
+      u.body.lookAt(v3.set(n.x, heightAt(n.x, n.z), n.z));
+      if (u.work === 0) u.body.playAbility("dig");
+      u.work += dt * (u.tool === "staff" ? 1.8 : 1);
+      if (u.work >= 1.5) {
+        u.work = 0;
+        n.stock--;
+        n.t = 0;
+        village.syncNode(n);
+        u.carry++;
+        u.carryKind = n.kind;
+        if (Math.hypot(cam.sx - n.x, cam.sz - n.z) < 40) o.sfx("eat", { gain: 0.3, pitch: 1.3 });
       }
     } else if (task.type === "perform") {
       const tr = task.tribe;
@@ -2306,33 +2819,35 @@ export function createTribeStage(o) {
         if (tr.hutHealth <= 0) conquer(tr);
       }
     } else if (task.type === "fight") {
-      if (!strike(u, task.target, dt) || (task.guard && distTo(u, HOME) > 30)) u.task = null;
+      if (!strike(u, task.target, dt) || (task.guard && distTo(u, HOME) > 30) || (task.leash && distTo(u, task.leash) > 24)) u.task = null;
     } else if (task.type === "hunt") {
       // Chase the animal down; once it falls, butcher it and carry the meat home.
       if (task.target.dead) {
         const c = T.carcasses.find((k) => k.from === task.target);
-        u.task = c ? { type: "haul", carcass: c } : null;
+        u.task = c ? { type: "haul", carcass: c, auto: task.auto, party: task.party } : null;
+        if (c && task.party?.leader === u && c.big) pop(c.x, c.z, "🏆", "good");
+        return;
+      }
+      // A hunting party keeps together on the way out, then closes in from all sides.
+      if (task.auto && life.follow(u, dt, task.target.pos)) return;
+      if (task.auto && distTo(task.target, HOME) > 115) {
+        u.task = null;
         return;
       }
       strike(u, task.target, dt);
     } else if (task.type === "haul") {
       const c = task.carcass;
-      if (u.carry > 0 && (u.carry >= carryOf(u, "fish") || c.food <= 0)) {
-        if (walk(u, PILE.x, PILE.z, 4.6, dt, 2.4)) {
-          T.food += u.carry;
-          pop(PILE.x, PILE.z, "+" + u.carry + " 🍖", "good");
-          o.sfx("eat");
-          u.carry = 0;
-          if (c.food <= 0) u.task = null;
-        }
+      if (u.carry > 0 && (u.carry >= carryOf(u, "meat") || c.food <= 0)) {
+        if (deliverHome(u, dt, task) && c.food <= 0) u.task = null;
         return;
       }
       if (c.food <= 0) {
         u.task = null;
         return;
       }
-      if (!walk(u, c.x, c.z, 5, dt, 1.6)) return;
+      if (!walk(u, c.x, c.z, 5, dt, 1.6 * (c.size || 1))) return;
       face(u, c.x, c.z);
+      u.body.setCrouch(0.3);
       u.work += dt;
       if (u.work >= 0.9) {
         u.work = 0;
@@ -2340,12 +2855,14 @@ export function createTribeStage(o) {
         const take = Math.min(2, c.food);
         c.food -= take;
         u.carry += take;
+        u.carryKind = "meat";
         syncCarcass(c);
+        if (u.carry >= carryOf(u, "meat") || c.food <= 0) u.body.setCrouch(0);
       }
     }
   }
   /** Members with a gathering staff carry half as much again. */
-  const carryOf = (u, kind) => Math.ceil(CARRY[kind] * (u.tool === "staff" ? 1.5 : 1)) + legacy.carry;
+  const carryOf = (u, kind) => Math.ceil((CARRY[kind] ?? LOAD[kind] ?? 3) * (u.tool === "staff" ? 1.5 : 1)) + legacy.carry;
   function nearestFoe(u, radius) {
     let best = null,
       bestD = radius;
@@ -2442,6 +2959,12 @@ export function createTribeStage(o) {
         u.body.root.scale.setScalar(1);
       }
       return idle(u, tr.center, dt, 2, 5);
+    }
+    // Anything to do wakes them.
+    if (u.resting && (u.task || u.raid || u.warParty || u.helping > 0 || u.visiting > 0 || tr.war > 0 || tr.watching > 0 || T.time - u.hurtAt < 1)) {
+      u.resting = false;
+      u.body.setSleep(false);
+      u.body.setCrouch(0);
     }
     if (u.task?.type === "fight") {
       // Break off when badly hurt or dragged too far from home.
@@ -2569,6 +3092,25 @@ export function createTribeStage(o) {
     }
     // Musicians make music at their fire anyway.
     if (tr.kind === "musicians" && u.tool === "horn" && Math.random() < dt * 0.08) perform(u, "sing");
+    // Other tribes keep the same hours: round their fire after dark, asleep by their hut late on.
+    if (world.isNight && tr.status !== "conquered") {
+      const a = (u.id * 2.4) % TAU,
+        late = world.timeOfDay > 0.72 && u.id % 3 !== 0;
+      const at = late ? { x: tr.center.x + Math.cos(a) * 4.2, z: tr.center.z + Math.sin(a) * 4.2 } : { x: tr.center.x + 6 + Math.cos(a) * 2.8, z: tr.center.z + 1 + Math.sin(a) * 2.8 };
+      if (walk(u, at.x, at.z, 2.4, dt, 0.5)) {
+        if (!u.resting) {
+          u.resting = true;
+          late ? u.body.setSleep(true) : u.body.setCrouch(1);
+          if (!late) face(u, tr.center.x + 6, tr.center.z + 1);
+        }
+      }
+      return;
+    }
+    if (u.resting) {
+      u.resting = false;
+      u.body.setSleep(false);
+      u.body.setCrouch(0);
+    }
     idle(u, tr.center, dt, 3, 9);
   }
   /** Hunters (and any hungry meat-eating tribe) chase the herds and carry the meat home. */
@@ -2673,6 +3215,7 @@ export function createTribeStage(o) {
     tr.rest = 0.8;
     bumpArc(right ? "good" : "miss");
     if (right) {
+      T.culture.songs++;
       pop(tr.center.x, tr.center.z, "♪", "good");
       // They like it: a few of them dance along.
       membersOf(tr)
@@ -2697,6 +3240,7 @@ export function createTribeStage(o) {
     if (T.food < GIFT.food) return toast("A gift needs " + GIFT.food + " food.");
     T.food -= GIFT.food;
     tr.giftCool = 25;
+    T.culture.gifts++;
     tr.relation = clampRelation(tr.relation + (giftAnswer(tr.relation, tr.rival, diet !== "plant") - tr.relation) * legacy.gift);
     tr.food += GIFT.food * 0.6;
     tr.war = 0;
@@ -2790,6 +3334,8 @@ export function createTribeStage(o) {
       if (u.task && u.task.tribe === tr) u.task = null;
     });
     T.food += 10;
+    T.culture.allies++;
+    life.event("victory", FIRE);
     o.sfx("friend");
     toast("The " + tr.name + " " + tr.rival.name.toLowerCase() + " are now your allies! They sent a gift of food.", 4.5);
     chronicle({ key: "tribe:ally:" + tr.kind, stage: "tribe", icon: "🤝", text: "Allied with the " + tr.name + " " + tr.rival.name.toLowerCase() + "." });
@@ -2818,6 +3364,8 @@ export function createTribeStage(o) {
       if (u.task && u.task.tribe === tr) u.task = null;
     });
     T.food += 25;
+    T.culture.conquests++;
+    life.event("victory", FIRE);
     o.sfx("roar");
     toast("You conquered the " + tr.name + " tribe and took their food.", 4.5);
     chronicle({ key: "tribe:conquer:" + tr.kind, stage: "tribe", icon: "⚔", text: "Conquered the " + tr.name + " " + tr.rival.name.toLowerCase() + "." });
@@ -2948,6 +3496,9 @@ export function createTribeStage(o) {
           look,
           region: regionId,
           time: Math.round(T.time0 + T.time),
+          priority: T.priority,
+          culture: Object.fromEntries(Object.entries(T.culture).map(([k, v]) => [k, Math.round(v)])),
+          auto: village.save(),
         }),
       );
       o.onSaved?.();
@@ -2958,6 +3509,7 @@ export function createTribeStage(o) {
   let saveClock = 20;
 
   /* ---- HUD refresh ------------------------------------------------------------------ */
+  let doingClock = 0;
   let unitsKey = "",
     tribesKey = "",
     hudClock = 0;
@@ -2977,7 +3529,7 @@ export function createTribeStage(o) {
         ? "Placing a shack"
         : "Ally with or conquer the five rival tribes · " + done + " / " + T.tribes.length;
     // Member chips.
-    const key = own.map((u) => u.id + (u.tool || "") + u.role + (u.child ? "c" : "") + (T.selected.has(u) ? "s" : "")).join(",");
+    const key = own.map((u) => u.id + (u.tool || "") + u.role + (u.child ? "c" : "") + (T.selected.has(u) ? "s" : "") + life.iconOf(u)).join(",");
     const list = $h("#trUnits");
     if (key !== unitsKey) {
       unitsKey = key;
@@ -2987,9 +3539,9 @@ export function createTribeStage(o) {
         b.className = "trUnit" + (T.selected.has(u) ? " sel" : "") + (u.child ? " child" : "");
         b.setAttribute("role", "listitem");
         b.setAttribute("aria-pressed", String(T.selected.has(u)));
-        b.setAttribute("aria-label", (u.chief ? "Chief" : u.child ? "Child" : u.from >= 0 ? "Recruit from the " + T.tribes[u.from].name + " tribe" : "Member") + (u.tool ? " with " + TOOLS[u.tool].name.toLowerCase() : "") + (u.role !== "free" ? ", " + ROLES[u.role].name.toLowerCase() : ""));
+        b.setAttribute("aria-label", (u.chief ? "Chief" : u.child ? "Child" : u.from >= 0 ? "Recruit from the " + T.tribes[u.from].name + " tribe" : "Member") + (u.tool ? " with " + TOOLS[u.tool].name.toLowerCase() : "") + (u.role !== "free" ? ", " + ROLES[u.role].name.toLowerCase() : "") + (life.activityOf(u) && ACTIVITIES[life.activityOf(u)] ? ", " + ACTIVITIES[life.activityOf(u)].name.toLowerCase() : ""));
         const pic = u.from >= 0 ? recruitPortrait(u.from) : portrait;
-        b.innerHTML = (pic ? `<img src="${pic}" alt="" draggable="false">` : `<span class="noPic">🐾</span>`) + `<em>${u.chief ? "👑" : u.child ? "🍼" : u.tool ? TOOLS[u.tool].icon : ""}</em>${u.role !== "free" && !u.child ? `<s class="trRole" aria-hidden="true">${ROLES[u.role].icon}</s>` : ""}<i><b></b></i>`;
+        b.innerHTML = (pic ? `<img src="${pic}" alt="" draggable="false">` : `<span class="noPic">🐾</span>`) + `<em>${u.chief ? "👑" : u.child ? "🍼" : u.tool ? TOOLS[u.tool].icon : ""}</em>${u.role !== "free" && !u.child ? `<s class="trRole" aria-hidden="true">${ROLES[u.role].icon}</s>` : ""}${life.iconOf(u) ? `<u class="trAct" aria-hidden="true">${life.iconOf(u)}</u>` : ""}<i><b></b></i>`;
         b.onclick = () => {
           if (u.child) return toast("Children can't work yet. They grow up quickly.");
           if (T.selected.has(u) && T.selected.size === 1) T.selected.clear();
@@ -3088,6 +3640,11 @@ export function createTribeStage(o) {
         b.classList.toggle("wanted", b.dataset.play === tr.ask);
       });
     }
+    if (sheet?.kind === "life" && (doingClock -= 0.05) <= 0) {
+      doingClock = 1;
+      const d = $h("#tsDoing");
+      if (d) d.innerHTML = doingHTML();
+    }
     if (sheet?.kind === "tribe" && sheet.tribe.status === "neutral") {
       const bar = $h("#trSheet .tsRel b");
       if (bar) bar.style.width = (sheet.tribe.relation + 100) / 2 + "%";
@@ -3105,6 +3662,7 @@ export function createTribeStage(o) {
       return;
     }
     T.time += dt;
+    frameNo++;
     // Keyboard panning.
     const pan = cam.sd * dt * 0.9;
     if (keys.has("a") || keys.has("arrowleft")) cam.x -= pan;
@@ -3116,6 +3674,13 @@ export function createTribeStage(o) {
     world.update(dt, { x: cam.sx, z: cam.sz });
 
     updateTribes(dt);
+    life.update(dt);
+    if ((growClock -= dt) <= 0) {
+      growClock = 4;
+      growVillage();
+    }
+    village.updateNodes(dt);
+    village.animate(dt, world.isNight);
     // Upkeep: every adult eats once a minute. Going short weakens them; nobody starves to death.
     if ((T.upkeepClock -= dt) <= 0) {
       T.upkeepClock = UPKEEP_EVERY;
@@ -3132,6 +3697,7 @@ export function createTribeStage(o) {
     updateSpears(dt);
     updateBurning(dt);
     updateHealers(dt);
+    updateLeaps(dt);
     for (const u of [...T.units]) {
       if (u.dead) {
         u.body.update(dt, 0);
@@ -3167,7 +3733,15 @@ export function createTribeStage(o) {
       u.pos.y = Math.max(heightAt(u.pos.x, u.pos.z), -0.4);
       u.body.root.position.copy(u.pos);
       u.body.root.rotation.y = u.heading;
+      // Far from the camera: small parts hidden and legs still (cheaper on phones).
+      const far = Math.hypot(u.pos.x - cam.sx, u.pos.z - cam.sz) > cam.sd * 1.9 + 30;
+      if (far !== !!u.far) {
+        u.far = far;
+        u.body.setLOD(far ? 0 : 1);
+      }
       if (!u.dead) u.body.update(dt, u.speed);
+      syncCarry(u);
+      if (u.mine && !u.dead) checkStuck(u, dt);
       // Selection rings.
       const sel = T.selected.has(u);
       if (sel && !u.ring) {
@@ -3191,6 +3765,8 @@ export function createTribeStage(o) {
         scene.remove(e.mesh);
         T.eggs.splice(i, 1);
         makeUnit(null, record, e.x, e.z, { child: true });
+        T.culture.births++;
+        life.event("birth", { x: e.x, z: e.z });
         pop(e.x, e.z, "🐣", "good");
         o.sfx("hatch");
         tipOnce("child", "A child! It will be grown and ready to work in a moment.");
@@ -3203,9 +3779,15 @@ export function createTribeStage(o) {
       o.sfx("hatch");
     }
     // Fires flicker, ripples breathe, fish jump, order rings fade.
+    // The village fire burns higher in the evening and at night, and lights the huts around it.
+    const tod = world.timeOfDay;
+    const dark = tod > 0.5 && tod < 0.98 ? Math.min(1, (tod - 0.5) * 8, (0.98 - tod) * 14) : 0;
+    flareT = Math.max(0, flareT - dt);
     fires.forEach((f, i) => {
-      f.flame.scale.set(1 + Math.sin(T.time * 11 + i) * 0.12, 1 + Math.sin(T.time * 7 + i * 2) * 0.22, 1 + Math.cos(T.time * 9 + i) * 0.12);
+      const big = i === 0 ? 1 + dark * 0.45 + flareT * 0.8 : 1;
+      f.flame.scale.set(big * (1 + Math.sin(T.time * 11 + i) * 0.12), big * (1 + Math.sin(T.time * 7 + i * 2) * 0.22), big * (1 + Math.cos(T.time * 9 + i) * 0.12));
     });
+    fireLight.intensity = (0.35 + dark * 2.6 + flareT * 1.5) * (1 + Math.sin(T.time * 13) * 0.06);
     fishSpots.forEach((f) => {
       const k = (T.time * 0.5 + f.phase) % 1;
       f.ripple.scale.setScalar(0.6 + k * 1.2);
@@ -3224,12 +3806,16 @@ export function createTribeStage(o) {
       }
     }
     emotes.update(dt);
-    syncPile();
+    village.syncStore(T.food);
     if ((hudClock -= dt) <= 0) {
       hudClock = 0.05;
       updateHUD();
     }
     if (toastTimer > 0 && (toastTimer -= dt) <= 0) $h("#trToast").classList.remove("show");
+    if ((mapClock -= dt) <= 0) {
+      mapClock = 0.12;
+      minimap.draw({ x: cam.sx, z: cam.sz, yaw: Math.PI / 2, heading: Math.PI / 2, time: T.time, markers: mapMarkers(false), range: Math.max(70, cam.sd * 1.6) });
+    }
     if ((saveClock -= dt) <= 0) {
       saveClock = 20;
       saveState();
@@ -3308,12 +3894,19 @@ export function createTribeStage(o) {
       boxSelect,
       formation,
       membersOf,
+      life,
+      village,
+      style,
+      growVillage,
+      HERDS,
       get sheet() {
         return sheet;
       },
     },
     dispose() {
       disposed = true;
+      clearTimeout(picTimer);
+      islandMap?.close();
       cine?.frame?.remove(false);
       cine?.extras?.forEach((m) => scene.remove(m));
       canvas.removeEventListener("pointerdown", onDown);
