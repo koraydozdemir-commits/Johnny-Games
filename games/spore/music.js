@@ -19,14 +19,15 @@ export const MUSIC_BASE = "https://pub-c7061cceb949469685093ccc3a5dd0ba.r2.dev/"
  * picks up where it left off.
  */
 export const TRACKS = {
-  menu: { file: "Spore OST/Main Menu.mp3", gain: 0.85, loop: true },
+  menu: { file: "Spore OST/Main Menu.mp3", gain: 0.85, loop: true, resume: true },
   cell: { file: "Spore OST/Cell Stage.mp3", gain: 1, loop: true, resume: true },
   land: { file: "Spore OST/Entering Land.mp3", gain: 1, loop: false, then: "creature" },
   creature: { file: "Spore OST/Creature Stage Roaming.mp3", gain: 1, loop: true, resume: true },
   nest: { file: "Spore OST/At Your Nest.mp3", gain: 0.95, loop: true, resume: true },
   mating: { file: "Spore OST/Creature Mating.mp3", gain: 0.95, loop: true },
-  // The Creature → Tribal cutscene is timed to this song; it carries on into the tribe's first minute.
-  founding: { file: "Spore OST/Founding A Tribe.mp3", gain: 1, loop: false, then: "tribe" },
+  // Starts with the Creature → Tribal cutscene and carries it; it hands over to the tribe's theme
+  // shortly after the tribe arrives (maxPlay), rather than playing its full two minutes into the stage.
+  founding: { file: "Spore OST/Founding A Tribe.mp3", gain: 1, loop: false, then: "tribe", maxPlay: 30 },
   tribe: { file: "Spore OST/Tribal Stage Relaxed.mp3", gain: 0.95, loop: true, resume: true },
   // Danger in the Tribal Stage borrows the war theme.
   tribeWar: { file: "Spore OST/Civilisation War.mp3", gain: 0.9, loop: true, resume: true, minHold: 20 },
@@ -34,7 +35,7 @@ export const TRACKS = {
   civWar: { file: "Spore OST/Civilisation War.mp3", gain: 0.9, loop: true, resume: true, minHold: 20 },
   pedia: { file: "Spore OST/Sporepedia.mp3", gain: 0.75, loop: true, resume: true },
 };
-export const FADE = { cross: 2.4, quick: 1.2, loopOverlap: 3.5, settle: 0.9, resumeWithin: 240, loadTimeout: 10 };
+export const FADE = { cross: 2.4, quick: 1.2, loopOverlap: 3.5, settle: 0.9, resumeWithin: 240, loadTimeout: 20, retry: 4 };
 
 /** The URL for a track id (each path segment encoded, so spaces are safe). */
 export const trackUrl = (id, base = MUSIC_BASE) => (TRACKS[id] ? base + TRACKS[id].file.split("/").map(encodeURIComponent).join("/") : "");
@@ -205,12 +206,22 @@ export function createMusic(o) {
 
   /** Switch to a track: load it on the idle deck while the other keeps playing, then cross. */
   let switchSeq = 0;
-  async function switchTo(id, { fade = FADE.cross, from = null } = {}) {
+  async function switchTo(id, { fade = FADE.cross, from = null, loop = false } = {}) {
     const seq = ++switchSeq;
     if (id !== current) since = now(); // looping into itself doesn't restart the clock
     current = id;
     if (!unlocked || !decks[0]) return;
     const out = active;
+    if (!loop && id && out && out.id === id) {
+      // Already on the playing deck (e.g. back from a screen before its track had loaded): keep it,
+      // bring it back up, and drop whatever was loading on the other deck.
+      const other = out === decks[0] ? decks[1] : decks[0];
+      if (other.level > 0) fadeDeck(other, 0, FADE.quick, true);
+      else other.el.pause();
+      fadeDeck(out, 1, FADE.quick);
+      if (out.el.paused && !hidden) out.el.play().catch(() => {});
+      return;
+    }
     if (!id) {
       if (out) fadeDeck(out, 0, FADE.quick, true);
       active = null;
@@ -221,8 +232,12 @@ export function createMusic(o) {
     d.el.pause();
     d.level = 0;
     const ok = await load(d, id, from ?? startAt(id, memory, now()));
-    if (seq !== switchSeq) return; // a newer request took over while this one loaded
-    if (!ok) return;
+    if (seq !== switchSeq) {
+      // A newer request took over while this one loaded: don't leave it running (muted) behind.
+      if (d !== active && d.level === 0 && d.id !== current) d.el.pause();
+      return;
+    }
+    if (!ok) return failed(id, d);
     if (d.cors) route(d);
     apply(d);
     d.el.muted = false;
@@ -230,9 +245,12 @@ export function createMusic(o) {
       await d.el.play();
     } catch (e) {
       // Still locked (iOS waits for a direct gesture): the next unlock() starts it.
+      d.el.muted = true;
+      stalled = true;
       return;
     }
     if (seq !== switchSeq) return;
+    stalled = false;
     if (out && out !== d) {
       remember(out);
       fadeDeck(out, 0, fade, true);
@@ -240,6 +258,21 @@ export function createMusic(o) {
     active = d;
     fadeDeck(d, 1, out ? fade : FADE.quick);
   }
+  /**
+   * A track couldn't load (slow connection, timeout). Don't leave the old track playing on as if it
+   * were the new one: forget the switch, and try again shortly if it's still wanted.
+   */
+  let retryTimer = null;
+  function failed(id, d) {
+    d.el.pause();
+    d.id = null;
+    current = active?.id ?? null;
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(() => {
+      if ((wanted || null) === id && current !== id) switchTo(id);
+    }, FADE.retry * 1000);
+  }
+  let stalled = false;
   /** Fade a deck to a level over some seconds (pausing it at silence if asked). */
   function fadeDeck(d, level, seconds, pauseAtEnd = false) {
     d.target = level;
@@ -266,17 +299,21 @@ export function createMusic(o) {
       }
     }
     const a = active;
-    if (a && a.ready && !a.el.paused && a.el.duration > 0) {
+    // Only the track that's meant to be playing loops or hands over. If another one is loading to
+    // replace it, looping here would cancel that switch and leave the old music on.
+    if (a && a.ready && !a.el.paused && a.el.duration > 0 && a.id === current) {
       const left = a.el.duration - a.el.currentTime;
       const tr = TRACKS[a.id];
       if (tr?.loop && left < FADE.loopOverlap && !a.looping) {
         // Cross into itself: the other deck starts from the top as this one fades out.
         a.looping = true;
         memory[a.id] = { pos: 0, duration: a.el.duration, at: t };
-        switchTo(a.id, { fade: FADE.loopOverlap * 0.9, from: 0 }).then(() => (a.looping = false));
-      } else if (!tr?.loop && tr?.then && left < FADE.cross && !a.handing) {
+        switchTo(a.id, { fade: FADE.loopOverlap * 0.9, from: 0, loop: true }).then(() => (a.looping = false));
+      } else if (!tr?.loop && tr?.then && (left < FADE.cross || (tr.maxPlay && t - since > tr.maxPlay)) && !a.handing) {
+        // A one-shot hands over to what the game wants now (or its own follow-on theme).
         a.handing = true;
-        switchTo(tr.then, { fade: FADE.cross }).then(() => (a.handing = false));
+        const next = wanted && wanted !== a.id ? wanted : tr.then;
+        switchTo(next, { fade: FADE.cross * 1.5 }).then(() => (a.handing = false));
       }
     }
   }
@@ -317,15 +354,19 @@ export function createMusic(o) {
     /** From a user gesture: playback is allowed now. */
     unlock() {
       if (unlocked) {
-        if (active && active.el.paused && !hidden) active.el.play().catch(() => {});
+        if (hidden) return;
+        // A track that was refused (iOS wanted a tap) or never started: start it in this tap.
+        if (current && (stalled || !active || active.id !== current) && !decks.some((d) => d && d.id === current && !d.ready)) switchTo(current);
+        else if (active && active.el.paused) active.el.play().catch(() => {});
         return;
       }
       unlocked = true;
       const id = wanted || current;
       if (id) switchTo(id); // plays the first deck inside this gesture
-      // Prime the other deck in the same gesture, muted, so later crossfades may start it.
-      const other = decks[1];
-      if (other && !other.el.getAttribute("src")) {
+      // Prime every unused deck in the same gesture, muted, so a track asked for later (the galaxy
+      // menu once the universe has loaded, a crossfade) is allowed to start it.
+      for (const other of decks) {
+        if (!other || other.el.getAttribute("src")) continue;
         other.el.src = SILENCE();
         other.el.muted = true;
         const p = other.el.play();
