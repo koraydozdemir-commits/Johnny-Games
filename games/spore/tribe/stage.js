@@ -3371,9 +3371,22 @@ export function createTribeStage(o) {
       chronicle({ key: "tribe:won", stage: "tribe", icon: v.icon, text: "Settled the island and earned the " + v.trait + " trait." });
       setTimeout(() => {
         o.sfx("unlock");
-        openSheet("won");
+        // Every tribe is an ally or gone: the village rises into a city by itself.
+        if (o.onCivilization) advanceToCiv(v);
+        else openSheet("won");
       }, 2500);
     } else tipOnce("room", "Your village can now hold " + room() + " members.", 4);
+  }
+  /** The island is settled: a moment to read how, then the city rises (the cutscene leads into Civilization). */
+  function advanceToCiv(v) {
+    if (disposed || cine) return;
+    toast(v.icon + " " + v.title + ". Your species earns the " + v.trait + " trait.", 4);
+    setTimeout(() => {
+      if (disposed || cine) return;
+      closeSheet();
+      saveState();
+      playCivRise();
+    }, 4000);
   }
   function updateTribes(dt) {
     for (const tr of T.tribes) {
@@ -3823,6 +3836,8 @@ export function createTribeStage(o) {
   // Arriving from the Creature Stage's stick throw: the campfire scene.
   if (o.intro === "campfire") startCampfire();
   else o.frame?.remove();
+  // A saved tribe that had already settled the island goes straight on to Civilization.
+  if (save && T.won && o.onCivilization) setTimeout(() => advanceToCiv(victoryPath(T.tribes) || { icon: "✦", title: "The island is settled", trait: "tribal" }), 1500);
 
   return {
     record,

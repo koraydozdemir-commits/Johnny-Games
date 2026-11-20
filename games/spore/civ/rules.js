@@ -8,7 +8,7 @@
 import { designStats, vehicleMode } from "../creations/modular.js";
 
 export const CIV_SAVE_KEY = "johnny-spore-civ-stage";
-export const CIV_VERSION = 1;
+export const CIV_VERSION = 2;
 export const YOU = "you";
 
 /** The three kinds of city. A city makes vehicles of its own kind. */
@@ -296,6 +296,12 @@ const ownerOk = (o, nations) => (o === YOU || o === null ? o : typeof o === "str
  * Read a saved Civilization Stage, tolerating anything missing or malformed. Designs are kept as they
  * are; the stage validates them before use.
  */
+/** A saved direction on the planet (a unit vector), or null. */
+function unitDir(d) {
+  if (!d || typeof d !== "object" || ![d.x, d.y, d.z].every(Number.isFinite)) return null;
+  const l = Math.hypot(d.x, d.y, d.z);
+  return l > 0.5 && l < 1.5 ? { x: d.x / l, y: d.y / l, z: d.z / l } : null;
+}
 export function readCivSave(raw) {
   let d = null;
   try {
@@ -329,12 +335,15 @@ export function readCivSave(raw) {
   const designs = d.designs && typeof d.designs === "object" ? d.designs : {};
   return {
     v: CIV_VERSION,
+    // The planet: saves from before the planet (version 1) have no seed and get the homeworld's planet.
+    seed: Number.isInteger(d.seed) && d.seed > 0 && d.seed < 2 ** 32 ? d.seed : null,
+    clock: Number.isFinite(d.clock) ? num(d.clock, 0, 1e7, 0) : null,
     money: num(d.money, 0, 1e7, START_MONEY),
     startType: TYPE_IDS.includes(d.startType) ? d.startType : "economic",
     nations,
     cities,
     geysers: (Array.isArray(d.geysers) ? d.geysers : []).slice(0, 16).map((g) => ({ owner: ownerOk(g?.owner ?? null, ids), hp: num(g?.hp, 0, 1, 1) })),
-    vehicles: (Array.isArray(d.vehicles) ? d.vehicles : []).slice(0, 60).map((v) => ({ owner: ownerOk(v?.owner, ids), design: typeof v?.design === "string" ? v.design.slice(0, 40) : null, x: num(v?.x, -400, 400, 0), z: num(v?.z, -400, 400, 0), hp: num(v?.hp, 0, 1, 1), city: Number.isInteger(v?.city) ? v.city : -1 })).filter((v) => v.owner && v.design),
+    vehicles: (Array.isArray(d.vehicles) ? d.vehicles : []).slice(0, 60).map((v) => ({ owner: ownerOk(v?.owner, ids), design: typeof v?.design === "string" ? v.design.slice(0, 40) : null, d: unitDir(v?.d), hp: num(v?.hp, 0, 1, 1), city: Number.isInteger(v?.city) ? v.city : -1 })).filter((v) => v.owner && v.design),
     designs: { building: designs.building && typeof designs.building === "object" ? designs.building : {}, vehicle: designs.vehicle && typeof designs.vehicle === "object" ? designs.vehicle : {} },
     captures: Object.fromEntries(TYPE_IDS.map((t) => [t, Math.round(num(d.captures?.[t], 0, 99, 0))])),
     superCool: num(d.superCool, 0, SUPER_COOLDOWN, 0),

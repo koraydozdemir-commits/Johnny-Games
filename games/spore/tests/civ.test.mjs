@@ -185,7 +185,29 @@ test("saves are read safely", () => {
   assert.deepEqual(s.cities[0].trade, { n0: 50 });
   assert.equal(s.cities[1].owner, null);
   assert.equal(s.vehicles.length, 1);
-  assert.equal(s.vehicles[0].x, 400);
+  // A version-1 (flat island) vehicle has no place on the planet: it is rebuilt at its home city.
+  assert.equal(s.vehicles[0].d, null);
+  assert.equal(s.seed, null);
   assert.deepEqual(s.captures, { military: 2, economic: 0, religious: 0 });
   assert.equal(s.card, "religious");
+});
+
+test("planet saves keep the planet's seed, the time of day and where each vehicle is", () => {
+  const s = readCivSave({
+    v: 2,
+    seed: 123456,
+    clock: 99.5,
+    cities: [{ owner: "you" }],
+    vehicles: [
+      { owner: "you", design: "military:land", d: { x: 0, y: 0.98, z: 0 } },
+      { owner: "you", design: "military:land", d: { x: "a", y: 0, z: 1 } },
+      { owner: "you", design: "military:land", d: { x: 0, y: 0, z: 0 } },
+    ],
+  });
+  assert.equal(s.seed, 123456);
+  assert.equal(s.clock, 99.5);
+  assert.deepEqual(s.vehicles[0].d, { x: 0, y: 1, z: 0 });
+  assert.equal(s.vehicles[1].d, null);
+  assert.equal(s.vehicles[2].d, null);
+  assert.equal(readCivSave({ seed: -4, cities: [{ owner: "you" }] }).seed, null);
 });

@@ -1003,7 +1003,9 @@ html body.tribeMode.creatureMode .mobileControls,html body.tribeMode.creatureMod
 .civHUD .trStats small{font-size:10px;color:#9fe0b0;font-weight:700}
 .civHUD .trToast{z-index:3}
 .civHUD .trTop,.civHUD .trGoal,.civHUD .trTribes{z-index:2}
-.civHUD .cvActions{grid-template-columns:repeat(5,1fr)}
+.civHUD .cvActions{grid-template-columns:repeat(6,1fr)}
+.civHUD .cvMark.far{font-size:10px;padding:2px 7px 6px;opacity:.92}
+@media (max-height:520px){.civHUD .cvActions{grid-template-columns:repeat(6,56px)}}
 .civHUD .cvNation{width:44px;height:44px;font-size:19px;cursor:pointer}.civHUD .cvNation span{opacity:1}
 .civHUD .cvNation[aria-disabled=true]{opacity:.45}
 .civHUD .cvMark{padding:3px 9px 7px}
