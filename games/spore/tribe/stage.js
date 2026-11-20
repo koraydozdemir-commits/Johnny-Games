@@ -1765,7 +1765,7 @@ export function createTribeStage(o) {
     frame.title(false);
     frame.setSkip(() => cine && (cine.t = Math.max(cine.t, CUTSCENES.campfire.end)));
     stick.scale.setScalar(1.8);
-    cine = { kind: "campfire", t: 0, k: reduced ? 1 / 0.6 : 1, T: CUTSCENES.campfire, stick, gy, frame, beats: beatClock({ clear: 0.15, land: CUTSCENES.campfire.land, title: 3.2, untitle: 9.5 }) };
+    cine = { kind: "campfire", t: 0, k: reduced ? 1 / 0.6 : 1, T: CUTSCENES.campfire, stick, gy, frame, beats: beatClock({ clear: 0.15, land: CUTSCENES.campfire.land, title: 2.6, untitle: 7 }) };
     hud.classList.add("cine");
   }
   function playCivRise() {
