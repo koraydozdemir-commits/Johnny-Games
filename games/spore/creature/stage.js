@@ -2266,7 +2266,7 @@ export function createCreatureStage(o) {
       lie,
       vel: null,
       spin: 0,
-      beats: beatClock({ pick: CUTSCENES.stickThrow.gather, raise: CUTSCENES.stickThrow.pickUp, throw: CUTSCENES.stickThrow.throw, untitle: CUTSCENES.stickThrow.throw + 8, fall: CUTSCENES.stickThrow.fall, bonk: CUTSCENES.stickThrow.bonk, laugh: CUTSCENES.stickThrow.bonk + 1.6, shrug: CUTSCENES.stickThrow.shrug, flash: CUTSCENES.stickThrow.flash }),
+      beats: beatClock({ pick: CUTSCENES.stickThrow.gather, raise: CUTSCENES.stickThrow.pickUp, throw: CUTSCENES.stickThrow.throw, untitle: CUTSCENES.stickThrow.throw + 3.5, fall: CUTSCENES.stickThrow.fall, bonk: CUTSCENES.stickThrow.bonk, laugh: CUTSCENES.stickThrow.bonk + 1.6, shrug: CUTSCENES.stickThrow.shrug, flash: CUTSCENES.stickThrow.flash }),
       frame: openFrame({ kicker: "Creature Stage complete", title: P.record.name, onSkip: () => (cine ? (cine.t = Math.max(cine.t, CUTSCENES.stickThrow.flash)) : null), flash: "#fff3d6" }),
       cam0: camera.position.clone(),
       // Family gather round in a loose half circle facing you.
@@ -2281,7 +2281,7 @@ export function createCreatureStage(o) {
     glare.innerHTML = '<i class="cfSun"></i><i class="cfRay"></i><i class="cfRing r1"></i><i class="cfRing r2"></i><i class="cfRing r3"></i>';
     cine.frame.el.appendChild(glare);
     cine.glare = glare;
-    // Two minutes of story: start it in the morning so the sun is high for the glare and it's still
+    // Start it in the morning so the sun is high for the glare and it's still
     // daylight when the stick comes down.
     world.setTimeOfDay(0.06);
     hud.classList.add("intro");
@@ -2292,7 +2292,7 @@ export function createCreatureStage(o) {
    * Where the camera is in each shot while the stick hangs in the sky (it cuts between them): looking up
    * at the stick against the sun, the thrower's upturned face, the family watching, and from high above.
    */
-  const SHOTS = ["sky", "face", "family", "aerial", "sky", "face"];
+  const SHOTS = ["sky", "face", "family", "aerial"];
   function stickShot(c, name, t, s, head) {
     const drift = t * 0.035;
     const yaw = c.yaw + drift;
@@ -2450,7 +2450,7 @@ export function createCreatureStage(o) {
       camera.lookAt(focus);
     } else if (t < T.apex) {
       // Tilting up after the stick.
-      const look = ease(span(t, T.throw, T.throw + 6));
+      const look = ease(span(t, T.throw, T.apex));
       const near = tmp.clone();
       const dist = c.dist * (1 - 0.35 * look);
       near.set(P.pos.x - Math.cos(yaw) * dist, P.pos.y + 1.1 - look * 0.5, P.pos.z + Math.sin(yaw) * dist);
@@ -2461,7 +2461,7 @@ export function createCreatureStage(o) {
       const len = (T.fall - T.apex) / SHOTS.length;
       const i = Math.min(SHOTS.length - 1, Math.floor((t - T.apex) / len));
       const a = stickShot(c, SHOTS[i], t, s, head);
-      const k = i > 0 ? ease(span(t, T.apex + i * len, T.apex + i * len + 1.5)) : ease(span(t, T.apex, T.apex + 3));
+      const k = i > 0 ? ease(span(t, T.apex + i * len, T.apex + i * len + 1.5)) : ease(span(t, T.apex, T.apex + Math.min(3, len)));
       const b = i > 0 ? stickShot(c, SHOTS[i - 1], t, s, head) : { pos: camera.position.clone(), look: s.position.clone() };
       shotPos.lerpVectors(b.pos, a.pos, k);
       shotLook.lerpVectors(b.look, a.look, k);
@@ -2472,7 +2472,7 @@ export function createCreatureStage(o) {
       const sky = stickShot(c, "sky", t, s, head);
       shotPos.lerpVectors(camera.position, sky.pos, Math.min(1, dt * 3));
       camera.position.copy(shotPos);
-      const k = ease(span(t, T.fall + 2, T.bonk));
+      const k = ease(span(t, T.fall + 1, T.bonk));
       camera.lookAt(mix(s.position.x, head.x, k * 0.6), mix(s.position.y, head.y, k * 0.85), mix(s.position.z, head.z, k * 0.6));
     } else {
       // The aftermath: a slow push in on the dazed thrower and its family.
@@ -2482,7 +2482,7 @@ export function createCreatureStage(o) {
       camera.lookAt(head.x, head.y - 0.2, head.z);
     }
     // The glare: where the stick is against the sky (it passes in front of the sun), brightest while it hangs.
-    const g = span(t, T.glare, T.apex + 4) * (1 - span(t, T.glareOut, T.fall + 2));
+    const g = span(t, T.glare, T.apex + 2) * (1 - span(t, T.glareOut, T.fall + 1));
     if (c.glare) {
       lookTmp.copy(s.position).project(camera);
       const onScreen = lookTmp.z < 1 && Math.abs(lookTmp.x) < 1.2 && Math.abs(lookTmp.y) < 1.2;

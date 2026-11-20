@@ -5926,15 +5926,30 @@ function saveRunningGame() {
   else if (creatureStage) creatureStage.save();
   else if (state.runStarted) saveGame(true);
 }
-function openUniverseScreen(screen, arg) {
-  if (universeOpen || creatureEditor) return;
+/** The music of whatever is under the universe screens: the stage in play, or the galaxy menu. */
+function stageMusic() {
+  if (galaxyStart || document.body.classList.contains("galaxyStart")) return "menu";
+  if (civStage) return "civ";
+  if (tribeStage) return "tribe";
+  if (creatureStage) return creatureAtNest ? "nest" : "creature";
+  return state.runStarted ? "cell" : "menu";
+}
+/** @param {string} [over] the universe screen this one opens on top of (it gets its music back) */
+function openUniverseScreen(screen, arg, over = null) {
+  if ((universeOpen && !over) || creatureEditor) return;
   if (!universe) return toast("Your universe is still loading. Try again in a moment.");
   universeOpen = true;
-  const resume = holdGame();
+  // The galaxy and the universe list are menus: the Main Menu theme plays over them.
+  const resume = over ? () => {} : holdGame();
   audio.setMusic(screen === "pedia" ? "pedia" : "menu");
   const done = () => {
+    if (over) {
+      // Back to the screen underneath (the galaxy), which is still open.
+      audio.setMusic(over === "pedia" ? "pedia" : "menu");
+      return;
+    }
     universeOpen = false;
-    audio.setMusic(civStage ? "civ" : tribeStage ? "tribe" : creatureStage ? "creature" : state.runStarted ? "cell" : "menu");
+    audio.setMusic(stageMusic());
     resume();
   };
   const { session } = universe;
@@ -5964,11 +5979,7 @@ function openUniverseScreen(screen, arg) {
       sfx: playSfx,
       portrait: (rec) => creatureSnapshot(rec, { width: 96, height: 96 }),
       focus: arg,
-      openEntry: (id) => {
-        universeOpen = false;
-        openUniverseScreen("pedia", id);
-        universeOpen = true;
-      },
+      openEntry: (id) => openUniverseScreen("pedia", id, "galaxy"),
       onClose: done,
     });
   } else if (screen === "pedia") {
