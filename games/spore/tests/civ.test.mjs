@@ -258,3 +258,78 @@ test("a design's chosen category must match how it moves", () => {
   assert.match(s.problems.join(" "), /aircraft/);
   assert.equal(validateModular({ ...car, category: "submarine" }, "vehicle").category, undefined);
 });
+
+test("weapons: each class fires its own kind of shot, flak against aircraft when it has any", async () => {
+  const { vehicleTemplates, weaponFor } = await import("../civ/rules.js");
+  const { WEAPONS } = await import("../civ/projectiles.js").catch(() => ({ WEAPONS: null }));
+  const unit = (cls, extra = []) => {
+    const d = validateModular(vehicleTemplates("military").find((t) => t.id === cls).design, "vehicle");
+    return vehicleUnit(validateModular({ ...d, parts: [...d.parts, ...extra] }, "vehicle"));
+  };
+  assert.equal(weaponFor(unit("artillery")).weapon, "artillery");
+  assert.equal(weaponFor(unit("bomber")).weapon, "bomb");
+  assert.equal(weaponFor(unit("torpedo"), "sea").weapon, "torpedo");
+  assert.equal(weaponFor(unit("torpedo"), "land").weapon, "shell");
+  assert.equal(weaponFor(unit("fighter"), "air").weapon, "tracer");
+  assert.equal(weaponFor(unit("tank", [{ id: "flak", x: 0, y: 1.4, z: -0.4 }]), "air").weapon, "flak");
+  assert.equal(weaponFor(unit("tank", [{ id: "missiles", x: 0, y: 1.4, z: -0.4 }]), "land").weapon, "missile");
+  for (const cls of ["car", "tank", "artillery", "warship", "torpedo", "fighter", "bomber"]) {
+    const w = weaponFor(unit(cls));
+    assert.ok(w.every > 0);
+    if (WEAPONS) assert.ok(WEAPONS[w.weapon], w.weapon);
+  }
+});
+
+test("economy: spice yield, the market, spice costs, build times and delivery pay", async () => {
+  const R2 = await import("../civ/rules.js");
+  assert.equal(R2.spiceYield({ owner: null, rich: 2, level: 3 }), 0, "an unclaimed geyser pumps nothing");
+  const base = R2.spiceYield({ owner: "you", rich: 1, level: 1 });
+  assert.ok(R2.spiceYield({ owner: "you", rich: 2.2, level: 1 }) > base * 2);
+  assert.ok(R2.spiceYield({ owner: "you", rich: 1, level: 3 }) > R2.spiceYield({ owner: "you", rich: 1, level: 2 }));
+  // The market wanders but stays in bounds and drifts back toward the usual price.
+  let p = R2.SPICE_PRICE.max;
+  for (let i = 0; i < 2000; i++) p = R2.marketStep(p, 0.5, 0.5);
+  assert.ok(Math.abs(p - R2.SPICE_PRICE.usual) < 0.1);
+  for (let i = 0; i < 2000; i++) {
+    p = R2.marketStep(p, 1, Math.random());
+    assert.ok(p >= R2.SPICE_PRICE.min && p <= R2.SPICE_PRICE.max);
+  }
+  // Selling more fetches more, but the price falls: two small sales are worth about one big one.
+  const big = R2.sellSpice(4, 100);
+  const a = R2.sellSpice(4, 50),
+    b = R2.sellSpice(a.price, 50);
+  assert.ok(big.price < 4 && big.money > 0 && big.money < 400);
+  assert.ok(Math.abs(a.money + b.money - big.money) <= 2);
+  assert.deepEqual(R2.sellSpice(4, 0), { money: 0, price: 4 });
+  // Spice costs: military only, aircraft most.
+  const unit = (role, mode, cls) => vehicleUnit(validateModular(starterVehicle(role, mode, undefined, cls), "vehicle"));
+  assert.equal(R2.spiceCost(unit("economic", "land")), 0);
+  assert.ok(R2.spiceCost(unit("military", "air", "fighter")) > R2.spiceCost(unit("military", "land", "tank")));
+  // Factories build faster.
+  const tank = unit("military", "land", "tank");
+  const none = { plots: [null, null, null, null, null, null] },
+    two = { plots: ["factory", "factory", null, null, null, null] };
+  assert.ok(R2.buildTime(tank, two) < R2.buildTime(tank, none) / 2);
+  // Longer routes and bigger partners pay more; raided cargo pays half.
+  assert.ok(R2.deliveryPay(200, 10) > R2.deliveryPay(40, 10));
+  assert.ok(R2.deliveryPay(40, 20) > R2.deliveryPay(40, 5));
+  assert.ok(Math.abs(R2.deliveryPay(100, 10, true) - R2.deliveryPay(100, 10) / 2) <= 1);
+});
+
+test("economy saves: spice, price, build queues and derrick levels", () => {
+  const s = readCivSave({
+    spice: 55.5,
+    price: 99,
+    cities: [{ owner: "you", queue: [{ key: "military:air:2", done: 0.4, money: 150, spice: 12 }, { key: "bad key" }, { key: "military:land" }, { key: "x" }] }],
+    geysers: [{ owner: "you", level: 7 }, { owner: null }],
+  });
+  assert.equal(s.spice, 55.5);
+  assert.equal(s.price, 7, "price clamped");
+  assert.deepEqual(s.cities[0].queue.map((q) => q.key), ["military:air:2", "military:land"]);
+  assert.equal(s.cities[0].queue[0].done, 0.4);
+  assert.equal(s.geysers[0].level, 3);
+  assert.equal(s.geysers[1].level, 1);
+  const old = readCivSave({ cities: [{ owner: "you" }] });
+  assert.equal(old.spice, 20);
+  assert.deepEqual(old.cities[0].queue, []);
+});
