@@ -21,7 +21,7 @@ import { validateModular } from "../creations/format.js";
 import { ROLES, STARTER_DESIGNS, VEHICLE_CLASSES, designStats, vehicleMode } from "../creations/modular.js";
 import { speciesStyle } from "../tribe/life.js";
 import { createVillage } from "../tribe/village.js";
-import { R, angle, arc, createPlanet, frameAt, offsetDir, seedOf, step, towards } from "./planet.js";
+import { R, angle, arc, createPlanet, frameAt, mulberry, offsetDir, seedOf, step, towards } from "./planet.js";
 import { createGlobe } from "./globe.js";
 import {
   AIR_AT,
@@ -33,7 +33,6 @@ import {
   MAX_TURRETS,
   PLOTS,
   PLOT_ROLES,
-  SPICE_INCOME,
   START_MONEY,
   SUPERWEAPONS,
   SUPER_COOLDOWN,
@@ -69,6 +68,16 @@ import {
   CLASSES_BY_MODE,
   hitMult,
   weaponFor,
+  spiceYield,
+  geyserRichness,
+  marketStep,
+  sellSpice,
+  spiceCost,
+  buildTime,
+  deliveryPay,
+  QUEUE_MAX,
+  DERRICK_UPGRADE,
+  SPICE_PRICE,
 } from "./rules.js";
 import { createProjectiles } from "./projectiles.js";
 
@@ -155,6 +164,9 @@ export function createCivStage(o) {
   /* ---- state -------------------------------------------------------------------------------- */
   const T = {
     money: save ? save.money : START_MONEY,
+    // Spice: pumped by derricks, spent on military vehicles, sold on the world market at `price`.
+    spice: save?.spice ?? 20,
+    price: save?.price ?? SPICE_PRICE.usual,
     startType: save?.startType || legacy.startType,
     nations: [],
     cities: [],
@@ -336,6 +348,7 @@ export function createCivStage(o) {
       base: clampRel(NATION_START[type] + mods.relation),
       war: saved ? saved.war : false,
       money: saved ? saved.money : 120,
+      spice: saved?.spice ?? 0,
       alive: saved ? saved.alive : true,
       clock: 4 + i * 1.3,
       buildClock: 20 + i * 7,
@@ -375,6 +388,7 @@ export function createCivStage(o) {
         trade: saved ? saved.trade : {},
         conv: saved ? saved.conv : {},
         unrest: saved ? saved.unrest : 0,
+        queue: saved?.queue || [],
         coastal: site.coastal,
         group: null,
         calm: 99,
@@ -726,7 +740,9 @@ export function createCivStage(o) {
   /* ---- spice geysers ------------------------------------------------------------------------------ */
   spiceDirs.forEach((d, i) => {
     const saved = save?.geysers[i];
-    T.geysers.push({ id: i, d, owner: saved ? saved.owner : null, hp: saved ? saved.hp : 1, group: null });
+    // Each geyser has its richness from the planet's seed, so it's the same every time you play it.
+    const rich = geyserRichness(mulberry((seed ^ (i * 2654435761)) >>> 0)());
+    T.geysers.push({ id: i, d, rich, level: saved?.level || 1, owner: saved ? saved.owner : null, hp: saved ? saved.hp : 1, group: null });
   });
   function buildGeyser(gz) {
     if (gz.group) {
@@ -735,13 +751,22 @@ export function createCivStage(o) {
     }
     const g = new THREE.Group();
     stand(g, gz.d);
+    // Richer geysers are wider; better derricks are taller, with a tank for each level.
     const vent = new THREE.Mesh(sharedGeo.vent, sharedMat.vent);
     vent.position.y = 0.4;
+    vent.scale.set(0.7 + gz.rich * 0.35, 1, 0.7 + gz.rich * 0.35);
     g.add(vent);
     if (gz.owner) {
       const tower = new THREE.Mesh(sharedGeo.derrick, sharedMat.derrick);
-      tower.position.y = 3;
+      tower.position.y = 3 * (0.85 + gz.level * 0.15);
+      tower.scale.setScalar(0.85 + gz.level * 0.15);
       g.add(tower);
+      for (let k = 1; k < gz.level; k++) {
+        const tank = new THREE.Mesh(sharedGeo.vent, sharedMat.derrick);
+        tank.position.set(k === 1 ? 1.6 : -1.6, 0.9, 0.6);
+        tank.scale.set(0.8, 2.2, 0.8);
+        g.add(tank);
+      }
       gz.flagMat = plain(ownerColor(gz.owner), { side: THREE.DoubleSide });
       const flag = new THREE.Mesh(sharedGeo.flag, gz.flagMat);
       flag.position.set(0.7, 5, 0);
@@ -863,7 +888,7 @@ export function createCivStage(o) {
     <div class="trTop">
       <div class="trBox">
         <b class="trName" id="cvName"></b>
-        <div class="trStats"><span title="Money (Sporebucks)">§ <b id="cvMoney">0</b> <small id="cvIncome"></small></span><span title="Cities you hold">🏙 <b id="cvCities">0</b></span><span title="Vehicles">🚙 <b id="cvVeh">0</b></span></div>
+        <div class="trStats"><button class="cvEcon" id="cvEcon" aria-label="Economy: money, spice and the spice market"><span title="Money (Sporebucks)">§ <b id="cvMoney">0</b> <small id="cvIncome"></small></span><span title="Spice">🌶 <b id="cvSpice">0</b></span></button><span title="Cities you hold">🏙 <b id="cvCities">0</b></span><span title="Vehicles">🚙 <b id="cvVeh">0</b></span></div>
       </div>
       <button class="trIcon" id="cvMenu" aria-label="Menu" title="Menu">☰</button>
     </div>
@@ -1378,7 +1403,7 @@ export function createCivStage(o) {
     }
     if (hit.type === "geyser") {
       if (sel.length) return orderTo(sel, { type: "geyser", geyser: hit.gz, d: hit.gz.d });
-      return toast(hit.gz.owner === YOU ? "Your spice derrick: it pays you §" + SPICE_INCOME + " a second." : hit.gz.owner ? `A spice derrick of the ${ownerName(hit.gz.owner)}. Military vehicles can wreck it.` : "A spice geyser. Send any vehicle that can reach it to claim it.");
+      return openSheet("spice", { gz: hit.gz });
     }
     if (sel.length) orderTo(sel, { type: "move", d: hit.d });
     else if (sheet) closeSheet();
@@ -1498,33 +1523,80 @@ export function createCivStage(o) {
         shot(from, to, "faith");
       }
       if (done) takeCity(c, v.owner, "religious");
-    } else {
-      const res = deliverTrade(c, v.owner, (v.unit.trade / 6) * dt);
-      const n = nationOf(c.owner);
-      if (n && v.owner === YOU) n.relation = clampRel(n.relation + (DIPLO.trade / 6) * dt);
-      if (c.owner === YOU && v.owner !== YOU) nationOf(v.owner) && (nationOf(v.owner).relation = clampRel(nationOf(v.owner).relation + (DIPLO.trade / 12) * dt));
-      if ((v.cool -= dt) <= 0) {
-        v.cool = 1.4;
-        shot(from, to, "trade");
+    }
+  }
+  /* ---- trade runs: goods out to the partner city, back home for more --------------------------------- */
+  /** The city a trade vehicle loads at: its own home if it can still get there, else the nearest it can. */
+  function tradeHome(v) {
+    const ok = (c) => c.owner === v.owner && (v.mode !== "sea" || c.anchor) && reachCity(v, c);
+    const home = T.cities[v.home];
+    if (home && ok(home)) return home;
+    return T.cities.filter(ok).sort((a, b) => arc(a.d, v.d) - arc(b.d, v.d))[0] || null;
+  }
+  function tradeRun(v, c, dt) {
+    const ord = v.order;
+    if (c.owner && hostile(v.owner, c.owner)) {
+      if (v.owner === YOU) toast(`${c.name} won't trade with you while you're at war.`, 3.5);
+      return void (v.order = null);
+    }
+    const home = tradeHome(v);
+    if (!home) return void (v.order = null);
+    const goal = (city) => (v.mode === "sea" ? city.anchor : city.d);
+    const near = v.mode === "sea" ? RANGE.sea : 7;
+    // A fresh order starts loaded if the vehicle is at home; otherwise it goes home to load first.
+    ord.loaded ??= arc(v.d, home.d) < 45;
+    if (ord.loaded) {
+      // Crossing the land of a nation at war with you: raiders take half the cargo.
+      const land = nearestCity(v.d);
+      if (land?.owner && land.owner !== v.owner && hostile(v.owner, land.owner)) {
+        if (!ord.raided && v.owner === YOU) toast(`Your trade vehicle is crossing hostile land: raiders will take half its cargo.`, 3.5);
+        ord.raided = true;
       }
-      if (res.newRoute && v.owner === YOU) toast(`Trade route open with ${c.name}: it pays you both.`);
-      if (res.complete) {
-        if (v.owner === YOU) {
-          if (!v.toldBuy) toast(`Trade with ${c.name} is complete: tap it to buy it.`, 4);
-          v.toldBuy = true;
-          v.order = null;
-        } else {
-          // A rival economic nation buys a city once its trade is complete and it can afford it.
-          const n2 = nationOf(v.owner),
-            cost = buyoutCost(cityEconomy(c, {}), 0);
-          // (Your own cities are never for sale: trade with you just pays you both.)
-          if (n2 && n2.money >= cost && c.owner !== YOU) {
-            n2.money -= cost;
-            takeCity(c, v.owner, "economic");
-          }
-        }
+      const left = drive(v, goal(c), dt, near);
+      if (left === Infinity) return void (v.order = null);
+      if (left > near + 0.6) return;
+      deliver(v, c, home, ord.raided);
+      ord.loaded = false;
+      ord.raided = false;
+    } else {
+      const left = drive(v, goal(home), dt, near + 1);
+      if (left === Infinity) return void (v.order = null);
+      if (left > near + 1.6) return;
+      ord.loaded = true;
+      if (v.owner === YOU && cam.salt < 200) popAt(home.d, 8, "📦", "good");
+    }
+  }
+  /** A delivery: both sides are paid (more for longer routes and bigger partners), and the partnership grows. */
+  function deliver(v, c, home, raided) {
+    const pay = deliveryPay(arc(home.d, c.d), cityEconomy(c, {}).pop, raided);
+    const res = deliverTrade(c, v.owner, v.unit.trade * 1.2);
+    earn(v.owner, pay);
+    if (c.owner) earn(c.owner, Math.round(pay * 0.5));
+    const partner = nationOf(c.owner),
+      trader = nationOf(v.owner);
+    if (partner && v.owner === YOU) partner.relation = clampRel(partner.relation + DIPLO.trade);
+    if (c.owner === YOU && trader) trader.relation = clampRel(trader.relation + DIPLO.trade / 2);
+    shot(vehiclePos(v, 1.5, _a), ground(c.d, 4, _b), "trade");
+    if (v.owner === YOU) {
+      popAt(c.d, 8, "+§" + pay + (raided ? " (raided)" : ""), raided ? "bad" : "good");
+      if (res.newRoute) toast(`Trade route open with ${c.name}: each delivery pays you both, and the route pays a little all the time.`, 4.5);
+      if (res.complete && !c.toldBuy) {
+        c.toldBuy = true;
+        toast(`Trade with ${c.name} is complete: tap it to buy it.`, 4);
+      }
+    } else if (res.complete && c.owner !== YOU && trader) {
+      // A rival economic nation buys a city once its trade is complete and it can afford it.
+      // (Your own cities are never for sale: trade with you just pays you both.)
+      const cost = buyoutCost(cityEconomy(c, {}), 0);
+      if (trader.money >= cost) {
+        trader.money -= cost;
+        takeCity(c, v.owner, "economic");
       }
     }
+  }
+  function earn(owner, money) {
+    if (owner === YOU) T.money += money;
+    else if (nationOf(owner)) nationOf(owner).money += money;
   }
   function updateVehicle(v, dt) {
     const ord = v.order;
@@ -1556,6 +1628,7 @@ export function createCivStage(o) {
     if (ord?.type === "city") {
       const c = ord.city;
       if (c.owner === v.owner) return void (v.order = null);
+      if (v.role === "economic") return tradeRun(v, c, dt);
       const goal = v.mode === "sea" ? c.anchor : c.d;
       if (!goal) return void (v.order = null);
       // Artillery and warships fight from further out (out of the turrets' reach, for artillery).
@@ -1603,9 +1676,17 @@ export function createCivStage(o) {
       if (v.role !== "military") return void (v.order = null);
       if (v.owner === YOU) declareOn(g.owner, "You attacked their derrick");
       g.hp -= (v.unit.dps * dt) / 40;
+      if ((v.cool -= dt) <= 0) {
+        const w = weaponFor(v.unit, "land");
+        v.cool = w.every;
+        const aim = ground(g.d, 3);
+        projectiles.fire(w.weapon, vehiclePos(v, 1.5, new THREE.Vector3()), () => aim);
+      }
       if (g.hp <= 0) {
+        if (g.owner === YOU) toast("One of your spice derricks was wrecked!", 3.5);
         g.owner = null;
         g.hp = 1;
+        g.level = 1;
         buildGeyser(g);
         boom(ground(g.d, 3), 8);
       }
@@ -1613,12 +1694,13 @@ export function createCivStage(o) {
     }
     g.owner = v.owner;
     g.hp = 1;
+    g.level = 1;
     buildGeyser(g);
     v.order = null;
     if (v.owner === YOU) {
       o.sfx("unlock");
       popAt(g.d, 7, "+ spice", "good");
-      tipOnce("spice", `Spice! Each derrick pays you §${SPICE_INCOME} a second.`);
+      tipOnce("spice", `Spice! This derrick pumps ${spiceYield(g).toFixed(1)} spice a second. Military vehicles need spice; sell the rest on the market (tap § at the top).`, 5.5);
       chronicle({ key: "civ:spice:first", stage: "civ", icon: "🌶", text: "Claimed the first spice geyser." });
     }
   }
@@ -1674,7 +1756,15 @@ export function createCivStage(o) {
         n.alive = false;
         continue;
       }
-      n.money += (mine.reduce((s, c) => s + cityEconomy(c, {}).income, 0) + T.geysers.filter((g) => g.owner === n.id).length * SPICE_INCOME + tradeIncome(T.cities, n.id)) * dt;
+      n.money += (mine.reduce((s, c) => s + cityEconomy(c, {}).income, 0) + tradeIncome(T.cities, n.id)) * dt;
+      // Rivals keep the spice they need for their army and sell the rest at the going price.
+      n.spice += spiceIncome(n.id) * dt;
+      if (n.spice > 60) {
+        const sale = sellSpice(T.price, n.spice - 40);
+        n.money += sale.money;
+        T.price = sale.price;
+        n.spice = 40;
+      }
       // Relations settle toward a resting point that falls as your nation grows: a rising power worries everyone.
       const rest = n.base - 6 * Math.max(0, yourCities().length - 1);
       if (!n.war) n.relation = clampRel(n.relation + Math.sign(rest - n.relation) * Math.min(Math.abs(rest - n.relation), DIPLO.drift * dt));
@@ -1718,8 +1808,21 @@ export function createCivStage(o) {
         // A military nation builds a mix of classes: mostly the main one, some artillery, bombers, torpedo boats.
         const classes = CLASSES_BY_MODE[mode];
         const key = c.type + ":" + mode + (c.type === "military" ? ":" + classes[Math.random() < 0.6 ? 0 : 1 + Math.floor(Math.random() * (classes.length - 1))] : "");
-        n.money -= vehicleUnit(vehicleDesign(n.id, key)).cost;
-        spawnVehicle(n.id, key, c);
+        const nu = vehicleUnit(vehicleDesign(n.id, key));
+        // Military vehicles burn spice: without it, a nation must wait (or win some geysers).
+        if (n.spice >= spiceCost(nu)) {
+          n.money -= nu.cost;
+          n.spice -= spiceCost(nu);
+          spawnVehicle(n.id, key, c);
+        }
+      }
+      // Spice is worth fighting over: idle vehicles claim free geysers, and at war, raid your derricks.
+      for (const v of fleet) {
+        if (v.order || v.mode === "sea" || Math.random() > 0.35) continue;
+        const want = T.geysers
+          .filter((g) => (!g.owner || (n.war && g.owner === YOU && v.role === "military")) && arc(g.d, v.d) < 130 && reachable(v, g.d))
+          .sort((a, b) => arc(a.d, v.d) / a.rich - arc(b.d, v.d) / b.rich)[0];
+        if (want) v.order = { type: "geyser", geyser: want, d: want.d };
       }
       // The first minute and a half is for building up, on every side.
       if (plan.target && T.time > 90) {
@@ -1773,6 +1876,8 @@ export function createCivStage(o) {
     if (sheet.kind === "city") html = cityHtml(sheet.city);
     else if (sheet.kind === "nation") html = nationHtml(sheet.nation);
     else if (sheet.kind === "designs") html = designsHtml();
+    else if (sheet.kind === "spice") html = spiceHtml(sheet.gz);
+    else if (sheet.kind === "economy") html = economyHtml();
     else if (sheet.kind === "won") html = wonHtml();
     else if (sheet.kind === "lost") html = lostHtml();
     else html = helpHtml();
@@ -1782,6 +1887,50 @@ export function createCivStage(o) {
     el.innerHTML = html;
     el.querySelector(".tsClose")?.addEventListener("click", closeSheet);
     bindSheet(el);
+  }
+  const RICHNESS = (r) => (r >= 2 ? "Very rich" : r >= 1.5 ? "Rich" : r >= 1 ? "Ordinary" : "Poor");
+  /** A spice geyser: how rich it is, whose it is, what it pumps, and what you can do about it. */
+  function spiceHtml(g) {
+    const land = nearestCity(g.d);
+    const sel = [...T.selected].filter((v) => !v.dead && v.owner === YOU);
+    const lvl = g.level || 1;
+    const next = lvl < 3 ? { ...g, level: lvl + 1, owner: g.owner || YOU } : null;
+    let body;
+    if (g.owner === YOU)
+      body = `<p class="tsHint">Your derrick pumps <b>🌶 ${spiceYield(g).toFixed(2)}/s</b>. ${next ? `Upgrading it to level ${lvl + 1} makes that ${spiceYield(next).toFixed(2)}/s.` : "It's fully upgraded."}</p>
+        <div class="tsBtns">${next ? `<button class="good" id="cvUpgrade" ${dis(T.money < DERRICK_UPGRADE[lvl])}>⬆ Level ${lvl + 1} · §${DERRICK_UPGRADE[lvl]}</button>` : ""}<button id="cvLook">📍 Look here</button></div>`;
+    else if (g.owner)
+      body = `<p class="tsHint">A derrick of the ${esc(ownerName(g.owner))}, pumping ${spiceYield(g).toFixed(2)}/s for them. Military vehicles can wreck it (that means war); then any vehicle can claim the geyser. Taking the city whose land it's on takes the derrick too.</p>
+        <div class="tsBtns">${sel.some((v) => v.role === "military") ? `<button class="bad" id="cvClaim">⚔ Send ${sel.filter((v) => v.role === "military").length} to wreck it</button>` : ""}<button id="cvLook">📍 Look here</button></div>`;
+    else
+      body = `<p class="tsHint">A free geyser: any vehicle that can reach it builds a derrick, pumping 🌶 ${spiceYield({ ...g, owner: YOU, level: 1 }).toFixed(2)}/s at first. Boats can't reach geysers.</p>
+        <div class="tsBtns">${sel.length ? `<button class="good" id="cvClaim">🚩 Send ${sel.length} to claim it</button>` : ""}<button id="cvLook">📍 Look here</button></div>`;
+    return `<div class="tsHead"><div>🌶 ${RICHNESS(g.rich)} spice geyser<small>${g.owner ? esc(cap(ownerName(g.owner))) + " · derrick level " + lvl : "Unclaimed"}${land ? " · on " + esc(land.name) + "'s land" : ""}</small></div><button class="tsClose" aria-label="Close">✕</button></div>
+      <div class="tsStats"><span><b>×${g.rich}</b>richness</span><span><b>${g.owner ? spiceYield(g).toFixed(2) : "—"}</b>🌶 / s</span><span><b>§${T.price.toFixed(1)}</b>per spice</span></div>
+      ${body}`;
+  }
+  /** Your economy: where money and spice come from, the spice market, and your derricks. */
+  function economyHtml() {
+    const cities = yourCities().reduce((s, c) => s + cityEconomy(c, ownerMods(YOU)).income, 0);
+    const routes = tradeIncome(T.cities, YOU);
+    const traders = vehiclesOf(YOU).filter((v) => v.role === "economic" && v.order?.type === "city").length;
+    const mine = T.geysers.filter((g) => g.owner === YOU);
+    const sell = (amount) => sellSpice(T.price, amount).money;
+    const chunk = Math.min(Math.floor(T.spice), 25);
+    const trend = T.price > SPICE_PRICE.usual * 1.15 ? "high" : T.price < SPICE_PRICE.usual * 0.85 ? "low" : "usual";
+    return `<div class="tsHead"><div>§ Economy<small>Money pays for buildings and vehicles; spice for military vehicles</small></div><button class="tsClose" aria-label="Close">✕</button></div>
+      <div class="tsStats"><span><b>${Math.floor(T.money)}</b>§ money</span><span><b>+${income().toFixed(1)}</b>§ / s</span><span><b>${Math.floor(T.spice)}</b>🌶 spice</span><span><b>+${spiceIncome().toFixed(1)}</b>🌶 / s</span></div>
+      <h5 class="tsKind">Income</h5>
+      <p class="tsHint">🏙 Cities: §${cities.toFixed(1)}/s (houses and factories; rioting cities pay a quarter)<br>🤝 Trade routes: §${routes.toFixed(1)}/s, plus a payment for every delivery (${traders} trade vehicle${traders === 1 ? "" : "s"} on the road)<br>🌶 Derricks: ${spiceIncome().toFixed(2)} spice/s</p>
+      <h5 class="tsKind">Spice market · §${T.price.toFixed(2)} a spice (${trend})</h5>
+      <div class="tsBtns"><button id="cvSell25" ${dis(chunk < 1)}>Sell ${chunk} → §${sell(chunk)}</button><button id="cvSellHalf" ${dis(T.spice < 2)}>Sell half → §${sell(Math.floor(T.spice / 2))}</button><button id="cvSellAll" ${dis(T.spice < 1)}>Sell all → §${sell(Math.floor(T.spice))}</button></div>
+      <p class="tsHint">The price drifts, and every sale pushes it down a little (rival nations sell too). Keep enough for the military vehicles you'll need.</p>
+      <h5 class="tsKind">Your derricks · ${mine.length}</h5>
+      <div class="tsTrade">${
+        mine
+          .map((g) => `<button class="tsTradeBtn" data-geyser="${g.id}"><span>🌶</span><b>${RICHNESS(g.rich)} · L${g.level}<small>${spiceYield(g).toFixed(2)}/s${nearestCity(g.d) ? " · " + esc(nearestCity(g.d).name) : ""}</small></b><em>${g.level < 3 ? "⬆ §" + DERRICK_UPGRADE[g.level] : "max"}</em></button>`)
+          .join("") || '<p class="tsHint">None yet: send any vehicle to a spice geyser (the glowing plumes) to claim it.</p>'
+      }</div>`;
   }
   function cityHtml(c) {
     const econ = cityEconomy(c, ownerMods(c.owner));
@@ -1810,13 +1959,23 @@ export function createCivStage(o) {
           const locked = !modes.includes(mode);
           const why = mode === "sea" && !c.coastal ? "Inland city" : mode === "air" && locked ? `Needs ${AIR_AT} cities` : "";
           const k = clsOf(u);
-          return `<button class="tsTradeBtn" data-vehicle="${key}" ${dis(locked || have >= cap || T.money < u.cost || !u.ok)}><span>${k ? k.icon : MODE_ICON[mode]}</span><b>${esc(T.designs.vehicle[key].name)}<small>${why || (k ? k.name : MODE_NAME[mode])}</small></b><em>§${u.cost}</em></button>`;
+          const sp = spiceCost(u);
+          return `<button class="tsTradeBtn" data-vehicle="${key}" ${dis(locked || have + queued() >= cap || c.queue.length >= QUEUE_MAX || T.money < u.cost || T.spice < sp || !u.ok)}><span>${k ? k.icon : MODE_ICON[mode]}</span><b>${esc(T.designs.vehicle[key].name)}<small>${why || `${k ? k.name : MODE_NAME[mode]} · ${buildTime(u, c, strengths)}s`}</small></b><em>§${u.cost}${sp ? `<br>🌶${sp}` : ""}</em></button>`;
         })
         .join("");
+      const queue = c.queue.length
+        ? `<div class="cvQueue">${c.queue
+            .map((q, i) => {
+              const d = vehicleDesign(YOU, q.key);
+              const k = clsOf(vehicleUnit(d, mods));
+              return `<button class="cvQItem" data-cancel="${i}" aria-label="${esc(d.name)}, ${Math.round(q.done * 100)}% built: tap to cancel and get a refund"><span>${k?.icon || "🚙"}</span><i><b style="width:${Math.round(q.done * 100)}%"></b></i><small>${i ? "waiting" : Math.round(q.done * 100) + "%"} ✕</small></button>`;
+            })
+            .join("")}</div>`
+        : "";
       return `${head}
         <h5 class="tsKind">Buildings · tap a plot</h5><div class="cvPlots">${plots}</div>${choices}
         <div class="tsBtns cvRow"><button id="cvTurret" ${dis(c.turrets >= MAX_TURRETS || T.money < BUILD_COST.turret)}>🗼 Turret · §${BUILD_COST.turret} (${c.turrets}/${MAX_TURRETS})</button><button id="cvFocus">📍 Look here</button></div>
-        <h5 class="tsKind">${CITY_TYPES[role].icon} ${CITY_TYPES[role].name} vehicles · ${have}/${cap}</h5><div class="tsTrade cvBuilds">${builds}</div>
+        <h5 class="tsKind">${CITY_TYPES[role].icon} ${CITY_TYPES[role].name} vehicles · ${have}/${cap}${c.queue.length ? ` · building ${c.queue.length}/${QUEUE_MAX}` : ""}</h5>${queue}<div class="tsTrade cvBuilds">${builds}</div>
         <p class="tsHint">${CITY_TYPES[role].desc}${econ.riot ? " <b>This city is rioting:</b> build entertainment, or fewer factories." : ""}</p>`;
     }
     const nat = nationOf(c.owner);
@@ -1894,13 +2053,36 @@ export function createCivStage(o) {
         <li><b>Look around:</b> drag to turn the planet, pinch or scroll to zoom from orbit down to the streets, twist two fingers (or Q/E) to turn the view. 🌍 jumps between the whole planet and the ground.</li>
         <li><b>Your cities:</b> tap one to build houses (people), factories (money, but unhappy people), entertainment (happiness), temples (faith) and turrets.</li>
         <li><b>Vehicles:</b> each city makes vehicles of its own kind. Tap vehicles (or 🚙 All) to select them, double-tap one for every vehicle of its class on screen, or use ⬚ (Shift-drag on a computer) to drag a box round a group. Then tap a city, a spice geyser, an enemy vehicle or the ground. The panel above your vehicles shows their health and gives more orders: 🛡 Guard a spot, 🔁 Patrol, change formation, 🎥 Follow, ✋ Stop. Land vehicles stay on their continent; boats (from coastal cities) cross the sea; aircraft go anywhere.</li>
-        <li><b>Take cities</b> three ways: ⚔ military vehicles knock out turrets and then the hall; 💰 economic vehicles trade until you can buy the city; 🕊 religious vehicles preach until it converts. Every city you take makes vehicles of its kind.</li>
-        <li><b>Spice:</b> drive any vehicle to a geyser to claim it. Each one pays you. Military vehicles can wreck a rival's derrick.</li>
+        <li><b>Take cities</b> three ways: ⚔ military vehicles knock out turrets and then the hall; 💰 economic vehicles run trade until you can buy the city; 🕊 religious vehicles preach until it converts. Every city you take makes vehicles of its kind.</li>
+        <li><b>Spice:</b> drive any vehicle to a geyser to build a derrick; richer geysers and upgraded derricks pump more. Military vehicles need spice to build; sell the rest on the market (tap § at the top). Military vehicles can wreck a rival's derrick, and taking a city takes the derricks on its land.</li>
+        <li><b>Production and trade:</b> vehicles are paid for when ordered and built over time; factories build faster. Trade vehicles carry goods between one of your cities and a partner: every delivery pays you both. War, and crossing a hostile nation's land, disrupts trade.</li>
         <li><b>Nations:</b> tap a nation at the top for gifts and peace. Military nations go to war with those they hate; religious ones preach; economic ones trade.</li>
         <li><b>Superweapon:</b> hold half the planet's cities and it's yours: one city at a time, the way you've been winning them.</li>
         <li><b>Goal:</b> unite every city on the planet under your flag. How you do it decides your card.</li>
       </ul>
       ${legacy.lines.length ? `<h5 class="tsKind">What your species brings</h5><ul class="tsHelp tsLegacy">${legacy.lines.map((l) => `<li>${l.icon} ${esc(l.text)}</li>`).join("")}</ul>` : ""}`;
+  }
+  function sellSome(amount) {
+    amount = Math.floor(Math.min(amount, T.spice));
+    if (amount < 1) return;
+    const sale = sellSpice(T.price, amount);
+    T.spice -= amount;
+    T.money += sale.money;
+    T.price = sale.price;
+    o.sfx("build");
+    toast(`Sold ${amount} spice for §${sale.money}.`, 2);
+    renderSheet();
+  }
+  function upgradeDerrick(g) {
+    const lvl = g.level || 1;
+    if (g.owner !== YOU || lvl >= 3) return;
+    if (T.money < DERRICK_UPGRADE[lvl]) return toast("Not enough money.");
+    T.money -= DERRICK_UPGRADE[lvl];
+    g.level = lvl + 1;
+    buildGeyser(g);
+    o.sfx("build");
+    popAt(g.d, 8, "⬆ level " + g.level, "good");
+    renderSheet();
   }
   function bindSheet(el) {
     const on = (id, fn) => {
@@ -1936,6 +2118,26 @@ export function createCivStage(o) {
           renderSheet();
         }),
     );
+    if (sheet?.kind === "spice") {
+      const g = sheet.gz;
+      el.querySelector("#cvUpgrade")?.addEventListener("click", (e) => (e.currentTarget.getAttribute("aria-disabled") === "true" ? toast("Not enough money.") : upgradeDerrick(g)));
+      el.querySelector("#cvLook")?.addEventListener("click", () => {
+        focusOn(g.d, ALT.city);
+        closeSheet();
+      });
+      el.querySelector("#cvClaim")?.addEventListener("click", () => {
+        const sel = [...T.selected].filter((v) => !v.dead && (!g.owner || v.role === "military"));
+        orderTo(sel, { type: "geyser", geyser: g, d: g.d });
+        closeSheet();
+      });
+    }
+    if (sheet?.kind === "economy") {
+      el.querySelector("#cvSell25")?.addEventListener("click", () => sellSome(25));
+      el.querySelector("#cvSellHalf")?.addEventListener("click", () => sellSome(T.spice / 2));
+      el.querySelector("#cvSellAll")?.addEventListener("click", () => sellSome(T.spice));
+      el.querySelectorAll("[data-geyser]").forEach((b) => (b.onclick = () => openSheet("spice", { gz: T.geysers[Number(b.dataset.geyser)] })));
+    }
+    el.querySelectorAll("[data-cancel]").forEach((b) => (b.onclick = () => cancelBuild(sheet.city, Number(b.dataset.cancel))));
     el.querySelectorAll("[data-vehicle]").forEach((b) => (b.onclick = () => (b.getAttribute("aria-disabled") === "true" ? vehicleRefusal(sheet.city, b.dataset.vehicle) : buyVehicle(sheet.city, b.dataset.vehicle))));
     el.querySelectorAll("[data-design]").forEach((b) => (b.onclick = () => editDesign(...b.dataset.design.split("|"))));
     el.querySelectorAll("[data-new]").forEach((b) => (b.onclick = () => (b.getAttribute("aria-disabled") === "true" ? toast(`You can keep ${DESIGNS_PER_ROLE} designs of your own per kind: delete one first.`) : newDesign(b.dataset.new))));
@@ -1980,25 +2182,55 @@ export function createCivStage(o) {
     on("#cvKeep", closeSheet);
     on("#cvRestart", () => o.onRestart());
   }
+  /** Vehicles you have plus those being built (each counts against what your cities can support). */
+  const queued = () => yourCities().reduce((s, c) => s + c.queue.length, 0);
   function vehicleRefusal(c, key) {
     const mode = key.split(":")[1];
     const u = vehicleUnit(vehicleDesign(YOU, key), mods);
     if (mode === "sea" && !c.coastal) return toast("This city is inland: only coastal cities build boats.");
     if (mode === "air" && yourCities().length < AIR_AT) return toast(`Aircraft need ${AIR_AT} cities.`);
     if (!u.ok) return toast("That design can't be used: open 🎨 Designs and fix it.");
-    if (vehiclesOf(YOU).length >= vehicleCap(YOU)) return toast(`Each city supports ${VEHICLES_PER_CITY} vehicles. Take more cities for more.`);
+    if (vehiclesOf(YOU).length + queued() >= vehicleCap(YOU)) return toast(`Each city supports ${VEHICLES_PER_CITY} vehicles (counting those being built). Take more cities for more.`);
+    if (c.queue.length >= QUEUE_MAX) return toast(`A city builds one vehicle at a time, with ${QUEUE_MAX - 1} more waiting.`);
+    if (T.spice < spiceCost(u)) return toast(`Not enough spice: this needs 🌶 ${spiceCost(u)}. Claim spice geysers with any vehicle.`, 4);
     toast("Not enough money.");
   }
+  /** Order a vehicle: paid now, built over time at the city (faster with factories). */
   function buyVehicle(c, key) {
-    if (!T.designs.vehicle[key] || !key.startsWith(c.type + ":")) return;
+    if (!T.designs.vehicle[key] || !key.startsWith(c.type + ":") || c.queue.length >= QUEUE_MAX) return;
     const u = vehicleUnit(T.designs.vehicle[key], mods);
+    const sp = spiceCost(u);
     T.money -= u.cost;
-    const v = spawnVehicle(YOU, key, c);
-    T.selected.clear();
-    T.selected.add(v);
+    T.spice -= sp;
+    c.queue.push({ key, done: 0, money: u.cost, spice: sp });
     o.sfx("build");
-    tipOnce("firstVehicle", "Your new vehicle is selected: tap a city to send it there, or the ground to move it.", 5);
+    tipOnce("queue", `Being built at ${c.name}: ${buildTime(u, c, strengths)}s. Factories build faster.`, 4);
     renderSheet();
+  }
+  function cancelBuild(c, i) {
+    const q = c.queue[i];
+    if (!q) return;
+    c.queue.splice(i, 1);
+    T.money += q.money;
+    T.spice += q.spice;
+    o.sfx("click");
+    renderSheet();
+  }
+  /** Your cities' factories at work: the first vehicle in each queue is built, then the next. */
+  function updateProduction(dt) {
+    for (const c of yourCities()) {
+      const q = c.queue[0];
+      if (!q) continue;
+      const u = vehicleUnit(vehicleDesign(YOU, q.key), mods);
+      q.done = Math.min(1, q.done + dt / Math.max(1, buildTime(u, c, strengths)));
+      if (q.done < 1) continue;
+      c.queue.shift();
+      // A design deleted while it was being built comes out as the standard one (vehicleDesign falls back).
+      const v = spawnVehicle(YOU, q.key, c);
+      popAt(c.d, 9, (clsOf(v.unit)?.icon || "🚙") + " ready", "good");
+      if (!T.selected.size) T.selected.add(v);
+      tipOnce("firstVehicle", "Your new vehicle is ready and selected: tap a city to send it there, or the ground to move it.", 5);
+    }
   }
   function editDesign(kind, key) {
     const current = kind === "building" ? T.designs.building[key] : T.designs.vehicle[key];
@@ -2097,6 +2329,16 @@ export function createCivStage(o) {
   }
 
   /* ---- taking cities -------------------------------------------------------------------------------- */
+  /** The city whose land a place is on (the nearest, within its territory), or null. */
+  function nearestCity(d) {
+    let best = null,
+      bd = TERRITORY;
+    for (const c of T.cities) {
+      const a = arc(d, c.d);
+      if (a < bd) (best = c), (bd = a);
+    }
+    return best;
+  }
   function takeCity(c, owner, method) {
     const from = c.owner;
     transferCity(c, owner, method);
@@ -2106,6 +2348,13 @@ export function createCivStage(o) {
     else if (method === "economic") c.type = "economic";
     buildCity(c, true);
     paintTerritory();
+    // Derricks on the city's land go with it.
+    for (const g of T.geysers)
+      if (g.owner === from && from !== owner && nearestCity(g.d) === c) {
+        g.owner = owner;
+        buildGeyser(g);
+        if (owner === YOU) popAt(g.d, 7, "+ derrick", "good");
+      }
     T.vehicles.filter((v) => v.order?.city === c).forEach((v) => (v.order = null));
     if (owner === YOU) {
       T.captures[method] = (T.captures[method] || 0) + 1;
@@ -2121,6 +2370,7 @@ export function createCivStage(o) {
       }
       checkWin();
     } else if (from === YOU) {
+      c.queue = [];
       o.sfx("hurt");
       toast(`${c.name} has fallen to the ${ownerName(owner)}.`, 4);
       vehiclesOf(YOU).filter((v) => v.home === c.id).forEach((v) => (v.home = capital().id));
@@ -2193,7 +2443,8 @@ export function createCivStage(o) {
   }
 
   /* ---- HUD refresh -------------------------------------------------------------------------------------- */
-  const income = () => yourCities().reduce((s, c) => s + cityEconomy(c, ownerMods(YOU)).income, 0) + T.geysers.filter((g) => g.owner === YOU).length * SPICE_INCOME + tradeIncome(T.cities, YOU);
+  const income = () => yourCities().reduce((s, c) => s + cityEconomy(c, ownerMods(YOU)).income, 0) + tradeIncome(T.cities, YOU);
+  const spiceIncome = (owner = YOU) => T.geysers.filter((g) => g.owner === owner).reduce((s, g) => s + spiceYield(g), 0);
   let hudClock = 0,
     liveClock = 1;
   const marks = new Map();
@@ -2217,7 +2468,7 @@ export function createCivStage(o) {
       const p = project(vehiclePos(v, v.mode === "air" ? 3 : 3.2));
       if (!el) {
         el = document.createElement("i");
-        el.className = "cvBar " + (v.owner === YOU ? "mine" : "foe");
+        el.className = "cvHpBar " + (v.owner === YOU ? "mine" : "foe");
         el.appendChild(document.createElement("b"));
         layer.appendChild(el);
         hpBars.set(v, el);
@@ -2255,6 +2506,7 @@ export function createCivStage(o) {
   function updateHUD() {
     $h("#cvMoney").textContent = Math.floor(T.money);
     $h("#cvIncome").textContent = "+" + income().toFixed(1) + "/s";
+    $h("#cvSpice").textContent = Math.floor(T.spice);
     $h("#cvCities").textContent = yourCities().length + "/" + T.cities.length;
     $h("#cvVeh").textContent = vehiclesOf(YOU).length + "/" + vehicleCap(YOU);
     const left = T.cities.length - yourCities().length;
@@ -2333,7 +2585,8 @@ export function createCivStage(o) {
   function updateSelection() {
     const sel = [...T.selected].filter((v) => !v.dead);
     const panel = $h("#cvOrders");
-    panel.hidden = !sel.length;
+    // (Out of the way while a sheet is open: the sheet has the screen.)
+    panel.hidden = !sel.length || !!sheet;
     $h("#cvFormIcon").textContent = FORMATIONS[formation].icon;
     $h("#cvFormName").textContent = FORMATIONS[formation].name;
     hud.querySelector('[data-cmd="patrol"]').classList.toggle("on", pendingCmd === "patrol");
@@ -2367,6 +2620,7 @@ export function createCivStage(o) {
     const el = $h("#cvSelInfo");
     if (el._html !== html) el.innerHTML = el._html = html;
   }
+  $h("#cvEcon").onclick = () => openSheet("economy");
   $h("#cvAll").onclick = () => {
     if (T.selected.size && T.selected.size === vehiclesOf(YOU).length) T.selected.clear();
     else selectAll();
@@ -2409,10 +2663,12 @@ export function createCivStage(o) {
       seed,
       clock: Math.round(globe.time),
       money: Math.round(T.money),
+      spice: Math.round(T.spice * 10) / 10,
+      price: Math.round(T.price * 100) / 100,
       startType: T.startType,
-      nations: T.nations.map((n) => ({ id: n.id, type: n.type, relation: n.relation, war: n.war, money: Math.round(n.money), alive: n.alive })),
-      cities: T.cities.map((c) => ({ id: c.id, owner: c.owner, type: c.type, plots: c.plots, turrets: c.turrets, turretHp: c.turretHp, hallHp: c.hallHp, trade: c.trade, conv: c.conv, unrest: c.unrest })),
-      geysers: T.geysers.map((g) => ({ owner: g.owner, hp: g.hp })),
+      nations: T.nations.map((n) => ({ id: n.id, type: n.type, relation: n.relation, war: n.war, money: Math.round(n.money), spice: Math.round(n.spice), alive: n.alive })),
+      cities: T.cities.map((c) => ({ id: c.id, owner: c.owner, type: c.type, plots: c.plots, turrets: c.turrets, turretHp: c.turretHp, hallHp: c.hallHp, trade: c.trade, conv: c.conv, unrest: c.unrest, queue: c.queue.map((q) => ({ key: q.key, done: Math.round(q.done * 1000) / 1000, money: q.money, spice: q.spice })) })),
+      geysers: T.geysers.map((g) => ({ owner: g.owner, hp: g.hp, level: g.level })),
       vehicles: T.vehicles.filter((v) => !v.dead).map((v) => ({ owner: v.owner, design: v.key, d: { x: r3(v.d.x), y: r3(v.d.y), z: r3(v.d.z) }, hp: Math.round((v.hp / v.unit.hp) * 100) / 100, city: v.home })),
       designs: T.designs,
       captures: T.captures,
@@ -2524,6 +2780,9 @@ export function createCivStage(o) {
         T.time += dt;
         T.superCool = Math.max(0, T.superCool - dt);
         T.money += income() * dt;
+        T.spice += spiceIncome() * dt;
+        T.price = marketStep(T.price, dt);
+        updateProduction(dt);
         for (const v of [...T.vehicles]) if (!v.dead) updateVehicle(v, dt);
         updateTurrets(dt);
         updateNations(dt);
@@ -2551,7 +2810,7 @@ export function createCivStage(o) {
       if ((hudClock -= dt) <= 0) {
         hudClock = 0.25;
         updateHUD();
-        if ((liveClock -= 0.25) <= 0 && sheet && (sheet.kind === "city" || sheet.kind === "nation") && !sheetPress) {
+        if ((liveClock -= 0.25) <= 0 && sheet && (sheet.kind === "city" || sheet.kind === "nation" || sheet.kind === "spice" || sheet.kind === "economy") && !sheetPress) {
           liveClock = 1;
           renderSheet(false);
         }

@@ -1003,6 +1003,12 @@ html body.tribeMode.creatureMode .mobileControls,html body.tribeMode.creatureMod
 .tribeHUD .trMenuPanel[hidden]{display:none}
 .tribeHUD .tsWide{grid-template-columns:1fr;margin-bottom:8px}
 .civHUD .trStats small{font-size:10px;color:#9fe0b0;font-weight:700}
+.civHUD .cvEcon{display:flex;gap:14px;align-items:baseline;padding:2px 8px;margin:-2px -8px;border:0;border-radius:10px;background:transparent;color:inherit;font:inherit;pointer-events:auto;cursor:pointer;touch-action:manipulation;min-height:32px}
+.civHUD .cvEcon:active{background:#ffffff14}
+.civHUD .cvQueue{display:flex;gap:6px;margin:6px 0 2px}
+.civHUD .cvQItem{flex:1;max-width:120px;display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:12px;border:1px solid #ffffff26;background:#ffffff10;color:inherit;font:inherit}
+.civHUD .cvQItem span{font-size:16px}.civHUD .cvQItem i{flex:1;height:5px;border-radius:3px;background:#ffffff1f;overflow:hidden}
+.civHUD .cvQItem i b{display:block;height:100%;background:#ffd24a}.civHUD .cvQItem small{font-size:10px;color:#cfe0e6;white-space:nowrap}
 .civHUD .trToast{z-index:3}
 .civHUD .trTop,.civHUD .trGoal,.civHUD .trTribes{z-index:2}
 .civHUD .cvActions{grid-template-columns:repeat(6,1fr)}
@@ -1048,8 +1054,8 @@ html body.tribeMode.creatureMode .mobileControls,html body.tribeMode.creatureMod
 .civHUD .cvCmds button span{font-size:17px;line-height:1}.civHUD .cvCmds button small{font-size:10.5px}
 .civHUD .cvCmds button.on{border-color:#8ff0a8;background:#2f7a5266}
 .civHUD .cvBoxRect{position:fixed;border:2px solid #8ff0a8;background:#8ff0a81f;border-radius:4px;pointer-events:none;z-index:3}
-.civHUD .cvBar{position:absolute;left:0;top:0;width:28px;height:4px;border-radius:2px;background:#0009;overflow:hidden;pointer-events:none}
-.civHUD .cvBar b{display:block;height:100%}.civHUD .cvBar.mine b{background:#8ff0a8}.civHUD .cvBar.foe b{background:#ff7b5c}
+.civHUD .cvHpBar{position:absolute;left:0;top:0;width:28px;height:4px;border-radius:2px;background:#0009;overflow:hidden;pointer-events:none}
+.civHUD .cvHpBar b{display:block;height:100%}.civHUD .cvHpBar.mine b{background:#8ff0a8}.civHUD .cvHpBar.foe b{background:#ff7b5c}
 @media (max-height:520px){.civHUD .cvOrders{padding:6px 10px;margin-bottom:4px}.civHUD .cvSelInfo p{display:none}.civHUD .cvCmds button{min-height:38px}}
 .civHUD .tsTrade.cvVehDesigns{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
 .civHUD .tsTrade.cvBuilds{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}

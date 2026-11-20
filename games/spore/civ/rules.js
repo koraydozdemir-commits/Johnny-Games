@@ -265,8 +265,59 @@ export function vehicleTemplates(role, colors) {
 }
 
 /* ---- spice --------------------------------------------------------------------------------- */
-export const SPICE_INCOME = 1.1;
+/**
+ * Spice is a resource of its own. Derricks pump it out of geysers into your stockpile; it pays for
+ * military vehicles (alongside money) and sells on the world market for money. Geysers differ in how
+ * rich they are, and a derrick can be upgraded to pump more.
+ */
+export const SPICE_RATE = 0.4; // spice a second from a level-1 derrick on a geyser of richness 1
+export const DERRICK_LEVELS = [1, 1.7, 2.5];
+export const DERRICK_UPGRADE = [0, 90, 160]; // money to reach level 2 and 3
 export const DERRICK_HP = 40;
+export const spiceYield = (g) => (g.owner ? SPICE_RATE * (g.rich || 1) * DERRICK_LEVELS[Math.max(0, Math.min(2, (g.level || 1) - 1))] : 0);
+/** Richness of the n-th geyser of a planet: some poor, most ordinary, a few rich (worth fighting over). */
+export const geyserRichness = (rand) => Math.round((rand < 0.25 ? 0.6 : rand < 0.8 ? 1 : rand < 0.95 ? 1.5 : 2.2) * 10) / 10;
+
+/** The world spice market: the price drifts around its usual level; selling a lot pushes it down. */
+export const SPICE_PRICE = { usual: 3.2, min: 1.2, max: 7 };
+export function marketStep(price, dt, rand = Math.random()) {
+  const pull = (SPICE_PRICE.usual - price) * 0.02 * dt;
+  const wobble = (rand - 0.5) * 0.12 * Math.sqrt(dt);
+  return Math.max(SPICE_PRICE.min, Math.min(SPICE_PRICE.max, price + pull + wobble));
+}
+/** Sell spice: what it fetches, and the price afterwards (each 10 spice sold knocks 2% off). */
+export function sellSpice(price, amount) {
+  if (amount <= 0) return { money: 0, price };
+  const after = Math.max(SPICE_PRICE.min, price * Math.pow(0.98, amount / 10));
+  return { money: Math.round(amount * (price + after) * 0.5), price: after };
+}
+
+/** Spice a vehicle needs to build: military vehicles burn it (aircraft most); the others need none. */
+export function spiceCost(unit) {
+  if (unit.role !== "military") return 0;
+  return Math.round(4 + unit.cost / 20 + (unit.mode === "air" ? 4 : 0));
+}
+
+/* ---- production ------------------------------------------------------------------------------ */
+/** Vehicles a city can have waiting to be built. */
+export const QUEUE_MAX = 3;
+/** Seconds a city takes to build a vehicle: factories (and better factory designs) build faster. */
+export function buildTime(unit, city, strengths = {}) {
+  const factories = city.plots.filter((p) => p === "factory").length;
+  return Math.round((unit.cost / (5 + factories * 4 * designFactor(strengths.factory))) * 10) / 10;
+}
+
+/* ---- trade runs ------------------------------------------------------------------------------- */
+/**
+ * A trade vehicle carries goods from home to a partner city and comes back for more. Each delivery
+ * pays both sides (more for longer routes and bigger cities) and moves the partnership on.
+ * @param {number} distance  of the route, in world units
+ * @param {number} pop       people in the partner city
+ */
+export function deliveryPay(distance, pop, raided = false) {
+  const pay = 8 + distance * 0.1 + pop * 0.8;
+  return Math.round(pay * (raided ? 0.5 : 1));
+}
 
 /* ---- the player's earlier stages ------------------------------------------------------------- */
 /**
@@ -390,6 +441,7 @@ export function readCivSave(raw) {
     relation: clampRel(num(n?.relation, -100, 100, 0)),
     war: !!n?.war,
     money: num(n?.money, 0, 1e6, 100),
+    spice: num(n?.spice, 0, 1e6, 0),
     alive: n?.alive !== false,
   }));
   const ids = nations.map((n) => n.id);
@@ -404,6 +456,8 @@ export function readCivSave(raw) {
     trade: Object.fromEntries(Object.entries(c?.trade && typeof c.trade === "object" ? c.trade : {}).filter(([k]) => k === YOU || ids.includes(k)).map(([k, v]) => [k, num(v, 0, 100, 0)])),
     conv: Object.fromEntries(Object.entries(c?.conv && typeof c.conv === "object" ? c.conv : {}).filter(([k]) => k === YOU || ids.includes(k)).map(([k, v]) => [k, num(v, 0, 100, 0)])),
     unrest: num(c?.unrest, 0, 5, 0),
+    // Vehicles being built (already paid for): the design key and how far along it is.
+    queue: (Array.isArray(c?.queue) ? c.queue : []).slice(0, QUEUE_MAX).filter((q) => typeof q?.key === "string" && /^(military|economic|religious):(land|sea|air)(:\w{1,12})?$/.test(q.key)).map((q) => ({ key: q.key, done: num(q.done, 0, 1, 0), money: num(q.money, 0, 1e5, 0), spice: num(q.spice, 0, 1e5, 0) })),
   }));
   if (!cities.some((c) => c.owner === YOU)) return null;
   const designs = d.designs && typeof d.designs === "object" ? d.designs : {};
@@ -413,10 +467,12 @@ export function readCivSave(raw) {
     seed: Number.isInteger(d.seed) && d.seed > 0 && d.seed < 2 ** 32 ? d.seed : null,
     clock: Number.isFinite(d.clock) ? num(d.clock, 0, 1e7, 0) : null,
     money: num(d.money, 0, 1e7, START_MONEY),
+    spice: num(d.spice, 0, 1e7, 20), // saves from before spice was a resource start with a little
+    price: num(d.price, SPICE_PRICE.min, SPICE_PRICE.max, SPICE_PRICE.usual),
     startType: TYPE_IDS.includes(d.startType) ? d.startType : "economic",
     nations,
     cities,
-    geysers: (Array.isArray(d.geysers) ? d.geysers : []).slice(0, 16).map((g) => ({ owner: ownerOk(g?.owner ?? null, ids), hp: num(g?.hp, 0, 1, 1) })),
+    geysers: (Array.isArray(d.geysers) ? d.geysers : []).slice(0, 16).map((g) => ({ owner: ownerOk(g?.owner ?? null, ids), hp: num(g?.hp, 0, 1, 1), level: Math.round(num(g?.level, 1, 3, 1)) })),
     vehicles: (Array.isArray(d.vehicles) ? d.vehicles : []).slice(0, 60).map((v) => ({ owner: ownerOk(v?.owner, ids), design: typeof v?.design === "string" ? v.design.slice(0, 40) : null, d: unitDir(v?.d), hp: num(v?.hp, 0, 1, 1), city: Number.isInteger(v?.city) ? v.city : -1 })).filter((v) => v.owner && v.design),
     designs: { building: designs.building && typeof designs.building === "object" ? designs.building : {}, vehicle: designs.vehicle && typeof designs.vehicle === "object" ? designs.vehicle : {} },
     captures: Object.fromEntries(TYPE_IDS.map((t) => [t, Math.round(num(d.captures?.[t], 0, 99, 0))])),
