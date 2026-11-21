@@ -1,0 +1,597 @@
+/*
+ * Johnny Spore — Civilization Stage design system.
+ *
+ * Warm cream surfaces, chunky tactile buttons, rounded organic frames, colour that means something:
+ *   ocean/turquoise  the planet, looking and moving       leaf green  building, agreeing, good news
+ *   orange & gold    money, spice, important actions      red         danger, war, hostility
+ *   purple           faith and the strange                 brown/navy  text
+ * Everything here is scoped to .civHUD (the Civilization Stage's interface) and to the building and
+ * vehicle editors (.mdEditor.md-building / .md-vehicle), so the other stages keep their own look.
+ * Selectors start ".tribeHUD.civHUD" so they win over the shared tribal HUD rules they restyle.
+ */
+.civHUD,.mdEditor.md-vehicle,.mdEditor.md-building{
+  --cv-cream:#fff6e3;--cv-cream2:#f7e6c4;--cv-cream3:#eccf9c;--cv-edge:#b88a4e;--cv-edge2:#8f6434;
+  --cv-ink:#3a2414;--cv-ink2:#6e4f33;--cv-ink3:#9b7a58;--cv-navy:#1d3550;
+  --cv-ocean:#2aa6c8;--cv-ocean2:#17799a;--cv-sky:#bff0ff;
+  --cv-leaf:#56c23f;--cv-leaf2:#2f8a22;--cv-gold:#ffb52e;--cv-gold2:#c77a0c;--cv-spice:#ff7a3d;
+  --cv-red:#e0493c;--cv-red2:#a32b20;--cv-purple:#9a68e0;--cv-purple2:#6538ad;
+  --cv-r:26px 22px 28px 20px / 22px 28px 20px 26px; /* organic: no two corners alike */
+  --cv-r-sm:16px 13px 17px 12px / 13px 17px 12px 16px;
+  --cv-shadow:0 5px 0 #6e4f3329,0 16px 34px #1d355055;
+  --cv-font:"Trebuchet MS","Gill Sans","Segoe UI Rounded","Nunito",system-ui,sans-serif;
+}
+
+/* ---- the icons ---------------------------------------------------------------------------------- */
+.civHUD .ic{width:22px;height:22px;flex:none;display:inline-block;vertical-align:-5px;overflow:visible}
+
+/* ---- surfaces ----------------------------------------------------------------------------------- */
+.tribeHUD.civHUD{font-family:var(--cv-font);color:var(--cv-ink)}
+.tribeHUD.civHUD button{color:var(--cv-ink)}
+.tribeHUD.civHUD button:focus-visible{outline:3px solid var(--cv-ocean);outline-offset:3px}
+.tribeHUD.civHUD .trBox,.tribeHUD.civHUD .trSheet,.civHUD .cvPeek,.tribeHUD.civHUD .cvOrders,.tribeHUD.civHUD .trMenuPanel,.civHUD .cvVictoryCard{
+  background:radial-gradient(120% 90% at 18% 0%,#fffdf7 0,var(--cv-cream) 45%,var(--cv-cream2) 100%);
+  border:3px solid var(--cv-edge);border-radius:var(--cv-r);box-shadow:var(--cv-shadow),inset 0 2px 0 #fff,inset 0 -3px 0 #e6cc9a;
+  -webkit-backdrop-filter:none;backdrop-filter:none;color:var(--cv-ink)}
+
+/* ---- the top bar: your nation and its resources ----------------------------------------------- */
+.tribeHUD.civHUD .trBox.cvRes{padding:5px 8px 7px;border-radius:20px 26px 22px 24px/24px 20px 26px 22px;max-width:calc(100vw - 76px)}
+.tribeHUD.civHUD .trName{display:inline-block;font-size:11.5px;font-weight:900;letter-spacing:.04em;color:#fff;background:linear-gradient(var(--cv-ocean),var(--cv-ocean2));border:2px solid var(--cv-navy);border-radius:10px 14px 12px 9px;padding:1px 10px 2px;margin:-14px 0 2px 4px;box-shadow:0 2px 0 var(--cv-navy);text-shadow:0 1px 0 #0005;max-width:60vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:top}
+.tribeHUD.civHUD .trStats{display:flex;gap:5px;margin:0;flex-wrap:nowrap;font-size:14px}
+.civHUD .cvPill{position:relative;display:inline-flex;align-items:center;gap:3px;height:34px;padding:0 9px 0 3px;border-radius:17px;background:#fff;border:2px solid var(--cv-cream3);box-shadow:inset 0 -2px 0 #f0dcb2;font:inherit;pointer-events:auto;cursor:pointer;touch-action:manipulation;white-space:nowrap;transition:transform .15s}
+.civHUD span.cvPill{cursor:default}
+.civHUD .cvPill .cvPillIc{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--cv-cream2)}
+.civHUD .cvPill .cvPillIc .ic{width:24px;height:24px;vertical-align:0}
+.tribeHUD.civHUD .cvPill b{font-size:15.5px;font-weight:900;color:var(--cv-ink);font-variant-numeric:tabular-nums}
+.tribeHUD.civHUD .cvPill small{font-size:10px;font-weight:800;color:var(--cv-leaf2);margin-left:1px}
+.civHUD .cvPill.money .cvPillIc{background:#ffe9a8}.civHUD .cvPill.spice .cvPillIc{background:#ffd9c2}.civHUD .cvPill.cities .cvPillIc{background:#d4f3fb}.civHUD .cvPill.vehicles .cvPillIc{background:#dcf5d2}
+.tribeHUD.civHUD .cvEcon{gap:3px;padding:0 9px 0 3px;margin:0;min-height:34px;border-radius:17px}
+.tribeHUD.civHUD .cvEcon:active,.civHUD .cvPill:active{transform:scale(.94)}
+.civHUD .cvPill.bump{animation:cvBump .5s cubic-bezier(.3,1.6,.5,1)}.civHUD .cvPill.dip{animation:cvDip .45s}
+@keyframes cvBump{35%{transform:scale(1.16) rotate(-2deg);border-color:var(--cv-leaf)}}
+@keyframes cvDip{25%{transform:translateX(-3px);border-color:var(--cv-red)}55%{transform:translateX(3px)}}
+.civHUD .cvDelta{position:absolute;left:50%;top:100%;font-size:12px;font-weight:900;opacity:0;pointer-events:none;white-space:nowrap;text-shadow:0 1px 0 #fff,0 0 4px #fff}
+.civHUD .cvDelta.up{color:var(--cv-leaf2);animation:cvFloat 1.3s ease-out}.civHUD .cvDelta.down{color:var(--cv-red2);animation:cvFloat 1.3s ease-out}
+@keyframes cvFloat{0%{opacity:0;transform:translate(-50%,-6px) scale(.6)}20%{opacity:1;transform:translate(-50%,2px) scale(1.1)}100%{opacity:0;transform:translate(-50%,16px)}}
+.tribeHUD.civHUD .trIcon.cvRound{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 40% 30%,#fff,var(--cv-cream2));border:3px solid var(--cv-edge);box-shadow:0 4px 0 var(--cv-edge2),0 8px 16px #0003;color:var(--cv-ink)}
+.tribeHUD.civHUD .trIcon.cvRound:active{transform:translateY(3px);box-shadow:0 1px 0 var(--cv-edge2)}
+
+/* The goal ribbon, with how much of the planet is yours. */
+.tribeHUD.civHUD .trGoal{top:calc(max(10px,env(safe-area-inset-top)) + 58px);background:var(--cv-cream);color:var(--cv-ink);border:2px solid var(--cv-edge);border-radius:14px 18px 15px 17px;padding:3px 12px 4px;box-shadow:0 3px 0 #6e4f3329;font-size:11.5px;font-weight:800;display:flex;align-items:center;gap:8px}
+.tribeHUD.civHUD .trGoal:empty{display:none}
+.civHUD .cvGoalBar{flex:none;width:46px;height:8px;border-radius:5px;background:#e6d3ad;overflow:hidden;box-shadow:inset 0 1px 2px #0003}
+.civHUD .cvGoalBar i{display:block;height:100%;background:linear-gradient(90deg,var(--cv-leaf),#9be06f);border-radius:5px}
+
+/* Rival leaders: their faces, ringed in how they feel about you. */
+.tribeHUD.civHUD .trTribes{top:calc(max(10px,env(safe-area-inset-top)) + 86px);gap:12px}
+.tribeHUD.civHUD .cvNation{position:relative;width:50px;height:50px;padding:0;border-radius:50%;background:radial-gradient(circle at 45% 35%,#fff,color-mix(in srgb,var(--nc) 30%,var(--cv-cream2)));border:3.5px solid var(--rel);box-shadow:0 0 0 2.5px #fffa,0 4px 0 #6e4f3340,0 8px 14px #0004;display:grid;place-items:center;overflow:visible;transition:transform .18s cubic-bezier(.3,1.6,.5,1)}
+.tribeHUD.civHUD .cvNation img{width:100%;height:100%;object-fit:cover;border-radius:50%;transform:scale(1.15)}
+.tribeHUD.civHUD .cvNation span{font-size:20px;opacity:1}
+.tribeHUD.civHUD .cvNation em{position:absolute;right:-7px;bottom:-6px;width:22px;height:22px;display:grid;place-items:center;font-style:normal;font-size:13px;background:#fff;border:2px solid var(--rel);border-radius:50%;box-shadow:0 2px 3px #0004;padding:0}
+.tribeHUD.civHUD .cvNation i{display:none}
+.tribeHUD.civHUD .cvNation:hover{transform:scale(1.08)}
+.tribeHUD.civHUD .cvNation:active{transform:scale(.92)}
+.tribeHUD.civHUD .cvNation.msg{animation:cvCall 1.4s ease-in-out infinite}
+.tribeHUD.civHUD .cvNation.war{box-shadow:0 0 0 2.5px #fffa,0 0 0 6px #e0493c55,0 8px 14px #0004}
+.tribeHUD.civHUD .cvNation.fallen{filter:grayscale(1);opacity:.45}
+@keyframes cvCall{0%,100%{transform:translateY(0)}20%{transform:translateY(-6px) rotate(-6deg)}40%{transform:translateY(0) rotate(5deg)}55%{transform:rotate(0)}}
+
+/* A quick hint: a speech-bubble ribbon. */
+.tribeHUD.civHUD .trToast{top:calc(max(10px,env(safe-area-inset-top)) + 146px);background:#fff;color:var(--cv-ink);border:2.5px solid var(--cv-edge);border-radius:18px 22px 20px 16px;box-shadow:0 4px 0 #6e4f3333,0 10px 24px #0003;font-size:13px;line-height:1.35;padding:8px 14px}
+.tribeHUD.civHUD .trToast.show{animation:cvPopIn .35s cubic-bezier(.3,1.5,.5,1)}
+
+/* ---- notifications: small illustrated cards ----------------------------------------------------- */
+.civHUD .cvNotes{position:absolute;right:10px;top:calc(max(10px,env(safe-area-inset-top)) + 62px);width:min(330px,calc(100vw - 20px));display:flex;flex-direction:column;gap:7px;pointer-events:none;z-index:4}
+.civHUD .cvNote{--lv:var(--cv-ocean);pointer-events:auto;display:flex;align-items:center;gap:9px;padding:7px 7px 7px 8px;background:var(--cv-cream);border:2.5px solid var(--cv-edge);border-left:7px solid var(--lv);border-radius:16px 20px 18px 14px;box-shadow:0 4px 0 #6e4f3333,0 10px 22px #0004;animation:cvNoteIn .42s cubic-bezier(.3,1.45,.5,1)}
+.civHUD .cvNote.good{--lv:var(--cv-leaf)}.civHUD .cvNote.warn{--lv:var(--cv-gold)}.civHUD .cvNote.danger{--lv:var(--cv-red);background:linear-gradient(90deg,#ffe9e2,var(--cv-cream) 40%)}
+.civHUD .cvNote.danger .cvNoteFace{animation:cvAlarm 1s ease-in-out 2}
+.civHUD .cvNote.out{animation:cvNoteOut .26s ease-in forwards}
+.civHUD .cvNoteFace{--nc:var(--lv);flex:none;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-size:21px;background:radial-gradient(circle at 45% 35%,#fff,color-mix(in srgb,var(--nc) 35%,#fff));border:2.5px solid var(--nc);overflow:hidden}
+.civHUD .cvNoteFace img{width:100%;height:100%;object-fit:cover;transform:scale(1.15)}.civHUD .cvNoteFace .ic{width:28px;height:28px;vertical-align:0}
+.civHUD .cvNoteText{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;font-size:12px;line-height:1.3;cursor:pointer}
+.civHUD .cvNoteText b{font-size:12.5px;font-weight:900}
+.civHUD .cvNoteText span{color:var(--cv-ink2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tribeHUD.civHUD .cvNoteGo{flex:none;min-height:36px;padding:0 11px;border-radius:12px;border:2px solid var(--cv-ocean2);background:linear-gradient(#5cc9e4,var(--cv-ocean));color:#fff;font-weight:900;font-size:12px;box-shadow:0 3px 0 var(--cv-ocean2);text-shadow:0 1px 0 #0004}
+.civHUD .cvNote.danger .cvNoteGo{border-color:var(--cv-red2);background:linear-gradient(#f2766a,var(--cv-red));box-shadow:0 3px 0 var(--cv-red2)}
+.civHUD .cvNote.good .cvNoteGo{border-color:var(--cv-leaf2);background:linear-gradient(#7fd864,var(--cv-leaf));box-shadow:0 3px 0 var(--cv-leaf2)}
+.tribeHUD.civHUD .cvNoteGo:active{transform:translateY(2px);box-shadow:0 1px 0 #0004}
+.tribeHUD.civHUD .cvNoteX{flex:none;width:28px;height:28px;padding:0;border:0;background:none;color:var(--cv-ink3);display:grid;place-items:center}
+.civHUD .cvNoteX .ic{width:16px;height:16px;vertical-align:0}
+@keyframes cvNoteIn{from{opacity:0;transform:translateX(40px) scale(.85)}}
+@keyframes cvNoteOut{to{opacity:0;transform:translateX(50px) scale(.9)}}
+@keyframes cvAlarm{20%,60%{transform:rotate(-10deg) scale(1.08)}40%,80%{transform:rotate(10deg) scale(1.08)}}
+
+/* ---- markers on the planet ---------------------------------------------------------------------- */
+.tribeHUD.civHUD .cvMark{background:var(--cv-cream);color:var(--cv-ink);border:2.5px solid var(--rel);border-radius:12px 15px 13px 11px;padding:2px 9px 6px 6px;box-shadow:0 3px 0 #0003,0 4px 10px #0003;font-weight:900;font-size:11px}
+.tribeHUD.civHUD .cvMark::after{content:"";position:absolute;left:50%;bottom:-8px;margin-left:-6px;border:6px solid transparent;border-top-color:var(--rel);border-bottom:0}
+.tribeHUD.civHUD .cvMark i{left:7px;right:7px;bottom:2px;height:4px;background:#0002}
+.tribeHUD.civHUD .cvMark.far{font-size:10px;padding:1px 7px 5px}
+.tribeHUD.civHUD .trPop{font-family:var(--cv-font);font-size:18px;color:#fff;-webkit-text-stroke:0;text-shadow:0 2px 0 var(--cv-ink),0 0 6px #0008}
+.tribeHUD.civHUD .trPop.good{color:#c4ff9e}.tribeHUD.civHUD .trPop.bad{color:#ffb0a6}
+.tribeHUD.civHUD .cvHpBar{height:5px;width:30px;border:1.5px solid #fff;box-shadow:0 1px 2px #0006;background:#3a2414aa}
+.tribeHUD.civHUD .cvBoxRect{border:3px dashed #fff;background:#56c23f2a;border-radius:12px;box-shadow:0 0 0 2px var(--cv-leaf2)}
+
+/* ---- the bottom: orders, your vehicles, the action bar ------------------------------------------- */
+.tribeHUD.civHUD .trBottom{background:linear-gradient(#0000,#1d355044 60%,#1d355077)}
+.tribeHUD.civHUD .trActions{gap:7px;max-width:560px}
+.tribeHUD.civHUD .trActions button{position:relative;min-height:58px;border-radius:18px 15px 19px 14px/15px 19px 14px 18px;border:2.5px solid var(--cv-edge);background:linear-gradient(#fffdf6,var(--cv-cream2));box-shadow:0 4px 0 var(--cv-edge2),0 8px 14px #0003;gap:0;padding-top:3px;transition:transform .1s,box-shadow .1s}
+.tribeHUD.civHUD .trActions button .ic{width:30px;height:30px;vertical-align:0;transition:transform .2s cubic-bezier(.3,1.6,.5,1)}
+.tribeHUD.civHUD .trActions button small{font-size:11px;font-weight:900;color:var(--cv-ink2)}
+.tribeHUD.civHUD .trActions button:hover .ic{transform:scale(1.12) rotate(-6deg)}
+.tribeHUD.civHUD .trActions button:active{transform:translateY(4px);box-shadow:0 0 0 var(--cv-edge2),0 3px 6px #0003}
+.tribeHUD.civHUD .trActions button[aria-disabled=true]{opacity:1;filter:saturate(.2);background:linear-gradient(#f4ecdc,#e6d8bd)}
+.tribeHUD.civHUD .trActions button[aria-disabled=true] small{color:var(--cv-ink3)}
+.tribeHUD.civHUD #cvSuper.ready{border-color:var(--cv-gold2);background:linear-gradient(#fff3c4,#ffd36a);animation:cvGlow 1.6s ease-in-out infinite}
+@keyframes cvGlow{50%{box-shadow:0 4px 0 var(--cv-gold2),0 0 0 5px #ffb52e66,0 8px 18px #ffb52e88}}
+.tribeHUD.civHUD .trUnits{gap:9px;padding:6px 3px}
+.tribeHUD.civHUD .trUnit{width:54px;height:54px;border:3px solid #fff;background:radial-gradient(circle at 45% 35%,#fff,var(--cv-cream2));box-shadow:0 3px 0 #6e4f3355,0 6px 12px #0004;transition:transform .15s cubic-bezier(.3,1.6,.5,1)}
+.tribeHUD.civHUD .trUnit img{object-fit:contain;padding:3px;box-sizing:border-box}
+.tribeHUD.civHUD .trUnit.military{border-color:#f3b0a8}.tribeHUD.civHUD .trUnit.economic{border-color:#ffd98a}.tribeHUD.civHUD .trUnit.religious{border-color:#d4bdf6}
+.tribeHUD.civHUD .trUnit.sel{border-color:var(--cv-leaf);transform:translateY(-4px) scale(1.06);box-shadow:0 0 0 3px #fff,0 0 0 6px var(--cv-leaf),0 8px 14px #0005}
+.tribeHUD.civHUD .trUnit em{right:-6px;top:-7px;font-size:13px;width:22px;height:22px;display:grid;place-items:center;background:#fff;border-radius:50%;box-shadow:0 1px 3px #0005;filter:none}
+.tribeHUD.civHUD .trUnit i{left:7px;right:7px;bottom:-6px;height:6px;background:#3a2414aa;border:1.5px solid #fff}
+.tribeHUD.civHUD .trUnit i b{background:var(--cv-leaf)}.tribeHUD.civHUD .trUnit.low i b{background:var(--cv-red)}
+.tribeHUD.civHUD .cvBox{display:grid;place-items:center;color:var(--cv-ink2)}.tribeHUD.civHUD .cvBox .ic{width:28px;height:28px;vertical-align:0}
+.tribeHUD.civHUD .cvBox.sel{background:radial-gradient(circle at 45% 35%,#fff,#c8f0b8);color:var(--cv-leaf2)}
+
+/* The selected vehicles: a portrait, health, and big order buttons. */
+.tribeHUD.civHUD .cvOrders{padding:9px 11px 11px;max-width:560px;margin-left:auto;margin-right:auto;width:100%;box-sizing:border-box;animation:cvPopIn .3s cubic-bezier(.3,1.5,.5,1)}
+.tribeHUD.civHUD .cvSelHead{gap:10px}
+.tribeHUD.civHUD .cvSelHead b{font-size:14.5px;font-weight:900}
+.tribeHUD.civHUD .cvSelHead small{color:var(--cv-ink2);font-weight:700}
+.civHUD .cvThumb.sel{width:52px;height:52px;border-radius:50%;background:radial-gradient(circle at 45% 35%,#fff,var(--cv-sky));border:2.5px solid var(--cv-ocean)}
+.civHUD .cvSelHead.military .cvThumb.sel{background:radial-gradient(circle at 45% 35%,#fff,#ffd6cf);border-color:var(--cv-red)}
+.civHUD .cvSelHead.religious .cvThumb.sel{background:radial-gradient(circle at 45% 35%,#fff,#e6d7fb);border-color:var(--cv-purple)}
+.civHUD .cvSelHead.economic .cvThumb.sel{background:radial-gradient(circle at 45% 35%,#fff,#ffeab0);border-color:var(--cv-gold2)}
+.civHUD .cvGroup{flex:none;position:relative;display:flex;align-items:center;width:84px;height:52px}
+.civHUD .cvGroup .cvThumb.mini{position:absolute;width:30px;height:30px;border-radius:50%;background:#fff;border:2px solid var(--cv-leaf);box-shadow:0 2px 3px #0003;transition:left .3s,top .3s}
+.civHUD .cvGroup em{position:absolute;right:-6px;bottom:-4px;font-style:normal;font-size:11px;font-weight:900;background:var(--cv-leaf);color:#fff;border-radius:9px;padding:0 5px}
+/* line, wedge, ring: the faces stand the way the vehicles will */
+.civHUD .cvGroup.f-line .mini:nth-child(1){left:0;top:11px}.civHUD .cvGroup.f-line .mini:nth-child(2){left:13px;top:11px}.civHUD .cvGroup.f-line .mini:nth-child(3){left:26px;top:11px}.civHUD .cvGroup.f-line .mini:nth-child(4){left:39px;top:11px}.civHUD .cvGroup.f-line .mini:nth-child(5){left:52px;top:11px}
+.civHUD .cvGroup.f-wedge .mini:nth-child(1){left:27px;top:0}.civHUD .cvGroup.f-wedge .mini:nth-child(2){left:13px;top:12px}.civHUD .cvGroup.f-wedge .mini:nth-child(3){left:41px;top:12px}.civHUD .cvGroup.f-wedge .mini:nth-child(4){left:0;top:22px}.civHUD .cvGroup.f-wedge .mini:nth-child(5){left:54px;top:22px}
+.civHUD .cvGroup.f-ring .mini:nth-child(1){left:27px;top:0}.civHUD .cvGroup.f-ring .mini:nth-child(2){left:48px;top:11px}.civHUD .cvGroup.f-ring .mini:nth-child(3){left:40px;top:23px}.civHUD .cvGroup.f-ring .mini:nth-child(4){left:14px;top:23px}.civHUD .cvGroup.f-ring .mini:nth-child(5){left:6px;top:11px}
+.tribeHUD.civHUD .cvHp{gap:6px}.tribeHUD.civHUD .cvHp .ic{width:18px;height:18px}
+.tribeHUD.civHUD .cvHp i{height:10px;border-radius:6px;background:#e6d3ad;box-shadow:inset 0 1px 2px #0003}
+.tribeHUD.civHUD .cvHp i b{background:linear-gradient(var(--cv-leaf),#3e9c2c);border-radius:6px;transition:width .3s}
+.tribeHUD.civHUD .cvHp.low i b{background:linear-gradient(#f2766a,var(--cv-red))}
+.tribeHUD.civHUD .cvHp small{color:var(--cv-ink2);font-weight:800}
+.tribeHUD.civHUD .cvSelInfo p{color:var(--cv-ink2);font-size:11.5px}.tribeHUD.civHUD .cvSelInfo p .ic{width:16px;height:16px}
+.tribeHUD.civHUD .cvSelInfo .good{color:var(--cv-leaf2)}.tribeHUD.civHUD .cvSelInfo .weak{color:var(--cv-red2)}
+.tribeHUD.civHUD .cvCmds{gap:6px}
+.tribeHUD.civHUD .cvCmds button{position:relative;min-height:52px;border-radius:15px 12px 16px 11px/12px 16px 11px 15px;border:2.5px solid var(--cv-edge);background:linear-gradient(#fff,var(--cv-cream2));box-shadow:0 3px 0 var(--cv-edge2);color:var(--cv-ink)}
+.tribeHUD.civHUD .cvCmds button .ic{width:24px;height:24px;vertical-align:0}
+.tribeHUD.civHUD .cvCmds button small{font-size:10.5px;font-weight:900;color:var(--cv-ink2)}
+.tribeHUD.civHUD .cvCmds button:active{transform:translateY(3px);box-shadow:0 0 0 var(--cv-edge2)}
+.tribeHUD.civHUD .cvCmds button.on{border-color:var(--cv-leaf2);background:linear-gradient(#ecffe0,#b9ec9c);box-shadow:0 3px 0 var(--cv-leaf2)}
+.civHUD .cvFormIc{position:absolute;top:3px;right:5px;font-size:10px;color:var(--cv-ink3)}
+
+/* ---- buttons (sheets, cards) -------------------------------------------------------------------- */
+.tribeHUD.civHUD .tsBtns{gap:9px;margin-top:8px}
+.tribeHUD.civHUD .tsBtns button,.civHUD .cvPeekBtns button{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:48px;padding:6px 12px;border-radius:16px 13px 17px 12px/13px 17px 12px 16px;border:2.5px solid var(--cv-edge);background:linear-gradient(#fffdf6,var(--cv-cream2));box-shadow:0 4px 0 var(--cv-edge2),0 6px 10px #0002;font-weight:900;font-size:14px;color:var(--cv-ink);transition:transform .08s,box-shadow .08s}
+.tribeHUD.civHUD .tsBtns button small,.civHUD .cvPeekBtns button small{font-size:11px;font-weight:800;opacity:.8}
+.tribeHUD.civHUD .tsBtns button:not(.good):not(.bad):not(.gift){background:linear-gradient(#fffdf6,var(--cv-cream2));color:var(--cv-ink)}
+.tribeHUD.civHUD .tsBtns .good,.civHUD .cvPeekBtns .good{background:linear-gradient(#8fe26f,var(--cv-leaf));border-color:var(--cv-leaf2);box-shadow:0 4px 0 var(--cv-leaf2),0 6px 10px #0002;color:#fff;text-shadow:0 1px 0 #0005}
+.tribeHUD.civHUD .tsBtns .bad,.civHUD .cvPeekBtns .bad{background:linear-gradient(#f2857a,var(--cv-red));border-color:var(--cv-red2);box-shadow:0 4px 0 var(--cv-red2),0 6px 10px #0002;color:#fff;text-shadow:0 1px 0 #0005}
+.tribeHUD.civHUD .tsBtns .gift{background:linear-gradient(#ffe08a,var(--cv-gold));border-color:var(--cv-gold2);box-shadow:0 4px 0 var(--cv-gold2),0 6px 10px #0002;color:var(--cv-ink)}
+.tribeHUD.civHUD .tsBtns .talk,.civHUD .cvPeekBtns .talk{background:linear-gradient(#7fd8ee,var(--cv-ocean))!important;border-color:var(--cv-ocean2);box-shadow:0 4px 0 var(--cv-ocean2),0 6px 10px #0002;color:#fff!important;text-shadow:0 1px 0 #0005}
+.tribeHUD.civHUD .tsBtns .mil{background:linear-gradient(#fff,#ffe2dc)!important}
+.tribeHUD.civHUD .tsBtns button:active,.civHUD .cvPeekBtns button:active{transform:translateY(4px);box-shadow:0 0 0 #0000,0 2px 4px #0002!important}
+.tribeHUD.civHUD .tsBtns button[aria-disabled=true],.civHUD .cvPeekBtns button[aria-disabled=true]{opacity:.55;filter:saturate(.25)}
+.civHUD .nope{animation:cvNope .4s!important}
+@keyframes cvNope{20%{transform:translateX(-6px) rotate(-1deg)}40%{transform:translateX(6px) rotate(1deg)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+.tribeHUD.civHUD .tsWide{grid-template-columns:1fr}
+
+/* ---- sheets ------------------------------------------------------------------------------------- */
+.tribeHUD.civHUD .trSheet{z-index:5;padding:12px 14px 14px;max-height:calc(100dvh - 230px);scrollbar-width:thin;scrollbar-color:var(--cv-cream3) transparent}
+.tribeHUD.civHUD .trSheet.pop{animation:cvSheetIn .42s cubic-bezier(.25,1.35,.5,1)}
+@keyframes cvSheetIn{from{opacity:0;transform:translate(-50%,40px) scale(.94)}}
+.tribeHUD.civHUD .tsHead{gap:10px;margin:-2px 0 6px}
+.tribeHUD.civHUD .tsHead>div{display:flex;flex-direction:column;min-width:0}
+.tribeHUD.civHUD .tsHead b{font-size:17px;font-weight:900;color:var(--cv-ink);line-height:1.15}
+.tribeHUD.civHUD .tsHead small{color:var(--cv-ink2);font-size:11.5px;font-weight:700}
+.civHUD .cvHeadIc{--tone:var(--cv-ocean);flex:none;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-size:24px;background:radial-gradient(circle at 40% 30%,#fff,color-mix(in srgb,var(--tone) 40%,#fff));border:3px solid var(--tone);box-shadow:0 3px 0 #0002;transform:rotate(-5deg)}
+.civHUD .cvHeadIc .ic{width:32px;height:32px;vertical-align:0}
+.civHUD .cvHead.money .cvHeadIc,.civHUD .cvHead.spice .cvHeadIc{--tone:var(--cv-gold)}.civHUD .cvHead.talk .cvHeadIc{--tone:var(--cv-ocean)}.civHUD .cvHead.designs .cvHeadIc{--tone:var(--cv-purple)}.civHUD .cvHead.bad .cvHeadIc{--tone:var(--cv-red)}
+.tribeHUD.civHUD .tsClose{flex:none;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;padding:0;border:2.5px solid var(--cv-edge);background:linear-gradient(#fff,var(--cv-cream2));box-shadow:0 3px 0 var(--cv-edge2);color:var(--cv-ink2)}
+.tribeHUD.civHUD .tsClose .ic{width:18px;height:18px;vertical-align:0}
+.tribeHUD.civHUD .tsClose:active{transform:translateY(3px);box-shadow:none}
+.tribeHUD.civHUD .cvFloatClose{position:absolute;right:10px;top:10px;z-index:3}
+.tribeHUD.civHUD .tsHint{color:var(--cv-ink2);font-size:12px;line-height:1.45}
+.tribeHUD.civHUD .tsHint b{color:var(--cv-ink)}.tribeHUD.civHUD .tsHint .ic{width:16px;height:16px;vertical-align:-3px}
+.tribeHUD.civHUD .tsKind{display:flex;align-items:baseline;gap:8px;margin:14px 0 6px;font-size:12.5px;letter-spacing:.02em;text-transform:none;font-weight:900;color:var(--cv-ink)}
+.tribeHUD.civHUD .tsKind::before{content:"";flex:none;width:12px;height:12px;border-radius:50% 40% 55% 45%;background:var(--cv-ocean);box-shadow:0 2px 0 var(--cv-ocean2);align-self:center}
+.tribeHUD.civHUD .tsKind small{font-size:11px;font-weight:700;color:var(--cv-ink3)}
+.tribeHUD.civHUD .tsWonText{color:var(--cv-ink)}
+.tribeHUD.civHUD .tsHelp{color:var(--cv-ink);font-size:13px;padding:0;list-style:none}
+.civHUD .cvHelp li{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;background:#fff8;border-radius:14px;border:1.5px solid var(--cv-cream3)}
+.civHUD .cvHelp li .ic{width:28px;height:28px;margin-top:1px}
+
+/* Stat chips: an icon, a big number, a word. */
+.civHUD .cvChips{display:grid;grid-template-columns:repeat(auto-fit,minmax(68px,1fr));gap:7px;margin:8px 0 4px}
+.civHUD .cvChip{--tone:var(--cv-ocean);display:flex;flex-direction:column;align-items:center;gap:0;padding:6px 4px 5px;border-radius:15px 12px 16px 11px;background:#fff;border:2px solid color-mix(in srgb,var(--tone) 45%,#fff);box-shadow:0 3px 0 color-mix(in srgb,var(--tone) 30%,#e6cc9a)}
+.civHUD .cvChip .ic{width:24px;height:24px;vertical-align:0}
+.tribeHUD.civHUD .cvChip b{font-size:18px;font-weight:900;color:var(--cv-ink);line-height:1.1;font-variant-numeric:tabular-nums}
+.civHUD .cvChip small{font-size:10px;font-weight:800;color:var(--cv-ink2);text-align:center}
+.civHUD .cvChip.money,.civHUD .cvChip.spice{--tone:var(--cv-gold)}.civHUD .cvChip.good,.civHUD .cvChip.res{--tone:var(--cv-leaf)}.civHUD .cvChip.bad,.civHUD .cvChip.mil{--tone:var(--cv-red)}.civHUD .cvChip.warn{--tone:var(--cv-spice)}.civHUD .cvChip.faith{--tone:var(--cv-purple)}
+.civHUD .cvChips.small .cvChip{padding:4px 3px}.tribeHUD.civHUD .cvChips.small .cvChip b{font-size:15px}.civHUD .cvChips.small .ic{width:20px;height:20px}
+
+/* Pips: a gauge you read at a glance. */
+.civHUD .cvPips{display:inline-flex;gap:2px;vertical-align:middle}
+.civHUD .cvPips i{width:9px;height:9px;border-radius:3px 4px 3px 4px;background:#e6d3ad;box-shadow:inset 0 1px 1px #0002}
+.civHUD .cvPips i.on{background:linear-gradient(#ffd36a,var(--cv-gold));box-shadow:inset 0 -1px 0 var(--cv-gold2)}
+.civHUD .cvPips.small i{width:6px;height:8px;border-radius:2px}
+.civHUD .cvAlert{display:flex;gap:8px;align-items:center;margin:8px 0;padding:8px 10px;border-radius:14px;font-size:12.5px;line-height:1.35;background:#ffe6df;border:2px solid #f2a397;color:var(--cv-red2)}
+.civHUD .cvAlert .ic{width:28px;height:28px}
+.civHUD .cvEmpty{color:var(--cv-ink3)!important;font-style:italic}
+
+/* Pictures of your designs. */
+.civHUD .cvThumb{flex:none;position:relative;display:grid;place-items:center;width:64px;height:64px}
+.civHUD .cvThumb img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 3px 2px #3a241433)}
+.civHUD .cvThumbIc{font-size:26px}.civHUD .cvThumbIc .ic{width:34px;height:34px}
+
+/* ---- the contextual card (a tapped city or geyser) --------------------------------------------- */
+.civHUD .cvPeek{position:absolute;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(400px,calc(100vw - 20px));box-sizing:border-box;padding:9px 11px 11px;pointer-events:auto;z-index:4}
+.civHUD .cvPeek.pop{animation:cvPeekIn .38s cubic-bezier(.3,1.5,.5,1)}
+@keyframes cvPeekIn{from{opacity:0;transform:translate(-50%,24px) scale(.9)}}
+.civHUD .cvPeekHead{--oc:var(--cv-ocean);display:flex;align-items:center;gap:9px}
+.civHUD .cvPeekHead b{flex:1;min-width:0;display:flex;flex-direction:column;font-size:16px;font-weight:900;line-height:1.15}
+.civHUD .cvPeekHead small{font-size:11.5px;font-weight:700;color:var(--cv-ink2)}
+.tribeHUD.civHUD .cvPeekX{flex:none;width:36px;height:36px;border-radius:50%;border:2px solid var(--cv-cream3);background:#fff;display:grid;place-items:center;padding:0;color:var(--cv-ink3)}
+.civHUD .cvPeekX .ic{width:15px;height:15px;vertical-align:0}
+.civHUD .cvPeekBtns{display:flex;gap:8px;margin-top:8px}.civHUD .cvPeekBtns button{flex:1;min-width:0;font-size:13px}
+.civHUD .cvTypeBadge{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:20px;background:radial-gradient(circle at 40% 30%,#fff,var(--cv-cream2));border:3px solid var(--oc,var(--cv-ocean));box-shadow:0 2px 0 #0002}
+.civHUD .cvTypeBadge.military{background:radial-gradient(circle at 40% 30%,#fff,#ffd6cf)}.civHUD .cvTypeBadge.economic{background:radial-gradient(circle at 40% 30%,#fff,#ffeab0)}.civHUD .cvTypeBadge.religious{background:radial-gradient(circle at 40% 30%,#fff,#e6d7fb)}
+.civHUD .cvTypeBadge.spice{border-color:var(--cv-spice)}.civHUD .cvTypeBadge .ic{width:26px;height:26px;vertical-align:0}
+
+/* ---- a city: its postcard, buildings, production ------------------------------------------------- */
+.civHUD .cvPostcard{--oc:var(--cv-ocean);position:relative;margin:-12px -14px 4px;padding:14px 12px 10px;border-radius:24px 20px 0 0/22px 26px 0 0;background:radial-gradient(60% 50% at 82% 8%,#fff7c8 0,#fff7c800 70%),linear-gradient(#9fe3f6,#d8f6ff 58%,#0000 58%),linear-gradient(0deg,color-mix(in srgb,var(--oc) 55%,#7fc95a),color-mix(in srgb,var(--oc) 30%,#a6dd7c));overflow:hidden;min-height:118px;box-sizing:border-box}
+.civHUD .cvPostcard::before{content:"";position:absolute;left:-10%;right:-10%;top:54%;height:44px;border-radius:50% 50% 0 0/100% 100% 0 0;background:color-mix(in srgb,var(--oc) 35%,#9bd873);opacity:.9}
+.civHUD .cvPostcard.riot{filter:saturate(.7) hue-rotate(-10deg)}
+.civHUD .cvSkyline{position:relative;display:flex;align-items:flex-end;justify-content:center;gap:0;height:76px;margin:0 46px 0 0}
+.civHUD .cvSkyline .cvThumb.sky{width:56px;height:62px;margin:0 -6px}
+.civHUD .cvSkyline .cvThumb.hall{width:78px;height:80px;z-index:1}
+.civHUD .cvSkyline .cvThumb{animation:cvRise .5s cubic-bezier(.3,1.5,.5,1) backwards}
+.civHUD .cvSkyline .cvThumb:nth-child(2){animation-delay:.05s}.civHUD .cvSkyline .cvThumb:nth-child(3){animation-delay:.1s}.civHUD .cvSkyline .cvThumb:nth-child(4){animation-delay:.15s}.civHUD .cvSkyline .cvThumb:nth-child(5){animation-delay:.2s}.civHUD .cvSkyline .cvThumb:nth-child(6){animation-delay:.25s}.civHUD .cvSkyline .cvThumb:nth-child(7){animation-delay:.3s}
+@keyframes cvRise{from{transform:translateY(18px) scaleY(.4);opacity:0}}
+.civHUD .cvPostName{position:relative;display:flex;align-items:center;gap:9px;margin-top:-4px;padding:6px 10px 6px 6px;background:var(--cv-cream);border:2.5px solid var(--cv-edge);border-radius:16px 20px 15px 19px;box-shadow:0 3px 0 #6e4f3333}
+.civHUD .cvPostName>span:last-child{flex:1;min-width:0;display:flex;flex-direction:column}
+.civHUD .cvPostName b{font-size:18px;font-weight:900;line-height:1.1}
+.civHUD .cvPostName small{font-size:11px;font-weight:700;color:var(--cv-ink2)}
+.civHUD .cvPostName .cvTypeBadge{border-color:var(--oc)}
+/* plots */
+.tribeHUD.civHUD .cvPlots{grid-template-columns:repeat(3,1fr);gap:8px}
+.tribeHUD.civHUD .cvPlot{--tone:var(--cv-ink3);position:relative;min-height:84px;padding:4px 2px 5px;border-radius:16px 13px 17px 12px/13px 17px 12px 16px;border:2.5px solid color-mix(in srgb,var(--tone) 60%,#fff);background:linear-gradient(#fff,color-mix(in srgb,var(--tone) 14%,#fff));box-shadow:0 3px 0 color-mix(in srgb,var(--tone) 55%,#c9a46a);color:var(--cv-ink);gap:0;transition:transform .12s}
+.tribeHUD.civHUD .cvPlot .cvThumb{width:54px;height:54px}
+.tribeHUD.civHUD .cvPlot small{font-size:10.5px;font-weight:900;color:var(--cv-ink2)}
+.tribeHUD.civHUD .cvPlot:active{transform:translateY(3px);box-shadow:none}
+.tribeHUD.civHUD .cvPlot.empty{border-style:dashed;border-color:#c9a46a;background:#fff6;box-shadow:none;color:var(--cv-ink3)}
+.tribeHUD.civHUD .cvPlot.empty .ic{width:30px;height:30px;opacity:.7;margin:10px 0 4px;transition:transform .2s}
+.tribeHUD.civHUD .cvPlot.empty:hover .ic{transform:scale(1.15) rotate(90deg);opacity:1}
+.tribeHUD.civHUD .cvPlot.picking{border-color:var(--cv-leaf);border-style:solid;background:#ecffe0;animation:cvBreathe 1.2s ease-in-out infinite}
+.tribeHUD.civHUD .cvPlot.fresh{animation:cvBuilt .7s cubic-bezier(.3,1.6,.5,1)}
+.tribeHUD.civHUD .cvPlot.fresh::after{content:"✨";position:absolute;right:4px;top:2px;font-size:16px;animation:cvSparkle .9s ease-out forwards}
+@keyframes cvBuilt{0%{transform:scale(.3) translateY(20px);opacity:0}60%{transform:scale(1.12)}}
+@keyframes cvSparkle{from{transform:scale(.3) rotate(-40deg);opacity:0}40%{opacity:1;transform:scale(1.4)}to{opacity:0;transform:scale(1) translateY(-10px)}}
+@keyframes cvBreathe{50%{transform:scale(1.04)}}
+/* building families */
+.civHUD .res{--tone:var(--cv-leaf)}.civHUD .ind{--tone:#8a8f9c}.civHUD .ent{--tone:#ff8fc6}.civHUD .rel{--tone:var(--cv-purple)}.civHUD .mil{--tone:var(--cv-red)}.civHUD .adm{--tone:var(--cv-ocean)}.civHUD .econ{--tone:var(--cv-gold)}
+.civHUD .cvBuildCards,.civHUD .cvDesignCards{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:9px;margin-top:9px}
+.tribeHUD.civHUD .cvBuildCard,.tribeHUD.civHUD .cvDesignCard{--tone:var(--cv-ocean);position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:2px;padding:20px 8px 9px;border-radius:18px 15px 19px 14px/15px 19px 14px 18px;border:2.5px solid color-mix(in srgb,var(--tone) 65%,#fff);background:linear-gradient(color-mix(in srgb,var(--tone) 18%,#fff),#fff 60%);box-shadow:0 4px 0 color-mix(in srgb,var(--tone) 60%,#a67c45);color:var(--cv-ink);animation:cvCardIn .35s cubic-bezier(.3,1.5,.5,1) backwards;transition:transform .12s}
+.tribeHUD.civHUD .cvBuildCard:nth-child(2),.tribeHUD.civHUD .cvDesignCard:nth-child(2){animation-delay:.05s}.tribeHUD.civHUD .cvBuildCard:nth-child(3),.tribeHUD.civHUD .cvDesignCard:nth-child(3){animation-delay:.1s}.tribeHUD.civHUD .cvBuildCard:nth-child(4),.tribeHUD.civHUD .cvDesignCard:nth-child(4){animation-delay:.15s}
+@keyframes cvCardIn{from{opacity:0;transform:translateY(14px) scale(.9)}}
+.tribeHUD.civHUD .cvBuildCard:hover,.tribeHUD.civHUD .cvDesignCard:hover{transform:translateY(-2px) rotate(-.6deg)}
+.tribeHUD.civHUD .cvBuildCard:active,.tribeHUD.civHUD .cvDesignCard:active{transform:translateY(3px);box-shadow:none}
+.civHUD .cvBuildFamily{position:absolute;top:-2px;left:50%;transform:translateX(-50%);font-size:9.5px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#fff;background:var(--tone);padding:2px 9px 3px;border-radius:0 0 10px 10px;text-shadow:0 1px 0 #0004;white-space:nowrap}
+.tribeHUD.civHUD .cvBuildCard b,.tribeHUD.civHUD .cvDesignCard b{font-size:13px;font-weight:900;display:flex;flex-direction:column;line-height:1.15}
+.tribeHUD.civHUD .cvDesignCard b small{font-size:10.5px;color:var(--cv-ink2);font-weight:700}
+.civHUD .cvEffect{font-size:10.5px;color:var(--cv-ink2);line-height:1.3}
+.civHUD .cvStatLine{display:flex;align-items:center;gap:4px;font-size:10px;font-weight:800;color:var(--cv-ink2)}.civHUD .cvStatLine .ic{width:15px;height:15px}
+.civHUD .cvCost{font-style:normal;font-weight:900;font-size:13px;color:var(--cv-gold2);background:#fff3d0;border:2px solid #ffd77a;border-radius:10px;padding:1px 9px;margin-top:3px}
+.civHUD .cvCost i{font-style:normal;color:var(--cv-spice)}.civHUD .cvCost .ic{width:14px;height:14px;vertical-align:-2px}
+.tribeHUD.civHUD [aria-disabled=true].cvBuildCard,.tribeHUD.civHUD [aria-disabled=true].cvVehCard{filter:saturate(.35);opacity:.7}
+.civHUD [aria-disabled=true] .cvCost{color:var(--cv-red2);background:#ffe6df;border-color:#f2a397}
+.tribeHUD.civHUD .cvDesignCard em{font-style:normal;font-size:11px;font-weight:900;color:var(--cv-ocean2);margin-top:2px}
+/* vehicle cards: production and designs */
+.civHUD .cvVehCards{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:9px}
+.tribeHUD.civHUD .cvVehCard{position:relative;display:grid;grid-template-columns:64px 1fr auto;grid-template-rows:auto auto;column-gap:8px;align-items:center;text-align:left;padding:7px 10px 7px 6px;border-radius:18px 15px 19px 14px/15px 19px 14px 18px;border:2.5px solid #9fd8e8;background:linear-gradient(100deg,#e3f8ff,#fff 55%);box-shadow:0 4px 0 #6fb4ca;color:var(--cv-ink);animation:cvCardIn .35s cubic-bezier(.3,1.5,.5,1) backwards;transition:transform .12s;min-width:0}
+.tribeHUD.civHUD .cvVehCard:active{transform:translateY(3px);box-shadow:none}
+.tribeHUD.civHUD .cvVehCard .cvThumb{grid-row:1/3}
+.tribeHUD.civHUD .cvVehCard b{display:flex;flex-direction:column;font-size:13.5px;font-weight:900;line-height:1.15;min-width:0}
+.tribeHUD.civHUD .cvVehCard b small{font-size:10.5px;font-weight:700;color:var(--cv-ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.civHUD .cvVehCard .cvCost,.civHUD .cvVehCard .cvEdit{grid-column:3;grid-row:1/3;align-self:center;margin:0}
+.civHUD .cvVehCard .cvEdit{font-style:normal;font-weight:900;font-size:12px;color:#fff;background:var(--cv-ocean);border-radius:10px;padding:4px 9px;box-shadow:0 2px 0 var(--cv-ocean2)}
+.civHUD .cvMiniStats{grid-column:2;display:flex;flex-wrap:wrap;gap:3px 8px;margin-top:3px}
+.civHUD .cvMiniStats>span{display:inline-flex;align-items:center;gap:2px}.civHUD .cvMiniStats .ic{width:14px;height:14px}
+.civHUD .cvVehCard.locked{background:repeating-linear-gradient(135deg,#f3ecde 0 10px,#ece2cf 10px 20px);border-color:#d6c4a2;box-shadow:0 4px 0 #c9b38a}
+.civHUD .cvLock{position:absolute;left:44px;top:4px}.civHUD .cvLock .ic{width:20px;height:20px}
+.civHUD .cvDesignRow{display:flex;gap:5px;min-width:0}.civHUD .cvDesignRow .cvVehCard{flex:1}
+.tribeHUD.civHUD .cvDesignOps button{border:2px solid var(--cv-cream3);background:#fff;color:var(--cv-ink);border-radius:12px;box-shadow:0 2px 0 var(--cv-cream3);min-height:36px}
+/* the production queue: real vehicles, filling up */
+.tribeHUD.civHUD .cvQueue{display:flex;gap:10px;margin:4px 0 10px;flex-wrap:wrap}
+.tribeHUD.civHUD .cvQItem{position:relative;flex:none;max-width:none;width:70px;height:78px;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;border:0;background:none;color:var(--cv-ink)}
+.civHUD .cvQItem .cvThumb{width:62px;height:62px;border-radius:50%;background:#fff;box-shadow:0 3px 0 #6e4f3333;z-index:1}
+.civHUD .cvQItem .cvQRing{position:absolute;left:4px;top:0;width:62px;height:62px;border-radius:50%;background:conic-gradient(var(--cv-leaf) calc(var(--p)*360deg),#e6d3ad 0);mask:radial-gradient(circle,#0000 26px,#000 27px);-webkit-mask:radial-gradient(circle,#0000 26px,#000 27px);z-index:2}
+.civHUD .cvQItem.wait{opacity:.7}.civHUD .cvQItem.wait .cvQRing{background:#e6d3ad}
+.civHUD .cvQItem.now .cvThumb img{animation:cvWork 1.2s ease-in-out infinite}
+@keyframes cvWork{50%{transform:translateY(-2px) rotate(-3deg)}}
+.tribeHUD.civHUD .cvQItem small{font-size:11px;font-weight:900;color:var(--cv-ink2);margin-top:2px}
+.civHUD .cvQX{position:absolute;right:0;top:-2px;width:20px;height:20px;border-radius:50%;background:#fff;border:2px solid var(--cv-red);display:grid;place-items:center;z-index:3;color:var(--cv-red)}.civHUD .cvQX .ic{width:11px;height:11px;vertical-align:0}
+/* defence and conversion meters (other nations' cities) */
+.civHUD .cvMeters{display:grid;grid-template-columns:1fr 1fr;gap:7px 12px;margin:8px 0}
+.civHUD .cvMeter{display:flex;align-items:center;gap:6px}.civHUD .cvMeter>span{flex:1;min-width:0}.civHUD .cvMeter small{font-size:10.5px;font-weight:800;color:var(--cv-ink2)}.civHUD .cvMeter b{font-size:11px;font-weight:900;min-width:32px;text-align:right}
+.tribeHUD.civHUD .cvMeter .tsRel{margin:2px 0 0;height:9px;background:#e6d3ad;box-shadow:inset 0 1px 2px #0003}
+.tribeHUD.civHUD .cvBar.foe b{background:linear-gradient(#f2766a,var(--cv-red))}.tribeHUD.civHUD .cvBar.trade b{background:linear-gradient(#ffd36a,var(--cv-gold))}.tribeHUD.civHUD .cvBar.faith b{background:linear-gradient(#c8a6f5,var(--cv-purple))}
+.civHUD .cvRelLine{border-left:5px solid var(--nc);padding-left:8px}
+.tribeHUD.civHUD .cvRow button{font-size:13px}
+
+/* ---- talking to a leader ----------------------------------------------------------------------- */
+.civHUD .cvComms{--nc:var(--cv-purple);position:relative;margin:-12px -14px 6px;padding:12px 14px 8px;border-radius:24px 20px 0 0/22px 26px 0 0;background:linear-gradient(color-mix(in srgb,var(--nc) 34%,#fff4dc),#0000 85%)}
+.civHUD .cvCommsStage{position:relative;width:176px;height:176px;margin:4px auto 0}
+.civHUD .cvRays{position:absolute;inset:-26px;border-radius:50%;background:repeating-conic-gradient(color-mix(in srgb,var(--nc) 40%,#fff) 0 12deg,#fff0 12deg 24deg);mask:radial-gradient(circle,#000 30%,#0000 70%);-webkit-mask:radial-gradient(circle,#000 30%,#0000 70%);animation:cvSpin 40s linear infinite;opacity:.8}
+@keyframes cvSpin{to{transform:rotate(360deg)}}
+.civHUD .cvLeaderPic{position:absolute;inset:8px;border-radius:50% 46% 52% 48%/48% 52% 46% 50%;background:radial-gradient(circle at 45% 35%,#fff,color-mix(in srgb,var(--nc) 40%,#fff));border:5px solid var(--nc);box-shadow:0 0 0 4px #fff,0 8px 0 #0002,0 14px 26px #0004;overflow:hidden;display:grid;place-items:center;animation:cvIdle 3.4s ease-in-out infinite;transform-origin:50% 90%}
+.civHUD .cvLeaderPic img{width:118%;height:118%;object-fit:cover;margin-top:6%}
+.civHUD .cvLeaderPic span{font-size:72px}
+@keyframes cvIdle{0%,100%{transform:translateY(0) rotate(0) scale(1)}30%{transform:translateY(-3px) rotate(-1.5deg) scale(1.01,.99)}60%{transform:translateY(1px) rotate(1.2deg) scale(.99,1.01)}}
+/* moods: how they hold themselves before you say a word */
+.civHUD .mood-delighted .cvLeaderPic{animation:cvHappyIdle 1.6s ease-in-out infinite}
+@keyframes cvHappyIdle{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-6px) rotate(2deg)}}
+.civHUD .mood-cross .cvLeaderPic,.civHUD .mood-angry .cvLeaderPic{animation:cvSeethe 2.2s ease-in-out infinite;border-color:var(--cv-red)}
+@keyframes cvSeethe{0%,100%{transform:scale(1)}50%{transform:scale(1.03,0.97)}55%{transform:translateX(-1px) scale(1.03,.97)}60%{transform:translateX(1px) scale(1.03,.97)}}
+.civHUD .mood-angry .cvRays{background:repeating-conic-gradient(#ff8a7a 0 12deg,#fff0 12deg 24deg);animation-duration:10s}
+.civHUD .mood-wary .cvLeaderPic{animation:cvWary 4s ease-in-out infinite}
+@keyframes cvWary{0%,100%{transform:rotate(0)}40%{transform:rotate(-4deg) translateX(-3px)}70%{transform:rotate(3deg) translateX(2px)}}
+.civHUD .cvMood{position:absolute;right:2px;bottom:6px;width:46px;height:46px;display:grid;place-items:center;font-size:28px;background:#fff;border-radius:50%;border:3px solid var(--nc);box-shadow:0 3px 0 #0002;z-index:2}
+.civHUD .cvFx{position:absolute;inset:0;pointer-events:none;z-index:3}
+.civHUD .cvFx i{position:absolute;left:50%;top:40%;font-style:normal;font-size:22px;opacity:0}
+/* reactions: played once when they answer */
+.civHUD .react-yes .cvLeaderPic{animation:cvJoy .9s cubic-bezier(.3,1.6,.5,1)}
+@keyframes cvJoy{0%{transform:scale(1)}25%{transform:translateY(-16px) scale(1.08,.94) rotate(-6deg)}50%{transform:translateY(0) scale(.94,1.06) rotate(5deg)}75%{transform:translateY(-6px) rotate(-2deg)}}
+.civHUD .react-yes .cvFx i::before{content:"💖"}.civHUD .react-yes .cvFx i:nth-child(2)::before{content:"✨"}.civHUD .react-yes .cvFx i:nth-child(3)::before{content:"🎉"}
+.civHUD .react-no .cvLeaderPic{animation:cvHeadShake .8s ease-in-out}
+@keyframes cvHeadShake{15%,45%{transform:rotate(-8deg)}30%,60%{transform:rotate(8deg)}75%{transform:rotate(-3deg)}}
+.civHUD .react-no .cvFx i:first-child::before{content:"💢"}
+.civHUD .react-annoyed .cvLeaderPic{animation:cvHuff .9s ease-in-out}
+@keyframes cvHuff{30%{transform:scale(1.06,.92) translateY(4px)}60%{transform:scale(.97,1.04)}}
+.civHUD .react-annoyed .cvFx i::before{content:"💨"}.civHUD .react-annoyed .cvFx i:nth-child(2)::before{content:"😤"}
+.civHUD .react-angry .cvLeaderPic{animation:cvRage .9s ease-in-out;border-color:var(--cv-red)}
+@keyframes cvRage{10%,30%,50%,70%{transform:translateX(-6px) rotate(-3deg) scale(1.06)}20%,40%,60%,80%{transform:translateX(6px) rotate(3deg) scale(1.06)}}
+.civHUD .react-angry .cvFx i::before{content:"💢"}.civHUD .react-angry .cvFx i:nth-child(2)::before{content:"🔥"}.civHUD .react-angry .cvFx i:nth-child(3)::before{content:"⚡"}
+.civHUD .react-angry .cvCommsStage,.civHUD .react-angry{animation:none}
+.civHUD .react-scared .cvLeaderPic{animation:cvCower 1s ease-in-out}
+@keyframes cvCower{20%{transform:translateY(8px) scale(.9)}40%,60%{transform:translateY(8px) scale(.9) translateX(-2px)}50%{transform:translateY(8px) scale(.9) translateX(2px)}}
+.civHUD .react-scared .cvFx i::before{content:"💦"}.civHUD .react-scared .cvFx i:nth-child(2)::before{content:"😰"}
+.civHUD [class*=react-] .cvFx i{animation:cvFxUp 1.3s ease-out forwards}
+.civHUD [class*=react-] .cvFx i:nth-child(1){--dx:-70px;animation-delay:.05s}.civHUD [class*=react-] .cvFx i:nth-child(2){--dx:60px;animation-delay:.18s}.civHUD [class*=react-] .cvFx i:nth-child(3){--dx:-30px;animation-delay:.32s}.civHUD [class*=react-] .cvFx i:nth-child(4){--dx:30px;animation-delay:.44s}
+@keyframes cvFxUp{0%{opacity:0;transform:translate(-50%,0) scale(.4)}25%{opacity:1;transform:translate(calc(-50% + var(--dx)*.5),-30px) scale(1.2)}100%{opacity:0;transform:translate(calc(-50% + var(--dx)),-90px) scale(.9)}}
+.civHUD .cvLeaderName{text-align:center;margin-top:6px}
+.civHUD .cvLeaderName b{display:block;font-size:19px;font-weight:900;color:var(--cv-ink)}
+.civHUD .cvLeaderName small{font-size:11.5px;font-weight:700;color:var(--cv-ink2)}
+.civHUD .cvSpeech{position:relative;margin:12px 4px 8px;padding:11px 14px;background:#fff;border:3px solid var(--nc);border-radius:20px 24px 22px 18px/24px 18px 24px 20px;font-size:14.5px;line-height:1.4;font-weight:700;color:var(--cv-ink);box-shadow:0 4px 0 #0002;animation:cvPopIn .4s cubic-bezier(.3,1.5,.5,1)}
+.civHUD .cvSpeech::before{content:"";position:absolute;left:50%;top:-14px;margin-left:-11px;border:11px solid transparent;border-bottom:14px solid var(--nc);border-top:0}
+.civHUD .cvSpeech::after{content:"";position:absolute;left:50%;top:-8px;margin-left:-8px;border:8px solid transparent;border-bottom:10px solid #fff;border-top:0}
+.civHUD .cvSpeech.yes{border-color:var(--cv-leaf)}.civHUD .cvSpeech.yes::before{border-bottom-color:var(--cv-leaf)}
+.civHUD .cvSpeech.no{border-color:var(--cv-red)}.civHUD .cvSpeech.no::before{border-bottom-color:var(--cv-red)}
+@keyframes cvPopIn{from{opacity:0;transform:scale(.85) translateY(6px)}}
+.civHUD .cvRelMeter{display:flex;align-items:center;gap:10px;margin:4px 4px 2px}
+.civHUD .cvRelTrack{position:relative;flex:1;height:14px;border-radius:8px;background:linear-gradient(90deg,var(--cv-red),#f0a04b 30%,#d9cbb0 50%,#9fdc7a 70%,var(--cv-leaf));box-shadow:inset 0 2px 3px #0003;border:2px solid #fff}
+.civHUD .cvRelTrack i{position:absolute;top:50%;left:calc(var(--p)*100%);width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:#fff;border:3px solid var(--cv-ink);box-shadow:0 2px 0 #0003;transition:left .8s cubic-bezier(.3,1.4,.5,1)}
+.civHUD .cvRelMeter.war .cvRelTrack{filter:saturate(1.3)}
+.civHUD .cvRelText{flex:none;font-size:12px;color:var(--cv-ink2);white-space:nowrap}.civHUD .cvRelText b{color:var(--cv-ink);font-weight:900}
+.civHUD .cvRelText em{font-style:normal;font-weight:900;padding:1px 6px;border-radius:8px;margin-left:2px;animation:cvPopIn .5s cubic-bezier(.3,1.6,.5,1)}
+.civHUD .cvRelText em.up{background:#dcf7cf;color:var(--cv-leaf2)}.civHUD .cvRelText em.down{background:#ffe0da;color:var(--cv-red2)}
+.tribeHUD.civHUD .cvOutcome{margin:8px 4px 2px;padding:7px 10px;border-radius:12px;font-size:12.5px;font-weight:800;animation:cvPopIn .45s cubic-bezier(.3,1.5,.5,1)}
+.tribeHUD.civHUD .cvOutcome.good{background:#e2f8d6;color:var(--cv-leaf2);border:2px solid #b4e59c}.tribeHUD.civHUD .cvOutcome.bad{background:#ffe6df;color:var(--cv-red2);border:2px solid #f2a397}
+.civHUD .cvStatus{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin:6px 0 2px}
+.civHUD .cvStatus span{font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px;background:#fff;border:1.5px solid var(--cv-cream3)}
+.civHUD .cvStatus span.wide{flex-basis:100%;text-align:center;background:none;border:0}
+.civHUD .cvStrength{margin:4px 0 0;text-align:center;font-size:11px;color:var(--cv-ink3);font-weight:700}.civHUD .cvStrength .ic{width:15px;height:15px}
+.tribeHUD.civHUD .cvChoices{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:8px 0}
+.tribeHUD.civHUD .cvChoices button{--tone:var(--cv-ocean);min-height:60px;padding:7px 9px 7px 7px;display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:7px;align-items:center;text-align:left;border-radius:16px 13px 17px 12px/13px 17px 12px 16px;border:2.5px solid color-mix(in srgb,var(--tone) 60%,#fff);background:linear-gradient(color-mix(in srgb,var(--tone) 14%,#fff),#fff);box-shadow:0 4px 0 color-mix(in srgb,var(--tone) 65%,#8f6434);color:var(--cv-ink);transition:transform .08s,box-shadow .08s;animation:cvCardIn .35s cubic-bezier(.3,1.5,.5,1) backwards}
+.tribeHUD.civHUD .cvChoices button:nth-child(2){animation-delay:.04s}.tribeHUD.civHUD .cvChoices button:nth-child(3){animation-delay:.08s}.tribeHUD.civHUD .cvChoices button:nth-child(4){animation-delay:.12s}.tribeHUD.civHUD .cvChoices button:nth-child(5){animation-delay:.16s}.tribeHUD.civHUD .cvChoices button:nth-child(6){animation-delay:.2s}.tribeHUD.civHUD .cvChoices button:nth-child(n+7){animation-delay:.24s}
+.tribeHUD.civHUD .cvChoices button:active{transform:translateY(4px);box-shadow:none}
+.tribeHUD.civHUD .cvChoices button.good{--tone:var(--cv-leaf)}.tribeHUD.civHUD .cvChoices button.bad{--tone:var(--cv-red)}.tribeHUD.civHUD .cvChoices button.gift,.tribeHUD.civHUD .cvChoices button.trade{--tone:var(--cv-gold)}.tribeHUD.civHUD .cvChoices button.faith{--tone:var(--cv-purple)}
+.civHUD .cvOpIc{grid-row:1/3;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:20px;background:#fff;border:2px solid color-mix(in srgb,var(--tone) 50%,#fff)}
+.tribeHUD.civHUD .cvChoices button b{font-size:13px;font-weight:900;line-height:1.15}
+.tribeHUD.civHUD .cvChoices button small{flex-basis:auto;margin:0;font-size:10.5px;color:var(--cv-ink2);line-height:1.25}
+.tribeHUD.civHUD .cvChoices button[aria-disabled=true]{opacity:.55;filter:saturate(.2);box-shadow:0 2px 0 #c9b38a}
+.tribeHUD.civHUD .cvAnswers button{display:flex;justify-content:center;text-align:center;font-weight:900;font-size:14px}
+.civHUD .cvWaiting{display:flex;align-items:center;justify-content:center;gap:6px;margin:6px 0 0;font-size:12.5px;font-weight:800;color:var(--cv-ink2)}.civHUD .cvWaiting b{color:var(--cv-red2)}
+.civHUD .cvTabs{margin-top:6px}
+.tribeHUD.civHUD .cvLog{max-height:none}
+.tribeHUD.civHUD .cvLog li{background:#fff;border:2px solid var(--cv-cream3);color:var(--cv-ink);border-radius:14px 16px 15px 4px}
+.tribeHUD.civHUD .cvLog li small{color:var(--cv-ink3)}.tribeHUD.civHUD .cvLog li em{color:var(--cv-gold2);font-weight:800}
+.tribeHUD.civHUD .cvChat li.them{border-left:5px solid var(--nc,var(--cv-purple))}
+.tribeHUD.civHUD .cvLog li.you{background:#e3f8ff;border-color:#9fd8e8;margin-left:22px;border-radius:16px 14px 4px 15px}
+.civHUD .cvInbox{display:grid;gap:7px;margin:6px 0}
+.tribeHUD.civHUD .cvInboxCard{display:flex;align-items:center;gap:9px;padding:7px 10px 7px 7px;border-radius:16px;border:2.5px solid var(--nc);background:#fff;box-shadow:0 3px 0 #0002;text-align:left;animation:cvCall 1.6s ease-in-out infinite}
+.civHUD .cvInboxCard span:nth-child(2){flex:1;min-width:0;display:flex;flex-direction:column;font-size:12px}.civHUD .cvInboxCard small{color:var(--cv-ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.civHUD .cvInboxCard em{font-style:normal;font-weight:900;color:var(--cv-red2)}
+
+/* ---- the world and the economy ------------------------------------------------------------------ */
+.civHUD .cvShare{display:flex;height:18px;border-radius:10px;overflow:hidden;border:2.5px solid #fff;box-shadow:0 2px 0 #0002,inset 0 1px 2px #0003;margin:4px 0 8px}
+.civHUD .cvShare i{background:var(--nc);border-right:2px solid #fff8}
+.civHUD .cvNationCards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.tribeHUD.civHUD .cvNationCard{position:relative;display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:9px;align-items:center;text-align:left;padding:8px 10px 8px 8px;border-radius:18px 15px 19px 14px/15px 19px 14px 18px;border:2.5px solid var(--nc);background:linear-gradient(100deg,color-mix(in srgb,var(--nc) 18%,#fff),#fff 70%);box-shadow:0 4px 0 color-mix(in srgb,var(--nc) 70%,#3a2414);color:var(--cv-ink);transition:transform .12s}
+.tribeHUD.civHUD .cvNationCard:active{transform:translateY(3px);box-shadow:none}
+.tribeHUD.civHUD .cvNationCard:disabled{cursor:default;opacity:1}
+.civHUD .cvNationFace{grid-row:1/3;position:relative;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-size:24px;background:radial-gradient(circle at 45% 35%,#fff,color-mix(in srgb,var(--nc) 35%,#fff));border:2.5px solid var(--nc);overflow:visible}
+.civHUD .cvNationFace img{width:100%;height:100%;object-fit:cover;border-radius:50%;transform:scale(1.12)}
+.civHUD .cvNationFace em{position:absolute;right:-6px;bottom:-5px;font-style:normal;font-size:14px;background:#fff;border-radius:50%;width:22px;height:22px;display:grid;place-items:center;box-shadow:0 1px 3px #0004}
+.civHUD .cvNationFace .ic{width:32px;height:32px}
+.tribeHUD.civHUD .cvNationCard b{display:flex;flex-direction:column;font-size:13.5px;font-weight:900;line-height:1.15;min-width:0}
+.tribeHUD.civHUD .cvNationCard b small{font-size:10.5px;font-weight:700;color:var(--cv-ink2)}
+.civHUD .cvNationNums{display:flex;gap:10px;font-size:12px;font-weight:900}.civHUD .cvNationNums .ic{width:16px;height:16px;margin-right:2px}
+.civHUD .cvNationRel{position:absolute;right:8px;top:7px;font-size:10px;font-weight:900;padding:1px 7px;border-radius:8px;background:#fff;border:1.5px solid var(--cv-cream3)}
+.civHUD .cvNationRel.war{background:#ffe0da;border-color:var(--cv-red);color:var(--cv-red2)}.civHUD .cvNationRel.ally{background:#dcf7cf;border-color:var(--cv-leaf);color:var(--cv-leaf2)}
+.civHUD .cvPairs{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.civHUD .cvPair{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px;padding:6px 10px;border-radius:14px;background:#fff;border:2px solid var(--cv-cream3);text-align:center}
+.civHUD .cvPair b{font-size:12.5px;font-weight:900;border-bottom:3px solid var(--nc)}.civHUD .cvPair>span{font-size:18px}
+.civHUD .cvPair small{grid-column:1/4;font-size:10.5px;color:var(--cv-ink2);font-weight:700}
+.civHUD .cvPair.war{background:#fff1ee;border-color:#f2a397}.civHUD .cvPair.ally{background:#f0fbea;border-color:#b4e59c}
+.civHUD .cvFlow{display:flex;height:22px;border-radius:12px;overflow:hidden;border:2.5px solid #fff;box-shadow:0 2px 0 #0002;background:#e6d3ad}
+.civHUD .cvFlow i{display:block;min-width:6px}.civHUD .cvFlow i.res{background:repeating-linear-gradient(135deg,var(--cv-leaf) 0 8px,#6fd35a 8px 16px)}.civHUD .cvFlow i.trade{background:repeating-linear-gradient(135deg,var(--cv-gold) 0 8px,#ffcf63 8px 16px)}
+.civHUD .cvFlowKey{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:5px;font-size:11px;font-weight:800;color:var(--cv-ink2)}.civHUD .cvFlowKey .ic{width:16px;height:16px}
+.civHUD .cvRoutes{list-style:none;margin:0;padding:0;display:grid;gap:7px}
+.civHUD .cvRoute{padding:7px 10px;border-radius:14px;background:#fff;border:2px solid #ffe08a}
+.civHUD .cvRouteEnds{display:flex;align-items:center;gap:8px;font-size:12.5px}.civHUD .cvRouteEnds b{font-weight:900;border-bottom:3px solid var(--nc,var(--cv-ocean))}
+.civHUD .cvRouteLine{position:relative;flex:1;height:4px;border-radius:2px;background:repeating-linear-gradient(90deg,var(--cv-gold) 0 8px,#0000 8px 14px);animation:cvMarch 1s linear infinite}
+@keyframes cvMarch{to{background-position:14px 0}}
+.civHUD .cvRouteLine em{position:absolute;top:-7px;left:0;width:16px;height:16px;border-radius:50%;background:var(--cv-gold);border:2px solid #fff;box-shadow:0 1px 2px #0004;animation:cvTruck 3s ease-in-out infinite alternate;display:none}
+.civHUD .cvRouteLine em:not([style*="--n:0"]){display:block}
+@keyframes cvTruck{to{left:calc(100% - 16px)}}
+.civHUD .cvRoute small{display:block;font-size:10.5px;color:var(--cv-ink2);font-weight:700;margin-top:3px}
+.civHUD .cvRoute.cut{border-color:#f2a397;background:#fff1ee}.civHUD .cvRoute.cut .cvRouteLine{background:repeating-linear-gradient(90deg,var(--cv-red) 0 4px,#0000 4px 14px);animation:none}.civHUD .cvRoute.cut small{color:var(--cv-red2)}
+.civHUD .cvMarket{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:14px;background:#fff;border:2px solid var(--cv-cream3)}
+.civHUD .cvMarket>span:last-child{display:flex;flex-direction:column;font-size:12.5px}.civHUD .cvMarket small{font-size:10.5px;color:var(--cv-ink2)}
+.civHUD .cvMarketDial{position:relative;flex:none;width:64px;height:34px;border-radius:34px 34px 0 0;background:conic-gradient(from 270deg at 50% 100%,var(--cv-red) 0 60deg,#d9cbb0 60deg 120deg,var(--cv-leaf) 120deg 180deg,#0000 180deg);overflow:hidden}
+.civHUD .cvMarketDial i{position:absolute;left:50%;bottom:0;width:3px;height:30px;margin-left:-1.5px;background:var(--cv-ink);border-radius:2px;transform-origin:50% 100%;transform:rotate(calc(-90deg + var(--p)*180deg));transition:transform .8s cubic-bezier(.3,1.4,.5,1)}
+.civHUD .cvMarketDial::after{content:"";position:absolute;left:50%;bottom:-6px;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:var(--cv-ink)}
+.tribeHUD.civHUD .cvSell{grid-template-columns:1fr 1fr 1fr}
+.tribeHUD.civHUD .cvSell button{flex-direction:column;gap:0;font-size:13px}
+.civHUD .cvCards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.tribeHUD.civHUD .cvCard{display:flex;align-items:center;gap:8px;padding:6px 10px 6px 6px;border-radius:16px;border:2.5px solid #ffcf9e;background:linear-gradient(100deg,#fff0e4,#fff);box-shadow:0 3px 0 #e6a56a;text-align:left;color:var(--cv-ink)}
+.civHUD .cvCard .cvThumb{width:42px;height:42px}.civHUD .cvCard b{flex:1;display:flex;flex-direction:column;font-size:12.5px}.civHUD .cvCard small{font-size:10.5px;color:var(--cv-ink2)}.civHUD .cvCard em{font-style:normal;font-weight:900;font-size:11.5px;color:var(--cv-gold2)}
+
+/* ---- the menu ------------------------------------------------------------------------------------ */
+.tribeHUD.civHUD .trMenuPanel{padding:10px;gap:7px;animation:cvPopIn .3s cubic-bezier(.3,1.5,.5,1);transform-origin:top right;z-index:6}
+.tribeHUD.civHUD .trMenuPanel button{display:flex;align-items:center;gap:8px;min-height:46px;padding:6px 16px 6px 10px;border-radius:14px;border:2px solid var(--cv-cream3);background:#fff;color:var(--cv-ink);font-weight:900;box-shadow:0 3px 0 var(--cv-cream3);text-align:left}
+.tribeHUD.civHUD .trMenuPanel button .ic{width:26px;height:26px}
+.tribeHUD.civHUD .trMenuPanel button.primary{background:linear-gradient(#8fe26f,var(--cv-leaf));border-color:var(--cv-leaf2);box-shadow:0 3px 0 var(--cv-leaf2);color:#fff;text-shadow:0 1px 0 #0005}
+.tribeHUD.civHUD .trMenuPanel button:active{transform:translateY(3px);box-shadow:none}
+.tribeHUD.civHUD .trPlace{background:var(--cv-cream);color:var(--cv-ink);border:3px solid var(--cv-gold);border-radius:18px;box-shadow:0 4px 0 var(--cv-gold2),0 10px 20px #0004}
+.tribeHUD.civHUD .trPlace button{background:#fff;color:var(--cv-ink);border:2px solid var(--cv-cream3)}
+
+/* ---- the camera decides how much interface there is ----------------------------------------------- */
+.civHUD .cvUnitRow,.civHUD .trActions,.civHUD .trTribes,.civHUD .trGoal{transition:opacity .35s,transform .35s}
+/* the whole planet: only what you need to read the world */
+.civHUD[data-zoom=planet] .cvUnitRow{opacity:0;transform:translateY(16px);pointer-events:none}
+.civHUD[data-zoom=planet] .trActions small{display:none}
+.civHUD[data-zoom=planet] .trActions{max-width:380px}
+.tribeHUD.civHUD[data-zoom=planet] .trActions button{min-height:50px}
+.civHUD[data-zoom=planet] .cvUnitRow:has(.sel){opacity:1;transform:none;pointer-events:auto}
+.civHUD[data-zoom=arrive] .trTop,.civHUD[data-zoom=arrive] .trBottom,.civHUD[data-zoom=arrive] .trTribes,.civHUD[data-zoom=arrive] .trGoal{opacity:0;pointer-events:none}
+/* a sheet has the screen: the floating bits make way */
+.civHUD.sheetOpen .cvPeek{display:none}
+.civHUD.victory>:not(.cvVictory):not(.trMarks){opacity:0!important;pointer-events:none!important;transition:opacity .6s}
+.civHUD.victory .trMarks{opacity:.35}
+
+/* ---- victory -------------------------------------------------------------------------------------- */
+.civHUD .cvVictory{position:absolute;inset:0;pointer-events:auto;display:grid;place-items:center;padding:20px 12px calc(16px + env(safe-area-inset-bottom));overflow:auto;background:radial-gradient(circle at 50% 40%,#fff7c800,#1d355088 80%);z-index:10;animation:cvFade .8s ease-out}
+.civHUD .cvVictory[hidden]{display:none}
+@keyframes cvFade{from{opacity:0}}
+.civHUD .cvVictoryCard{position:relative;width:min(480px,100%);box-sizing:border-box;padding:18px 18px 16px;text-align:center;animation:cvVictoryIn 1s cubic-bezier(.3,1.4,.5,1) .4s backwards}
+@keyframes cvVictoryIn{from{opacity:0;transform:scale(.6) translateY(60px) rotate(-4deg)}}
+.civHUD .cvVictoryKicker{margin:0;font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--cv-ocean2)}
+.civHUD .cvVictoryCard h2{margin:2px 0 8px;font-size:28px;font-weight:900;color:var(--cv-ink);text-shadow:0 2px 0 #ffd36a}
+.civHUD .cvVictoryLeader{--oc:var(--cv-ocean);position:relative;width:128px;height:128px;margin:0 auto;border-radius:50%;background:radial-gradient(circle at 45% 35%,#fff,color-mix(in srgb,var(--oc) 40%,#fff));border:5px solid var(--oc);box-shadow:0 0 0 5px #fff,0 0 0 9px #ffc83d,0 10px 24px #0004;display:grid;place-items:center;animation:cvHappyIdle 1.8s ease-in-out infinite}
+.civHUD .cvVictoryLeader img{width:112%;height:112%;object-fit:cover;border-radius:50%}.civHUD .cvVictoryLeader>.ic{width:72px;height:72px}
+.civHUD .cvVictoryBadge{position:absolute;right:-10px;bottom:-4px;width:50px;height:50px;display:grid;place-items:center;font-size:26px;background:linear-gradient(#ffe08a,var(--cv-gold));border:3px solid var(--cv-gold2);border-radius:50%;box-shadow:0 3px 0 var(--cv-gold2);animation:cvBadge 1.2s cubic-bezier(.3,1.8,.5,1) 1.1s backwards}
+@keyframes cvBadge{from{transform:scale(0) rotate(-180deg)}}
+.civHUD .cvVictoryName{margin:12px 0 2px;font-size:14px}
+.civHUD .cvVictoryText{margin:0 0 6px;font-size:12.5px;color:var(--cv-ink2);line-height:1.45}
+.civHUD .cvVictorySplit{display:flex;height:14px;border-radius:8px;overflow:hidden;border:2px solid #fff;box-shadow:0 2px 0 #0002;margin:4px 0}
+.civHUD .cvVictorySplit .military{background:var(--cv-red)}.civHUD .cvVictorySplit .economic{background:var(--cv-gold)}.civHUD .cvVictorySplit .religious{background:var(--cv-purple)}
+.civHUD .cvVictoryHow{font-size:13px;line-height:1.45;margin:8px 0}.civHUD .cvVictoryHow small{display:block;color:var(--cv-ink3);font-size:11px;margin-top:3px}
+.civHUD .cvMoments{list-style:none;margin:0;padding:0;display:grid;gap:5px;text-align:left}
+.civHUD .cvMoments li{display:grid;grid-template-columns:28px auto 1fr;gap:6px;align-items:center;padding:5px 9px;font-size:12px;background:#fff;border-radius:12px;border:1.5px solid var(--cv-cream3);animation:cvCardIn .4s cubic-bezier(.3,1.5,.5,1) backwards}
+.civHUD .cvMoments li span{font-size:16px;text-align:center}.civHUD .cvMoments li small{color:var(--cv-ink3);font-weight:800}
+.civHUD .cvMoments li.gap{display:block;text-align:center;background:none;border:0;color:var(--cv-ink3);padding:0}
+.civHUD .cvMoments li:nth-child(2){animation-delay:.1s}.civHUD .cvMoments li:nth-child(3){animation-delay:.2s}.civHUD .cvMoments li:nth-child(4){animation-delay:.3s}.civHUD .cvMoments li:nth-child(5){animation-delay:.4s}.civHUD .cvMoments li:nth-child(6){animation-delay:.5s}.civHUD .cvMoments li:nth-child(7){animation-delay:.6s}
+.civHUD .cvConfetti{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+.civHUD .cvConfetti i{position:absolute;top:-20px;left:calc(var(--x)*1%);width:10px;height:14px;border-radius:3px;background:hsl(var(--h) 85% 60%);animation:cvConfetti 3.6s linear var(--d) infinite}
+@keyframes cvConfetti{to{transform:translateY(110vh) rotate(720deg) translateX(40px)}}
+.civHUD .cvWave{position:fixed;left:50%;top:45%;width:20px;height:20px;margin:-10px;border-radius:50%;border:6px solid var(--oc);pointer-events:none;animation:cvWave 2.4s ease-out 3 forwards;opacity:0}
+@keyframes cvWave{0%{opacity:.9;transform:scale(1)}100%{opacity:0;transform:scale(60)}}
+
+/* ---- layouts: phones (a bottom sheet), tablets and computers (a panel beside the planet) -------- */
+@media (max-width:700px){
+  .tribeHUD.civHUD .trSheet{left:0;right:0;bottom:0;width:auto;transform:none;max-height:calc(100dvh - 128px - env(safe-area-inset-top));border-radius:28px 28px 0 0/24px 24px 0 0;border-bottom:0;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+  .tribeHUD.civHUD .trSheet::before{content:"";display:block;width:44px;height:5px;border-radius:3px;background:var(--cv-cream3);margin:-4px auto 8px}
+  .tribeHUD.civHUD .trSheet.pop{animation:cvSheetUp .45s cubic-bezier(.25,1.25,.5,1)}
+  @keyframes cvSheetUp{from{transform:translateY(60%);opacity:.4}}
+  .civHUD .cvPostcard,.civHUD .cvComms{margin-top:-25px}
+  .civHUD.sheetOpen .trTribes,.civHUD.sheetOpen .trGoal,.civHUD.sheetOpen .trToast{opacity:0;pointer-events:none}
+  .civHUD.sheetOpen .cvNotes{top:calc(max(10px,env(safe-area-inset-top)) + 54px)}
+  .civHUD .cvNotes{left:10px;right:10px;width:auto;top:calc(max(10px,env(safe-area-inset-top)) + 150px)}
+  .civHUD .cvCommsStage{width:150px;height:150px}
+  .tribeHUD.civHUD .trActions button{min-height:56px}
+  .tribeHUD.civHUD .cvCmds{grid-template-columns:repeat(6,1fr)}
+  .civHUD .cvVehCards{grid-template-columns:1fr}
+  .civHUD .cvBuildCards{grid-template-columns:1fr 1fr}
+  .civHUD .cvDesignCards{grid-template-columns:repeat(3,1fr)}
+  .tribeHUD.civHUD .cvDesignCard{padding:18px 4px 7px}
+  .civHUD .cvNationCards{grid-template-columns:1fr}
+}
+@media (max-width:440px){.tribeHUD.civHUD .cvPill small{display:none}.civHUD .cvPill{padding-right:7px;gap:2px;height:32px}.civHUD .cvPill .cvPillIc{width:26px;height:26px}.civHUD .cvPill .cvPillIc .ic{width:22px;height:22px}.tribeHUD.civHUD .trStats{gap:4px}.tribeHUD.civHUD .cvPill b{font-size:14.5px}}
+@media (max-width:380px){.civHUD .cvPill.vehicles{display:none}.civHUD .cvDesignCards{grid-template-columns:1fr 1fr}.tribeHUD.civHUD .cvChoices{grid-template-columns:1fr}}
+@media (min-width:701px){
+  .tribeHUD.civHUD .trSheet{left:auto;right:14px;top:calc(max(14px,env(safe-area-inset-top)) + 64px);bottom:auto;transform:none;width:min(460px,calc(100vw - 28px));max-height:calc(100dvh - 92px - 160px)}
+  @keyframes cvSheetIn{from{opacity:0;transform:translateX(50px) scale(.94)}}
+  .civHUD.sheetOpen .cvNotes{right:auto;left:14px}
+  .civHUD .cvNotes{top:calc(max(10px,env(safe-area-inset-top)) + 62px)}
+  .tribeHUD.civHUD .trSheet[data-kind=nation],.tribeHUD.civHUD .trSheet[data-kind=city]{width:min(500px,calc(100vw - 28px))}
+}
+@media (min-width:701px) and (min-height:700px){.tribeHUD.civHUD .trSheet{max-height:calc(100dvh - 92px - 24px);z-index:6}.civHUD.sheetOpen .trBottom{padding-right:min(500px,calc(100vw - 28px))}}
+@media (min-width:1100px){.tribeHUD.civHUD .trTribes{top:max(14px,env(safe-area-inset-top))}.tribeHUD.civHUD .trGoal{top:calc(max(14px,env(safe-area-inset-top)) + 64px)}.tribeHUD.civHUD .trToast{top:calc(max(14px,env(safe-area-inset-top)) + 100px)}}
+@media (max-height:520px){
+  .tribeHUD.civHUD .trSheet{left:auto;right:8px;top:max(8px,env(safe-area-inset-top));bottom:8px;width:min(440px,58vw);max-height:none;border-radius:var(--cv-r);transform:none}
+  .tribeHUD.civHUD .trSheet::before{display:none}
+  .civHUD .cvPostcard,.civHUD .cvComms{margin-top:-12px}
+  .civHUD .cvCommsStage{width:120px;height:120px}
+  .civHUD .cvPeek{bottom:calc(76px + env(safe-area-inset-bottom));left:10px;transform:none}
+  @keyframes cvPeekIn{from{opacity:0;transform:translateY(24px) scale(.9)}}
+  .civHUD .cvNotes{width:300px;top:calc(max(8px,env(safe-area-inset-top)) + 50px)}
+  .civHUD.sheetOpen .cvNotes{right:auto;left:8px}
+  .tribeHUD.civHUD .trActions{grid-template-columns:repeat(6,54px)}
+  .tribeHUD.civHUD .trActions button{min-height:50px}.tribeHUD.civHUD .trActions button small{display:none}
+}
+
+/* ---- reduced motion: no bouncing, spinning or confetti -------------------------------------------- */
+.civHUD.calm *,.civHUD.calm *::before,.civHUD.calm *::after{animation-duration:.001s!important;animation-iteration-count:1!important;transition-duration:.001s!important}
+@media (prefers-reduced-motion:reduce){.civHUD *,.civHUD *::before,.civHUD *::after{animation-duration:.001s!important;animation-iteration-count:1!important;transition-duration:.001s!important}}
+
+/* ---- the building and vehicle editors: a sibling of the creature creator ------------------------- */
+.mdEditor.md-vehicle,.mdEditor.md-building{color:var(--cv-ink);font-family:var(--cv-font)}
+.mdEditor.md-vehicle .ceTop,.mdEditor.md-building .ceTop{background:linear-gradient(#fff6e3f5,#fff6e3d0);border-bottom:3px solid var(--cv-edge);box-shadow:0 4px 0 #6e4f3322}
+.mdEditor.md-vehicle #mdName,.mdEditor.md-building #mdName{flex:1 1 140px;min-width:0;border:2.5px solid var(--cv-edge);background:#fff;color:var(--cv-ink);border-radius:14px 12px 15px 11px;padding:9px 12px;font:inherit;font-weight:900;font-size:16px;box-shadow:inset 0 2px 3px #0001}
+.mdEditor.md-vehicle .ceDna,.mdEditor.md-building .ceDna{color:var(--cv-gold2);background:#fff3d0;border:2px solid #ffd77a;border-radius:12px;padding:4px 10px}
+.mdEditor.md-vehicle .ceTopBtns button,.mdEditor.md-building .ceTopBtns button{border:2.5px solid var(--cv-edge);border-radius:14px;background:linear-gradient(#fff,var(--cv-cream2));color:var(--cv-ink);box-shadow:0 3px 0 var(--cv-edge2);font-weight:900;min-height:42px}
+.mdEditor.md-vehicle .ceTopBtns button.primary,.mdEditor.md-building .ceTopBtns button.primary{background:linear-gradient(#8fe26f,var(--cv-leaf));border-color:var(--cv-leaf2);box-shadow:0 3px 0 var(--cv-leaf2);color:#fff;text-shadow:0 1px 0 #0005}
+.mdEditor.md-vehicle .ceTopBtns button:active,.mdEditor.md-building .ceTopBtns button:active{transform:translateY(3px);box-shadow:none}
+.mdEditor.md-vehicle .ceHint,.mdEditor.md-building .ceHint{color:var(--cv-ink);text-shadow:0 1px 0 #fff,0 0 6px #fff;font-weight:700}
+.mdEditor.md-vehicle .mdStats,.mdEditor.md-building .mdStats{background:radial-gradient(120% 90% at 18% 0%,#fffdf7,var(--cv-cream) 50%,var(--cv-cream2));border:3px solid var(--cv-edge);border-radius:var(--cv-r);box-shadow:var(--cv-shadow);color:var(--cv-ink)}
+.mdEditor.md-vehicle .mdStats h3,.mdEditor.md-building .mdStats h3{color:var(--cv-ink);font-weight:900}
+.mdEditor.md-vehicle .ceStat,.mdEditor.md-building .ceStat{font-weight:800;color:var(--cv-ink2)}
+.mdEditor.md-vehicle .ceStat i b,.mdEditor.md-building .ceStat i b{width:10px;height:10px;border-radius:3px 4px 3px 4px;background:#e6d3ad}
+.mdEditor.md-vehicle .ceStat i b.on,.mdEditor.md-building .ceStat i b.on{background:linear-gradient(#ffd36a,var(--cv-gold));box-shadow:inset 0 -1px 0 var(--cv-gold2)}
+.mdEditor.md-vehicle .mdReady,.mdEditor.md-building .mdReady{color:var(--cv-leaf2);font-weight:900}
+.mdEditor.md-vehicle .mdProblems,.mdEditor.md-building .mdProblems{color:var(--cv-red2)}
+.mdEditor.md-vehicle .mdMode,.mdEditor.md-vehicle .mdClass{color:var(--cv-ink2)}
+.mdEditor.md-vehicle .cePanel,.mdEditor.md-building .cePanel{background:radial-gradient(120% 90% at 18% 0%,#fffdf7,var(--cv-cream) 45%,var(--cv-cream2));border-top:3px solid var(--cv-edge);border-radius:30px 30px 0 0/26px 26px 0 0;box-shadow:0 -4px 0 #6e4f3318,0 -10px 30px #0003}
+.mdEditor.md-vehicle .ceTabs button,.mdEditor.md-building .ceTabs button{color:var(--cv-ink3);border-radius:14px 14px 0 0}
+.mdEditor.md-vehicle .ceTabs button[aria-selected=true],.mdEditor.md-building .ceTabs button[aria-selected=true]{background:#fff;color:var(--cv-ink);box-shadow:inset 0 -4px var(--cv-gold)}
+.mdEditor.md-vehicle .ceChips button,.mdEditor.md-building .ceChips button{border:2px solid var(--cv-cream3);background:#fff;color:var(--cv-ink2);font-weight:900;box-shadow:0 2px 0 var(--cv-cream3)}
+.mdEditor.md-vehicle .ceChips button[aria-selected=true],.mdEditor.md-building .ceChips button[aria-selected=true]{background:linear-gradient(#7fd8ee,var(--cv-ocean));border-color:var(--cv-ocean2);color:#fff;box-shadow:0 2px 0 var(--cv-ocean2);text-shadow:0 1px 0 #0004}
+.mdEditor.md-vehicle .cePart,.mdEditor.md-building .cePart{border:2.5px solid #9fd8e8;border-radius:18px 15px 19px 14px/15px 19px 14px 18px;background:linear-gradient(#e3f8ff,#fff 60%);color:var(--cv-ink);box-shadow:0 4px 0 #6fb4ca;transition:transform .15s cubic-bezier(.3,1.6,.5,1)}
+.mdEditor.md-vehicle .cePart:hover,.mdEditor.md-building .cePart:hover{transform:translateY(-3px) rotate(-1.5deg)}
+.mdEditor.md-vehicle .cePart:active,.mdEditor.md-building .cePart:active{transform:translateY(3px) scale(.96);box-shadow:none}
+.mdEditor.md-vehicle .cePart:disabled,.mdEditor.md-building .cePart:disabled{filter:saturate(.2);opacity:.6}
+.mdEditor.md-vehicle .cePart small,.mdEditor.md-building .cePart small{color:var(--cv-ink2);font-weight:700}
+.mdEditor.md-vehicle .cePart .thumb img,.mdEditor.md-building .cePart .thumb img{filter:drop-shadow(0 3px 2px #3a241433)}
+.mdEditor.md-vehicle .ceGroup h4,.mdEditor.md-building .ceGroup h4{color:var(--cv-ink);font-weight:900}
+.mdEditor.md-vehicle .ceGroup button,.mdEditor.md-vehicle .ceRow button,.mdEditor.md-building .ceGroup button,.mdEditor.md-building .ceRow button{border:2.5px solid var(--cv-cream3);background:#fff;color:var(--cv-ink);font-weight:900;border-radius:14px;box-shadow:0 3px 0 var(--cv-cream3)}
+.mdEditor.md-vehicle .ceRow button[aria-checked=true],.mdEditor.md-building .ceRow button[aria-checked=true]{background:linear-gradient(#ffe08a,var(--cv-gold));border-color:var(--cv-gold2);box-shadow:0 3px 0 var(--cv-gold2)}
+.mdEditor.md-vehicle .mdNote,.mdEditor.md-building .mdNote{color:var(--cv-ink2)}
+.mdEditor.md-vehicle .mdTools,.mdEditor.md-building .mdTools{background:var(--cv-cream);border:3px solid var(--cv-edge);border-radius:20px;box-shadow:var(--cv-shadow);color:var(--cv-ink)}
+.mdEditor.md-vehicle .mdTools button,.mdEditor.md-building .mdTools button{border:2px solid var(--cv-cream3);background:#fff;color:var(--cv-ink);border-radius:12px;box-shadow:0 2px 0 var(--cv-cream3);font-weight:800}
+.mdEditor.md-vehicle .mdBudget.full,.mdEditor.md-vehicle .ceBudget.full{color:var(--cv-red2)}
+
+/* ---- clearing the older civilization styles these components replace ----------------------------- */
+.tribeHUD.civHUD .cvSpeech{font-style:normal}
+.tribeHUD.civHUD .cvSpeech::before{width:0;height:0;background:none;transform:none;border-left:11px solid transparent;border-right:11px solid transparent;border-top:0;border-bottom:14px solid var(--nc)}
+.tribeHUD.civHUD .cvSpeech.yes::before{border-bottom-color:var(--cv-leaf)}.tribeHUD.civHUD .cvSpeech.no::before{border-bottom-color:var(--cv-red)}
+.tribeHUD.civHUD .cvQItem .cvQX{flex:none;height:20px;border-radius:50%;background:#fff;overflow:visible}
+.tribeHUD.civHUD .cvSelHead>.cvGroup{min-width:84px;height:52px;border-radius:0;background:none;font-size:inherit;display:flex}
+.tribeHUD.civHUD .cvSelHead>.cvThumb.sel{min-width:0}
+.tribeHUD.civHUD .cvChoices button .cvOpIc{font-size:20px}
+@media (min-width:701px) and (max-width:1099px){.civHUD.sheetOpen .trTribes,.civHUD.sheetOpen .trGoal{left:calc((100vw - min(500px,100vw - 28px)) / 2)}}

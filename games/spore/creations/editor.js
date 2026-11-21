@@ -100,7 +100,7 @@ export function openModularEditor(o) {
 
   /* ---- DOM -------------------------------------------------------------------- */
   const root = document.createElement("div");
-  root.className = "crEditor mdEditor";
+  root.className = "crEditor mdEditor md-" + kind;
   root.setAttribute("role", "dialog");
   root.setAttribute("aria-label", KIND_NAMES[kind] + " editor");
   root.innerHTML = `

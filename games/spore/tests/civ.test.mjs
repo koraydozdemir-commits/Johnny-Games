@@ -333,3 +333,17 @@ test("economy saves: spice, price, build queues and derrick levels", () => {
   assert.equal(old.spice, 20);
   assert.deepEqual(old.cities[0].queue, []);
 });
+
+test("civ save: your milestones (for the victory screen) are kept, cleaned and capped", () => {
+  const city = { owner: "you", type: "economic", plots: [null, null, null, null, null, null] };
+  const old = readCivSave({ cities: [city] });
+  assert.deepEqual(old.moments, [], "saves from before have no milestones");
+  const many = Array.from({ length: 40 }, (_, i) => ({ t: i, icon: "⚔", text: "Moment " + i }));
+  const s = readCivSave({ cities: [city], moments: [...many, { t: 5, text: 42 }, null, { t: -3, icon: "x".repeat(50), text: "y".repeat(300) }] });
+  assert.equal(s.moments.length, 30);
+  const last = s.moments[s.moments.length - 1];
+  assert.equal(last.t, 0, "times are clamped");
+  assert.equal(last.icon.length, 8);
+  assert.equal(last.text.length, 200);
+  assert.ok(s.moments.every((m) => typeof m.text === "string"));
+});
