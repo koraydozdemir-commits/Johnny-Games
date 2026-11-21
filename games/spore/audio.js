@@ -257,6 +257,47 @@ export function createAudio() {
       [262, 330, 392, 523, 659].forEach((f, i) => bell(t + 0.25 + i * 0.22, f, 0.04, 0.9));
     },
     shard: (t) => [880, 1175, 1568, 2093].forEach((f, i) => bell(t + i * 0.08, f, 0.05, 0.6)),
+    /* Interface sounds (the Civilization Stage's menus, conversations and orders): short, soft, never shrill. */
+    // A bubbly "bloop" up as a panel opens, down as it closes.
+    uiOpen: (t) => tone("sine", 380, 720, t, 0.11, 0.045),
+    uiClose: (t) => tone("sine", 640, 330, t, 0.1, 0.035),
+    // Picking something: a woody tick and a little chirp.
+    uiSelect: (t) => {
+      tone("triangle", 900, 1200, t, 0.05, 0.03);
+      noise(t, 0.03, 0.03, "bandpass", 2400, 2400, 3);
+    },
+    // An order given to vehicles: two quick blips.
+    uiCommand: (t) => {
+      tone("square", 440, 440, t, 0.04, 0.018);
+      tone("square", 660, 660, t + 0.06, 0.05, 0.018);
+    },
+    // A message arriving: a gentle two-note chime.
+    uiNotify: (t) => {
+      bell(t, 784, 0.035, 0.4);
+      bell(t + 0.12, 1046, 0.03, 0.5);
+    },
+    // An urgent message (war, a city under attack): a low double horn.
+    uiAlarm: (t) => {
+      tone("sawtooth", 196, 185, t, 0.22, 0.03);
+      tone("sawtooth", 196, 175, t + 0.26, 0.28, 0.03);
+    },
+    // Agreement: a rising major arpeggio.
+    uiYes: (t) => [523, 659, 784].forEach((f, i) => bell(t + i * 0.07, f, 0.04, 0.45)),
+    // Refusal: a falling "wah-wah".
+    uiNo: (t) => {
+      tone("triangle", 330, 262, t, 0.18, 0.04);
+      tone("triangle", 262, 196, t + 0.18, 0.24, 0.04);
+    },
+    // A building or vehicle finished: a hammer tap and a sparkle.
+    uiDone: (t) => {
+      noise(t, 0.05, 0.06, "bandpass", 1100, 700, 2);
+      [1046, 1318].forEach((f, i) => bell(t + 0.08 + i * 0.06, f, 0.035, 0.4));
+    },
+    // The world united: a fanfare.
+    fanfare: (t) => {
+      [392, 523, 659, 784, 1046].forEach((f, i) => bell(t + i * 0.13, f, 0.05, 0.9));
+      [523, 659, 784].forEach((f) => tone("triangle", f, f, t + 0.75, 1.2, 0.025));
+    },
   };
 
   /* ---- ambience ---- */

@@ -487,12 +487,15 @@ export function readCivSave(raw) {
     pairs[k] = { rel: clampRel(num(p?.rel, -100, 100, 0)), war: !!p?.war, allied: !!p?.allied && !p?.war, pact: !!p?.pact && !p?.war, warFor: num(p?.warFor, 0, 1e7, 0) };
   }
   const news = (Array.isArray(d.news) ? d.news : []).slice(-20).filter((x) => typeof x?.text === "string").map((x) => ({ t: num(x.t, 0, 1e7, 0), text: x.text.slice(0, 200) }));
+  // Your own milestones (for the victory screen); saves from before have none.
+  const moments = (Array.isArray(d.moments) ? d.moments : []).filter((x) => typeof x?.text === "string").slice(-30).map((x) => ({ t: num(x.t, 0, 1e7, 0), icon: typeof x.icon === "string" ? x.icon.slice(0, 8) : "✦", text: x.text.slice(0, 200) }));
   const designs = d.designs && typeof d.designs === "object" ? d.designs : {};
   return {
     v: CIV_VERSION,
     // The planet: saves from before the planet (version 1) have no seed and get the homeworld's planet.
     pairs,
     news,
+    moments,
     seed: Number.isInteger(d.seed) && d.seed > 0 && d.seed < 2 ** 32 ? d.seed : null,
     clock: Number.isFinite(d.clock) ? num(d.clock, 0, 1e7, 0) : null,
     money: num(d.money, 0, 1e7, START_MONEY),
