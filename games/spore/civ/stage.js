@@ -84,6 +84,7 @@ import { createProjectiles } from "./projectiles.js";
 import { createThumbs } from "./thumbs.js";
 import { installIcons, ico } from "./icons.js";
 import { DOMINANT_SHARE, PERSONALITIES, availableOptions, answer, cityPrice, incoming, leaderName, leaderTitle, MESSAGE_TTL, nudge, pairDecision, pairKey, pairRest, personalityFor, respond, silence } from "./leaders.js";
+import { heritageRemark } from "../heritage.js";
 
 const TAU = Math.PI * 2;
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -1524,7 +1525,7 @@ export function createCivStage(o) {
   }
   /** How devout your nation is: temples, and religious cities. */
   const yourFaith = () => yourCities().reduce((s, c) => s + c.plots.filter((p) => p === "temple").length * 2 + (c.type === "religious" ? 2 : 0), 0);
-  const namesFor = (n) => ({ you: o.name || "your nation", them: n.name });
+  const namesFor = (n) => ({ you: o.name || "your nation", them: n.name, heritage: heritageRemark(o.heritage, n.personality) });
   const leaderLine = (n) => warLine(n);
   const warLine = (n) => ({ aggressive: `Enough talk. The ${n.name} march on ${o.name || "you"}!`, friendly: "You leave us no choice. It is war.", greedy: "You've cost us too much. This is war.", religious: `The heretics must be stopped. War!`, cautious: "We have weighed it, and we must fight. War." })[n.personality] || "War.";
   /** Whether you and a nation have come across each other: your cities or vehicles near theirs. */
@@ -2881,6 +2882,7 @@ export function createCivStage(o) {
         <div class="cvChips">${chip(ico("city"), T.cities.length, "cities", "res")}${chip(ico("sword"), caps.military, "by force", "mil")}${chip(ico("money"), caps.economic, "bought", "money")}${chip(ico("faith"), caps.religious, "converted", "faith")}</div>
         <div class="cvVictorySplit" role="img" aria-label="How you took the planet">${split || `<i class="${T.startType}" style="flex:1"></i>`}</div>
         <p class="cvVictoryHow">${esc(verdict)} <small>${clockText(T.time)} of play · ${vehiclesOf(YOU).length} vehicles · ${T.geysers.filter((g) => g.owner === YOU).length} derricks · §${Math.floor(T.money)} in the treasury</small></p>
+        ${o.heritage?.summary ? `<p class="cvVictoryHow cvLineage">${esc(o.heritage.summary.replace(/\.$/, ""))}, and now unites its world.</p>` : ""}
         ${picks.length ? `<h5 class="tsKind cvKind">Your story</h5><ol class="cvMoments">${picks.map((x) => (x ? `<li><span>${esc(x.icon)}</span><small>${clockText(x.t)}</small>${esc(x.text)}</li>` : `<li class="gap">…</li>`)).join("")}</ol>` : ""}
         <p class="tsHint">The Space Stage comes next and isn't part of the game yet: keep playing here, or go back to the Tribal Stage.</p>
         <div class="tsBtns"><button class="good" id="cvKeep">${ico("play")} Keep playing</button><button id="cvStory">${ico("history")} Species history</button></div>
@@ -3273,7 +3275,8 @@ export function createCivStage(o) {
     T.won = true;
     const card = civArchetype(T.captures, T.startType);
     T.card = card.id;
-    chronicle({ key: "civ:won", stage: "civ", icon: card.icon, text: "United the world as a " + card.name.toLowerCase() + " nation." });
+    const c = T.captures;
+    chronicle({ key: "civ:won", stage: "civ", icon: card.icon, major: true, text: `United the world as a ${card.name.toLowerCase()} nation (${c.military || 0} cities taken by force, ${c.economic || 0} bought, ${c.religious || 0} converted).` });
     o.onWon?.(card);
     saveState();
     setTimeout(() => openSheet("won"), 1800);
@@ -3325,7 +3328,7 @@ export function createCivStage(o) {
     }
     return routes * ROUTE_INCOME * 0.5;
   }
-  const spiceIncome = (owner = YOU) => T.geysers.filter((g) => g.owner === owner).reduce((s, g) => s + spiceYield(g), 0);
+  const spiceIncome = (owner = YOU) => T.geysers.filter((g) => g.owner === owner).reduce((s, g) => s + spiceYield(g), 0) * (owner === YOU ? 1 + (mods.spice || 0) : 1);
   let hudClock = 0,
     liveClock = 1;
   const marks = new Map();
@@ -3810,6 +3813,7 @@ export function createCivStage(o) {
     },
     debug: {
       T,
+      legacy,
       cam,
       openPeek,
       notify,

@@ -8,7 +8,7 @@ import { TRIBE_INSTINCT } from "./creature/identity.js";
 
 export const CHRONICLE_KEY = "johnny-spore-chronicle";
 export const CHRONICLE_VERSION = 1;
-const MAX_EVENTS = 80;
+const MAX_EVENTS = 120;
 
 /**
  * What each earlier stage's card gives the Tribal Stage. Effects:
@@ -79,7 +79,7 @@ export function readChronicle(raw) {
   const events = d.events
     .filter((e) => e && typeof e.key === "string" && typeof e.text === "string" && STAGES.includes(e.stage))
     .slice(-MAX_EVENTS)
-    .map((e) => ({ key: e.key.slice(0, 60), stage: e.stage, icon: String(e.icon || "•").slice(0, 4), text: e.text.slice(0, 160), at: Number.isFinite(e.at) ? e.at : 0 }));
+    .map((e) => ({ key: e.key.slice(0, 60), stage: e.stage, icon: String(e.icon || "•").slice(0, 4), text: e.text.slice(0, 240), at: Number.isFinite(e.at) ? e.at : 0, ...(e.major ? { major: true } : {}) }));
   return { v: CHRONICLE_VERSION, events };
 }
 
@@ -89,11 +89,14 @@ export function readChronicle(raw) {
  */
 export function addEvent(ch, ev, at = Date.now()) {
   if (!ev?.key || ch.events.some((e) => e.key === ev.key)) return false;
-  ch.events.push({ key: ev.key, stage: ev.stage, icon: ev.icon || "•", text: ev.text, at });
+  if (!STAGES.includes(ev.stage) || typeof ev.text !== "string") return false;
+  ch.events.push({ key: ev.key, stage: ev.stage, icon: ev.icon || "•", text: ev.text.slice(0, 240), at, ...(ev.major ? { major: true } : {}) });
   if (ch.events.length > MAX_EVENTS) {
-    // Keep the founding moments and the most recent story.
-    const firsts = ch.events.filter((e) => e.key.endsWith(":start")).slice(0, 3);
-    ch.events = [...firsts, ...ch.events.filter((e) => !firsts.includes(e)).slice(-(MAX_EVENTS - firsts.length))];
+    // Keep the founding moments and the turning points, then the most recent story, in order.
+    const keep = new Set([...ch.events.filter((e) => e.key.endsWith(":start") || e.key === "home:begin").slice(0, 4), ...ch.events.filter((e) => e.major || e.key.startsWith("heritage:")).slice(-16)]);
+    const rest = ch.events.filter((e) => !keep.has(e)).slice(-(MAX_EVENTS - keep.size));
+    const kept = new Set([...keep, ...rest]);
+    ch.events = ch.events.filter((e) => kept.has(e));
   }
   return true;
 }

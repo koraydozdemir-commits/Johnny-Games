@@ -3097,9 +3097,23 @@ export function createCreatureStage(o) {
   function foodNear() {
     const r = 2.2 + P.scale + snatchReach();
     const carcassR = r + anatomyReach();
-    for (const c of carcasses) if (c.bites > 0 && !c.dragged && Math.hypot(c.x - P.pos.x, c.z - P.pos.z) < carcassR) return { kind: "meat", c };
-    for (const f of world.fruits) if (f.alive && !f.hanging && !f.claimed && Math.abs(f.y - heightAt(f.x, f.z)) < 1.6 && Math.hypot(f.x - P.pos.x, f.z - P.pos.z) < r) return { kind: "fruit", f };
-    return null;
+    // The nearest within reach, not the first in the list: a big creature can reach several at once.
+    let best = null,
+      bd = Infinity;
+    for (const c of carcasses) {
+      if (c.bites <= 0 || c.dragged) continue;
+      const d = Math.hypot(c.x - P.pos.x, c.z - P.pos.z);
+      if (d < carcassR && d < bd) (bd = d), (best = { kind: "meat", c });
+    }
+    if (best) return best;
+    // Fruit on the ground: a tall or long body reaches a little further down and out too.
+    const fruitR = r + anatomyReach() * 0.5;
+    for (const f of world.fruits) {
+      if (!f.alive || f.hanging || f.claimed || Math.abs(f.y - heightAt(f.x, f.z)) >= 1.6) continue;
+      const d = Math.hypot(f.x - P.pos.x, f.z - P.pos.z);
+      if (d < fruitR && d < bd) (bd = d), (best = { kind: "fruit", f });
+    }
+    return best;
   }
   function holdMesh(kind) {
     const mesh = new THREE.Mesh(kind === "meat" ? chunkGeo : carriedFruitGeo, kind === "meat" ? chunkMat : carriedFruitMat);

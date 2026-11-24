@@ -1283,6 +1283,12 @@ body.cellEditorMode #partsPanel .partCard.locked{min-height:96px}
 /* the timeline: turning points stand out */
 .chronicle .chr.key{font-weight:700;color:#fff}.chronicle .chr.key::before{width:14px;height:14px;left:-22px;top:4px;background:var(--k,#f5c75a);box-shadow:0 0 0 3px #0b1c28,0 0 12px var(--k,#f5c75a)}
 .chronicle .chr.civ::before{background:#c58bff}
+.chronicle .chrChapter{list-style:none;margin:8px 0 0 -14px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#9fb8c2}
+.chronicle .chrChapter:first-child{margin-top:0}
+.heritage{display:grid;gap:8px}.hgSummary{margin:0;font-size:14px;line-height:1.45;color:#f2fbff}
+.hgTags{display:flex;flex-wrap:wrap;gap:6px}.hgTag{display:inline-grid;grid-template-columns:auto auto;column-gap:6px;align-items:center;padding:5px 10px;border-radius:12px;background:#ffffff12;border:1px solid #ffffff22}
+.hgTag i{grid-row:span 2;font-style:normal;font-size:18px}.hgTag b{font-size:13px;color:#fff}.hgTag small{font-size:10px;color:#9fb8c2;text-transform:uppercase;letter-spacing:.06em}
+.hgSub{margin:4px 0 0;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#9fb8c2}
 /* the species' character in the history screen */
 .idCard{display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:14px;border:2px solid var(--c);background:linear-gradient(160deg,color-mix(in srgb,var(--c) 30%,#132f43),#0f2536)}
 .idCard .idIcon{font-size:34px;line-height:1}.idCard b{font-size:16px}.idCard p{margin:3px 0 0;font-size:13px;color:#d9e8ee;line-height:1.35}
@@ -1581,6 +1587,27 @@ body.galaxyStart:not(.gsReady) #scene{visibility:hidden}
 body.galaxyStart>:not(#scene):not(.gs):not(.uv):not(.settingsScreen):not(.homeArrive):not(script){visibility:hidden!important}
 .homeArrive{position:fixed;inset:0;z-index:80;pointer-events:none;display:grid;place-items:center;transition:opacity 1.6s}
 .homeArrive p{margin:0;text-align:center;font-size:30px;font-weight:900;letter-spacing:.12em;color:#fff;text-shadow:0 2px 20px #000a}.homeArrive small{display:block;font-size:11px;letter-spacing:.4em;color:#ffffffc0}
+.gsBtn.gsSmall{min-height:40px;font-size:13px;opacity:.9}
+.gsSpecies{position:absolute;left:0;right:0;top:calc(max(16px,env(safe-area-inset-top)) + 64px);pointer-events:auto;padding:0 12px}
+.gsSpecies h2{margin:0 0 6px 6px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#c9c4ea;text-shadow:0 1px 4px #000}
+.gsSpList{display:flex;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;padding:2px 2px 8px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.gsSpList::-webkit-scrollbar{display:none}
+.gsSp{flex:none;scroll-snap-align:start;display:grid;grid-template-columns:44px auto;grid-template-rows:auto auto;column-gap:9px;align-items:center;text-align:left;min-width:150px;max-width:210px;min-height:56px;padding:6px 12px 6px 6px;border-radius:30px;border:1px solid #ffffff2e;background:#0b0a1fc9;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;cursor:pointer;box-shadow:0 4px 16px #0007}
+.gsSp b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.gsSp small{font-size:11px;color:#c9c4ea}
+.gsSpPic{grid-row:span 2;width:44px;height:44px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:radial-gradient(circle,#ffffff22,#0000);box-shadow:0 0 0 2px var(--sc,#ffd36a)}
+.gsSpPic img{width:100%;height:100%;object-fit:cover}.gsSpPic i{font-style:normal;font-size:20px}
+.gsSp.active{border-color:#ffe7a8aa}.gsSp.sel{background:#2a2160e6;border-color:var(--sc,#ffd36a);box-shadow:0 0 18px color-mix(in srgb,var(--sc,#ffd36a) 45%,transparent)}
+.gsSpNew .gsSpPic{box-shadow:0 0 0 2px #ffffff55}.gsSpNew{border-style:dashed}
+.gsPanel.species .gsHead{align-items:center}
+.gsSpBig{flex:none!important;width:64px;height:64px;border-radius:50%;overflow:hidden;display:grid;place-items:center;box-shadow:0 0 0 3px var(--sc,#ffd36a),0 0 22px var(--sc,#ffd36a)}
+.gsSpBig img{width:100%;height:100%;object-fit:cover}.gsSpBig i{font-style:normal;font-size:30px}
+.gsProg{position:relative;display:grid;grid-template-columns:repeat(4,1fr);margin:14px 0 6px;height:22px;border-radius:11px;background:#ffffff14;overflow:hidden;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#fff}
+.gsProg i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#5fc8ff,#6fe08a,#ffc35a,#d59bff);opacity:.7}
+.gsProg span{position:relative;display:grid;place-items:center;text-shadow:0 1px 3px #000}
+.gsTags{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.gsTags span{padding:4px 10px;border-radius:11px;background:#ffffff14;border:1px solid #ffffff22;font-size:12px;font-weight:700}
+.gsSpFacts{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:8px 0 12px;font-size:12px}.gsSpFacts dt{color:#9b96c4;font-size:10px;text-transform:uppercase;letter-spacing:.08em}.gsSpFacts dd{margin:0;color:#f2f0ff;font-weight:700}
+@media (max-width:859px){.gs.spMode .gsSpecies{display:none}}
+@media (max-height:560px){.gsSpecies{top:calc(max(8px,env(safe-area-inset-top)) + 46px)}.gsSp{min-height:46px}.gsSpPic{width:36px;height:36px}}
 @media (prefers-reduced-motion:reduce){.gs,.gsPanel{transition:none;animation:none}}
 /* ---- Creature Stage: Social / Combat mode switch and the compact target card ---- */
 .creatureHUD .chModes{pointer-events:auto;display:flex;align-items:center;border-radius:999px;border:2px solid #ffffff44;background:#0d2232e6;overflow:hidden;box-shadow:0 3px 10px #0007}

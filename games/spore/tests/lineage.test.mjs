@@ -34,10 +34,13 @@ test("the chronicle records each moment once, and survives bad data", () => {
   assert.equal(addEvent(ch, { key: "tribe:start", stage: "tribe", text: "Founded a tribe." }, 5), true);
   assert.equal(addEvent(ch, { key: "tribe:start", stage: "tribe", text: "again" }, 6), false);
   assert.equal(ch.events.length, 1);
-  for (let i = 0; i < 120; i++) addEvent(ch, { key: "e" + i, stage: "creature", text: "event " + i }, i);
-  assert.equal(ch.events.length, 80);
+  addEvent(ch, { key: "heritage:instinct", stage: "creature", text: "A turning point.", major: true }, 7);
+  for (let i = 0; i < 200; i++) addEvent(ch, { key: "e" + i, stage: "creature", text: "event " + i }, i);
+  assert.equal(ch.events.length, 120);
   assert.equal(ch.events[0].key, "tribe:start", "founding moments are kept");
-  assert.equal(ch.events.at(-1).key, "e119");
+  assert.equal(ch.events[1].key, "heritage:instinct", "turning points are kept, in order");
+  assert.equal(ch.events[1].major, true);
+  assert.equal(ch.events.at(-1).key, "e199");
   assert.deepEqual(readChronicle("{bad"), emptyChronicle());
   assert.deepEqual(readChronicle({ events: "no" }), emptyChronicle());
   const r = readChronicle({ events: [{ key: "a", stage: "tribe", text: "ok", at: 1 }, { key: "b", stage: "space", text: "nope" }, { stage: "cell", text: "no key" }] });
