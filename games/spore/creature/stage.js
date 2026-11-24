@@ -434,7 +434,18 @@ export function createCreatureStage(o) {
     const dx = n.pos.x - P.pos.x,
       dz = n.pos.z - P.pos.z,
       d = Math.hypot(dx, dz);
-    const close = 2.4 * P.scale;
+    // Close enough to dance: allow for big or long bodies, which bodies pushing apart can keep further off.
+    const close = Math.max(2.4 * P.scale, 2.4 + anatomyReach() + (n.scale || 1) * 1.2);
+    // A partner that died, or couldn't get to you within 10 s (stuck on terrain, blocked), no longer
+    // leaves the courtship running forever with the Mate button hidden: the egg is laid anyway.
+    c.walk = (c.walk || 0) + (d > close ? dt : 0);
+    if (n.dead || c.walk > 10) {
+      courtship = null;
+      o.onCourtship?.(false);
+      dust(P.pos.x, P.pos.z, 6, eggMat);
+      mate();
+      return;
+    }
     // The partner trots over; once together the two face each other and dance.
     if (d > close) {
       n.heading = Math.atan2(dz, -dx);
