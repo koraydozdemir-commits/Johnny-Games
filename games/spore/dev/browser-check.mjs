@@ -9,7 +9,7 @@
  *
  * Exits non-zero if any check fails. Each check prints ✓ or ✗ with a reason.
  */
-/* global process, getComputedStyle */
+/* global process, getComputedStyle, MouseEvent */
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";

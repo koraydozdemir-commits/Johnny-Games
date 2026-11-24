@@ -2536,11 +2536,11 @@ function startCivStage(opts = {}) {
       if (!universe) return;
       universe.session.record({ id: "design:" + kind + ":" + design.role + ":" + Date.now().toString(36), kind, owned: true, name: design.name, sub: (kind === "building" ? "Building" : "Vehicle") + " · " + design.role, stage: "Civilization", design, place: "Home" });
     },
-    onChronicle: (ev) => {
-      recordChronicle(ev);
-      if (/^civ:(war|attacked)/.test(ev?.key || "")) audio.setMusic("civWar");
-      else if (/^civ:peace/.test(ev?.key || "")) audio.setMusic("civ");
-    },
+    onChronicle: recordChronicle,
+    // The war theme follows the real state of the world: any war of yours, or an attack on your
+    // cities (before, a peace with one nation turned it off while another war went on, and a war
+    // that ended when the enemy fell never turned it off).
+    onDanger: (on) => civStage !== null && audio.setMusic(on ? "civWar" : "civ"),
     onHistory: openPath,
     onSettings: openGameSettings,
     onSaved: () => markSaved(localStorage),

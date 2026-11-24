@@ -2295,6 +2295,15 @@ export function createCivStage(o) {
     minimap.draw(0.25);
   }
 
+  /* -- danger, for the soundtrack: at war with anyone, or your cities under attack -- */
+  let danger = null;
+  function updateDanger() {
+    const on = !arrive && !T.won && T.nations.some((n) => n.alive && n.war);
+    if (on === danger) return;
+    danger = on;
+    o.onDanger?.(on);
+  }
+
   /* -- world events: the planet changes without being asked (civ/events.js) -- */
   let eventMarks = []; // { d, color, until }: rings on the minimap where something happened
   function worldSnapshot() {
@@ -3883,6 +3892,7 @@ export function createCivStage(o) {
         hudClock = 0.25;
         updateWorldEvents();
         updateMinimap();
+        updateDanger();
         updateHUD();
         hud.classList.toggle("calm", calm());
         if ((liveClock -= 0.25) <= 0 && !sheetPress) {
