@@ -123,7 +123,9 @@ const LINES = {
   },
 };
 export function line(kind, personality, names = {}) {
-  const t = LINES[kind]?.[personality] || LINES[kind]?.cautious || "";
+  let t = LINES[kind]?.[personality] || LINES[kind]?.cautious || "";
+  // On meeting you, a leader may say what they know of your species' past.
+  if (kind === "greet" && names.heritage) t += " " + names.heritage;
   return t.replace(/\{you\}/g, names.you || "your people").replace(/\{them\}/g, names.them || "our people").replace(/\{x\}/g, names.x ?? "");
 }
 

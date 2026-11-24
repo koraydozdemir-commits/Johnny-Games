@@ -227,13 +227,36 @@ export function openHistoryScreen(d) {
   const st = d.stats;
   const library = d.library ? libraryHtml(d.library) : "";
   const STAGE_ICON = { cell: "◉", creature: "🦎", tribe: "⛺", civ: "🏛" };
+  const STAGE_NAME = { cell: "Cell Stage", creature: "Creature Stage", tribe: "Tribal Stage", civ: "Civilization Stage" };
+  // The chronicle as a timeline in chapters, one per stage; turning points stand out.
+  const isKey = (e) => e.major || /^(leaning|milestone|creature:card|cell:complete|tribe:won|first:|heritage:|civ:(won|war|unified|captured)|home:begin)/.test(e.key);
+  let lastStage = null;
   const chronicle = d.chronicle?.length
     ? "<h3>CHRONICLE · " + d.chronicle.length + " MOMENT" + (d.chronicle.length === 1 ? "" : "S") + '</h3><ol class="chronicle">' +
       d.chronicle
-        .map((e) => '<li class="chr ' + esc(e.stage) + (/^(leaning|milestone|creature:card|cell:complete|tribe:won|first:)/.test(e.key) ? " key" : "") + '"><span class="chrStage" title="' + esc(e.stage) + ' stage">' + STAGE_ICON[e.stage] + '</span><span class="chrIcon" aria-hidden="true">' + esc(e.icon) + "</span><span>" + esc(e.text) + "</span></li>")
+        .map((e) => {
+          const head = e.stage !== lastStage ? '<li class="chrChapter" aria-hidden="false">' + STAGE_ICON[e.stage] + " " + STAGE_NAME[e.stage] + "</li>" : "";
+          lastStage = e.stage;
+          return head + '<li class="chr ' + esc(e.stage) + (isKey(e) ? " key" : "") + '"><span class="chrStage" title="' + esc(e.stage) + ' stage">' + STAGE_ICON[e.stage] + '</span><span class="chrIcon" aria-hidden="true">' + esc(e.icon) + "</span><span>" + esc(e.text) + "</span></li>";
+        })
         .join("") +
       "</ol>"
     : "";
+  // Who the species is, from the first cell on: the identity each stage handed to the next.
+  const h = d.heritage;
+  const heritage =
+    h && (h.tags.length || h.summary)
+      ? '<h3>HERITAGE</h3><div class="heritage">' +
+        (h.summary ? '<p class="hgSummary">' + esc(h.summary) + "</p>" : "") +
+        '<div class="hgTags">' +
+        [h.diet && [h.diet.icon, h.diet.name, "Cell"], h.instinct && [h.instinct.icon, h.instinct.name + (h.instinct.earned ? "" : " (forming)"), "Creature"], h.tribe?.name && [h.tribe.icon, h.tribe.name, "Tribal"], h.civ?.methodName && [h.civ.icon, h.civ.methodName, "Civilization"]]
+          .filter(Boolean)
+          .map(([i, n, st]) => '<span class="hgTag"><i aria-hidden="true">' + esc(i) + "</i><b>" + esc(n) + "</b><small>" + st + "</small></span>")
+          .join("") +
+        "</div>" +
+        (d.civLegacy?.length ? '<p class="hgSub">Carried into the Civilization Stage</p><ul class="legacyList">' + d.civLegacy.map((l) => "<li>" + esc(l.icon) + " " + esc(l.text) + "</li>").join("") + "</ul>" : "") +
+        "</div>"
+      : "";
   const identity = d.identity ? identityHtml(d.identity) : "";
   const legacy = d.legacy?.length
     ? '<h3>LEGACY IN THE TRIBAL STAGE</h3><ul class="legacyList">' + d.legacy.map((l) => "<li>" + esc(l.icon) + " <b>" + esc(l.name) + "</b> " + esc(l.text) + "</li>").join("") + "</ul>"
@@ -248,6 +271,7 @@ export function openHistoryScreen(d) {
     (DIET_THRESHOLDS.carnivore - DIET_THRESHOLDS.herbivore) * 100 + '"></i><i class="dpZone carn" style="flex:' + (1 - DIET_THRESHOLDS.carnivore) * 100 +
     '"></i><i class="dpMark" style="left:' + lean * 100 + '%"></i></div>' +
     '<div class="dpCounts" style="margin-top:6px"><span>🌿 ' + d.plants + " plants</span><span>" + d.meat + " meat 🥩</span></div>" +
+    heritage +
     identity +
     legacy +
     chronicle +

@@ -6,6 +6,8 @@
  * Rates are per second of play. Money is "§" (Sporebucks).
  */
 import { VEHICLE_CLASSES, designStats, partTotals, vehicleClass, vehicleMode } from "../creations/modular.js";
+import { CIV_INSTINCT } from "../heritage.js";
+import { readEvents } from "./events.js";
 
 export const CIV_SAVE_KEY = "johnny-spore-civ-stage";
 export const CIV_VERSION = 2;
@@ -323,17 +325,22 @@ export function deliveryPay(distance, pop, raided = false) {
 /**
  * What the species brings from its earlier stages. The tribal trait sets the first city's kind;
  * cards from every earlier stage each give one lasting bonus.
- * @param {{cellDiet?:string, creatureCard?:string, tribeTrait?:string}} legacy
+ * @param {{cellDiet?:string, creatureCard?:string, instinct?:string, tribeTrait?:string}} legacy
  */
 export function civLegacy(legacy = {}) {
   const startType = { Warlike: "military", Industrious: "economic", Diplomatic: "religious" }[legacy.tribeTrait] || "economic";
-  const mods = { damage: 0, health: 0, social: 0, incomeBonus: 0, happyBonus: 0, turret: 0, relation: 0 };
+  const mods = { damage: 0, health: 0, social: 0, incomeBonus: 0, happyBonus: 0, turret: 0, relation: 0, spice: 0 };
   const lines = [];
   const diet = { carnivore: "meat", herbivore: "plant", omnivore: "omni" }[legacy.cellDiet] || legacy.cellDiet;
   if (diet === "meat") (mods.health += 0.1), lines.push({ icon: "🦈", text: "Carnivore cells: vehicles have 10% more health." });
   else if (diet === "plant") (mods.happyBonus += 1), lines.push({ icon: "🌿", text: "Herbivore cells: every city is a little happier." });
   else if (diet) (mods.incomeBonus += 0.05), lines.push({ icon: "🍽", text: "Omnivore cells: 5% more income." });
-  if (legacy.creatureCard === "Aggressive") (mods.damage += 0.15), lines.push({ icon: "🦖", text: "Aggressive creatures: military vehicles hit 15% harder." });
+  const inst = CIV_INSTINCT[legacy.instinct];
+  if (inst) {
+    // The Creature Stage instinct (all eight of them), in place of the older three-colour card.
+    for (const [k, v] of Object.entries(inst.effect)) mods[k] = (mods[k] || 0) + v;
+    lines.push({ icon: inst.icon, text: inst.name + " ancestors: " + inst.text.split(": ").slice(1).join(": ") });
+  } else if (legacy.creatureCard === "Aggressive") (mods.damage += 0.15), lines.push({ icon: "🦖", text: "Aggressive creatures: military vehicles hit 15% harder." });
   else if (legacy.creatureCard === "Social") (mods.social += 0.15), lines.push({ icon: "🎵", text: "Social creatures: trade and preaching work 15% faster." });
   else if (legacy.creatureCard) (mods.incomeBonus += 0.05), lines.push({ icon: "🧭", text: "Adaptable creatures: 5% more income." });
   if (legacy.tribeTrait === "Warlike") (mods.turret += 0.2), lines.push({ icon: "⚔", text: "Warlike tribe: you start as a military city, and turrets are 20% stronger." });
@@ -496,6 +503,8 @@ export function readCivSave(raw) {
     pairs,
     news,
     moments,
+    // World events (saves from before them start with none, the first a few minutes off).
+    events: readEvents(d.events),
     seed: Number.isInteger(d.seed) && d.seed > 0 && d.seed < 2 ** 32 ? d.seed : null,
     clock: Number.isFinite(d.clock) ? num(d.clock, 0, 1e7, 0) : null,
     money: num(d.money, 0, 1e7, START_MONEY),

@@ -9,7 +9,7 @@
  * gen.js, so what you see is the universe you will play.
  */
 import * as THREE from "three";
-import { GALAXY_LY, STAR_KINDS, makeGalaxy, makeSystem, terraformLevel } from "./gen.js";
+import { GALAXY_LY, STAR_KINDS, findHomeWorld, makeGalaxy, makeSystem, terraformLevel } from "./gen.js";
 import { hashSeed, rng32 } from "./names.js";
 import { makePlanetGlobe, planetTextures } from "./planet-tex.js";
 
@@ -146,6 +146,8 @@ function ringTexture() {
  * @param {number|null} [o.homeStarId]    the universe in play's home star, marked on the map
  * @param {() => number} o.newSeed        a fresh galaxy for a new game when one is already in progress
  * @param {(kind:string, opts?:object) => void} [o.sfx]
+ * @param {object[]} [o.species]   every saved species (main.js speciesSaves): chosen right here in the galaxy
+ * @param {(id:string) => void} [o.onSwitch]  continue a species that isn't the one in play
  * @param {() => void} o.onContinue
  * @param {() => void} o.onLoad
  * @param {() => void} o.onSettings
@@ -167,6 +169,9 @@ export function createGalaxyStart(o) {
   const disposables = [];
   const keep = (x) => (disposables.push(x), x);
   const tex = { cloud: keep(cloudTexture(77)), glow: keep(glowTexture()), ring: keep(ringTexture()) };
+  // Saved species (each its own universe and galaxy), and the ring colour of each stage.
+  const speciesList = (o.species || []).map((x) => ({ ...x }));
+  const STAGE_COLORS = { Cell: 0x5fc8ff, Creature: 0x6fe08a, Tribal: 0xffc35a, Civilization: 0xd59bff };
 
   /* ---- the galaxy's look -------------------------------------------------------------------- */
   let G = null; // the built galaxy: { seed, galaxy, group, starWorld(id), ... }
@@ -370,11 +375,27 @@ export function createGalaxyStart(o) {
     parts.push(...halos);
     // The home star of the universe in play, if any, wears a gold ring.
     let homeMark = null;
-    if (o.homeStarId != null && galaxy.stars[o.homeStarId] && seed === o.seed) {
+    if (o.homeStarId != null && galaxy.stars[o.homeStarId] && seed === o.seed && !speciesList.some((x) => x.active && x.stage !== "New")) {
       const s = galaxy.stars[o.homeStarId];
       homeMark = new THREE.Sprite(keepLocal(new THREE.SpriteMaterial({ map: tex.ring, color: 0xffd36a, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending })));
       homeMark.position.set(...toWorld(s.x, s.y, heightOf(s)));
       parts.push(homeMark);
+    }
+    // Every saved species living in this galaxy marks its home star: a ring in its stage's colour.
+    const speciesMarks = [];
+    for (const sp of speciesList) {
+      if (sp.seed !== seed || sp.stage === "New") continue;
+      let starId = sp.homeStarId;
+      if (starId == null || !galaxy.stars[starId]) starId = (findHomeWorld(galaxy) || {}).starId;
+      const s = galaxy.stars[starId];
+      if (!s) continue;
+      sp.starId = starId;
+      const m = new THREE.Sprite(keepLocal(new THREE.SpriteMaterial({ map: tex.ring, color: STAGE_COLORS[sp.stage] || 0xffd36a, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending })));
+      m.position.set(...toWorld(s.x, s.y, heightOf(s)));
+      m.renderOrder = 8;
+      m.userData = { speciesId: sp.id, starId };
+      speciesMarks.push(m);
+      parts.push(m);
     }
     group.add(...parts);
     scene.add(group);
@@ -384,6 +405,7 @@ export function createGalaxyStart(o) {
       group,
       halos,
       homeMark,
+      speciesMarks,
       startMat,
       nebMat,
       glowMat,
@@ -461,9 +483,13 @@ export function createGalaxyStart(o) {
     <nav class="gsMenu" id="gsMenu" aria-label="Main menu">
       <div class="gsSave" id="gsSave" hidden></div>
       <button class="gsBtn primary" id="gsContinue" hidden>Continue</button>
-      <button class="gsBtn" id="gsNew">New Game</button>
-      <button class="gsBtn" id="gsLoad">Load Game · Universes</button>
+      <button class="gsBtn" id="gsNew">New Species</button>
+      <button class="gsBtn gsSmall" id="gsLoad">Manage universes</button>
     </nav>
+    <section class="gsSpecies" id="gsSpecies" aria-label="Your species" hidden>
+      <h2>Your species</h2>
+      <div class="gsSpList" id="gsSpList" role="list"></div>
+    </section>
     <div class="gsChoose" id="gsChoose" hidden>
       <p class="gsHint" id="gsHint" role="status" aria-live="polite">Choose a star where life will begin</p>
       <div class="gsCycle" role="group" aria-label="Starting systems">
@@ -496,8 +522,98 @@ export function createGalaxyStart(o) {
     $("#gsSave").innerHTML = `<b>${esc(o.save.species)}</b><span>${esc(o.save.stage)}${o.save.home ? " · " + esc(o.save.home) : ""}</span>`;
   }
 
+  /* ---- saved species, chosen in the galaxy -------------------------------------------------------- */
+  const evolved = speciesList.filter((x) => x.stage !== "New");
+  const STAGE_ICON = { Cell: "◉", Creature: "🦎", Tribal: "⛺", Civilization: "🏛" };
+  const ago = (t) => {
+    if (!t) return "";
+    const m = Math.round((Date.now() - t) / 60000);
+    if (m < 2) return "just now";
+    if (m < 60) return m + " min ago";
+    const h = Math.round(m / 60);
+    if (h < 24) return h + " h ago";
+    const d = Math.round(h / 24);
+    return d < 30 ? d + " day" + (d === 1 ? "" : "s") + " ago" : new Date(t).toLocaleDateString();
+  };
+  const hours = (s) => (s >= 3600 ? Math.floor(s / 3600) + " h " + Math.round((s % 3600) / 60) + " min" : Math.max(1, Math.round(s / 60)) + " min");
+  function renderSpeciesStrip() {
+    const box = $("#gsSpList");
+    box.innerHTML =
+      evolved
+        .map(
+          (x) => `<button class="gsSp${x.active ? " active" : ""}${chosenSpecies?.id === x.id ? " sel" : ""}" role="listitem" data-sp="${esc(x.id)}" style="--sc:#${(STAGE_COLORS[x.stage] || 0xffd36a).toString(16).padStart(6, "0")}" aria-label="${esc(x.species)}, ${esc(x.stage)} Stage">
+            <span class="gsSpPic">${x.thumb ? `<img src="${x.thumb}" alt="">` : `<i aria-hidden="true">${STAGE_ICON[x.stage] || "✦"}</i>`}</span>
+            <b>${esc(x.species)}</b><small>${STAGE_ICON[x.stage] || ""} ${esc(x.stage)}</small></button>`,
+        )
+        .join("") + `<button class="gsSp gsSpNew" role="listitem" id="gsSpNew" aria-label="Start a new species"><span class="gsSpPic"><i aria-hidden="true">＋</i></span><b>New species</b><small>Choose a star</small></button>`;
+    box.querySelectorAll("[data-sp]").forEach((b) => (b.onclick = () => chooseSpecies(b.dataset.sp)));
+    $("#gsSpNew").onclick = () => $("#gsNew").click();
+  }
+  let chosenSpecies = null;
+  /** Fly to a species' home star (switching galaxy if it lives in another) and show what it has become. */
+  function chooseSpecies(id) {
+    const sp = speciesList.find((x) => x.id === id);
+    if (!sp || cinema) return;
+    sfx("click");
+    if (selected) deselect();
+    if (G.seed !== sp.seed) rebuild(sp.seed);
+    chosenSpecies = sp;
+    setMode("species");
+    const star = sp.starId != null ? G.galaxy.stars[sp.starId] : null;
+    if (star) {
+      const at = starWorld(star);
+      cam.goal = { tx: at.x, tz: at.z, dist: 26 };
+      cam.ty = 0;
+      cam.fly = 2;
+      turning = 0.2;
+    }
+    renderSpeciesPanel(sp, star);
+    renderSpeciesStrip();
+  }
+  function renderSpeciesPanel(sp, star) {
+    const p = $("#gsPanel");
+    p.hidden = false;
+    p.classList.add("species");
+    const pct = Math.round(Math.max(0, Math.min(1, sp.progress || 0)) * 100);
+    p.innerHTML = `
+      <div class="gsHead">
+        <div class="gsSpBig" style="--sc:#${(STAGE_COLORS[sp.stage] || 0xffd36a).toString(16).padStart(6, "0")}">${sp.thumb ? `<img src="${sp.thumb}" alt="">` : `<i aria-hidden="true">${STAGE_ICON[sp.stage] || "✦"}</i>`}</div>
+        <div><small>${sp.active ? "PLAYING NOW" : "SAVED SPECIES"}</small><h2>${esc(sp.species)}</h2>
+        <p>${STAGE_ICON[sp.stage] || ""} ${esc(sp.stage)} Stage · ${esc(sp.detail || "")}</p></div>
+        <button class="gsRound" id="gsClose" aria-label="Back to the galaxy">✕</button>
+      </div>
+      <div class="gsProg" role="img" aria-label="Evolution ${pct}% of the way to the stars"><i style="width:${pct}%"></i><span>Cell</span><span>Creature</span><span>Tribal</span><span>Civ</span></div>
+      ${sp.tags?.length ? `<div class="gsTags">${sp.tags.map((t) => `<span>${esc(t)}</span>`).join("")}</div>` : ""}
+      <dl class="gsSpFacts">
+        ${sp.home ? `<div><dt>Homeworld</dt><dd>${esc(sp.home.planet)} · ${esc(sp.home.star)}</dd></div>` : star ? `<div><dt>Home star</dt><dd>${esc(star.name)}</dd></div>` : ""}
+        <div><dt>Universe</dt><dd>${esc(sp.universe)}</dd></div>
+        ${sp.lastPlayed ? `<div><dt>Last played</dt><dd>${ago(sp.lastPlayed)}</dd></div>` : ""}
+        ${sp.playtime > 30 ? `<div><dt>Played</dt><dd>${hours(sp.playtime)}</dd></div>` : ""}
+      </dl>
+      <div class="gsBtns"><button class="gsBtn primary" id="gsSpGo">Continue ${esc(sp.species)}</button></div>`;
+    $("#gsClose").onclick = () => setMode("title");
+    $("#gsSpGo").onclick = () => {
+      $("#gsSpGo").disabled = true;
+      $("#gsSpGo").textContent = "Loading…";
+      if (sp.active) o.onContinue();
+      else o.onSwitch?.(sp.id);
+    };
+    $("#gsSpGo").focus({ preventScroll: true });
+  }
+  function leaveSpecies() {
+    if (!chosenSpecies) return;
+    chosenSpecies = null;
+    const p = $("#gsPanel");
+    p.classList.remove("species");
+    p.hidden = true;
+    cam.goal = { tx: cam.goal.tx * 0.5, tz: cam.goal.tz * 0.5, dist: wideDist() };
+    cam.fly = 2;
+    turning = 1;
+    renderSpeciesStrip();
+  }
+
   /* ---- modes and selection ------------------------------------------------------------------------ */
-  let mode = "title"; // title | choose
+  let mode = "title"; // title | choose | species
   let selected = null; // { star, planet, system, index }
   let sys = null; // the open system's 3D bits
   let cinema = null;
@@ -506,8 +622,11 @@ export function createGalaxyStart(o) {
     mode = m;
     $("#gsMenu").hidden = m !== "title";
     $("#gsChoose").hidden = m !== "choose";
+    $("#gsSpecies").hidden = !(m === "title" || m === "species") || !evolved.length;
     $("#gsBack").hidden = m === "title";
     $("#gsCount").textContent = G.galaxy.starts.length + " starting systems";
+    el.classList.toggle("spMode", m === "species");
+    if (m !== "species") leaveSpecies();
     if (m === "title") deselect();
   }
   function starWorld(star) {
@@ -517,6 +636,7 @@ export function createGalaxyStart(o) {
   function select(starId) {
     const star = G.galaxy.stars[starId];
     if (!star?.start) return;
+    $("#gsPanel").classList.remove("species");
     if (mode !== "choose") setMode("choose");
     clearSystem();
     const system = makeSystem(G.seed, star);
@@ -842,7 +962,7 @@ export function createGalaxyStart(o) {
     if (e.key === "Escape") {
       if (!$("#gsConfirm").hidden) $("#gsConfirm").hidden = true;
       else if (selected) deselect();
-      else if (mode === "choose") setMode("title");
+      else if (mode === "choose" || mode === "species") setMode("title");
       return;
     }
     if (e.target !== document.body && e.target !== canvas) return;
@@ -892,6 +1012,18 @@ export function createGalaxyStart(o) {
   }
   const ray = new THREE.Raycaster();
   function tap(sx, sy) {
+    // A saved species' home star: choose that species.
+    if (mode !== "choose" && G.speciesMarks.length) {
+      G.group.updateMatrixWorld(true);
+      let hit = null,
+        bd = 40;
+      for (const m of G.speciesMarks) {
+        const p = screenOf(m.position.clone().applyMatrix4(G.group.matrixWorld));
+        const d = Math.hypot(p.x - sx, p.y - sy);
+        if (p.on && d < bd) (bd = d), (hit = m);
+      }
+      if (hit) return chooseSpecies(hit.userData.speciesId);
+    }
     if (selected && !$("#gsPanel").hidden && sys) {
       // In a system: a tap elsewhere goes back out to the galaxy, unless it's on another starting star.
       const hit = pick(sx, sy);
@@ -920,8 +1052,9 @@ export function createGalaxyStart(o) {
   $("#gsLoad").onclick = () => o.onLoad();
   $("#gsSettings").onclick = () => o.onSettings();
   $("#gsNew").onclick = () => {
-    // A game in progress keeps its galaxy: a new game gets a galaxy of its own.
-    if (o.save && G.seed === o.seed) rebuild(o.newSeed());
+    // A game in progress keeps its galaxy: a new species gets a galaxy (a universe) of its own, so
+    // no existing species is ever overwritten.
+    if (evolved.some((x) => x.seed === G.seed) || (o.save && G.seed === o.seed)) rebuild(o.newSeed());
     setMode("choose");
     cam.goal = { tx: 0, tz: 6, dist: 230 };
     cam.fly = 1.5;
@@ -931,6 +1064,7 @@ export function createGalaxyStart(o) {
     if (selected) deselect();
     else setMode("title");
   };
+  renderSpeciesStrip();
   $("#gsPrev").onclick = () => cycle(-1);
   $("#gsNext").onclick = () => cycle(1);
   $("#gsIn").onclick = () => ((cam.goal.dist *= 0.65), clampGoal());
@@ -956,6 +1090,7 @@ export function createGalaxyStart(o) {
       return mode;
     },
     resize,
+    toast,
     update(dt) {
       time.value += dt;
       if (toastT > 0 && (toastT -= dt) <= 0) $("#gsToast").classList.remove("show");
@@ -974,6 +1109,11 @@ export function createGalaxyStart(o) {
         if (selected) h.material.opacity *= h.userData.starId === selected.star.id ? 1.6 : 0.4;
       }
       if (G.homeMark) G.homeMark.scale.setScalar(G.homeMark.position.distanceTo(camera.position) * 0.034);
+      for (const m of G.speciesMarks) {
+        const on = chosenSpecies?.id === m.userData.speciesId;
+        m.scale.setScalar(m.position.distanceTo(camera.position) * (on ? 0.05 + 0.006 * Math.sin(time.value * 3) : 0.038));
+        m.material.opacity = mode === "choose" ? 0.25 : on ? 1 : 0.7;
+      }
       // On a phone the panel covers the lower screen: keep the open system in the space above it.
       const panel = $("#gsPanel");
       const lift = !cinema && !panel.hidden && innerWidth < 860 ? panel.getBoundingClientRect().height / 2 : 0;
@@ -1017,6 +1157,10 @@ export function createGalaxyStart(o) {
       begin,
       openConfirm,
       cycle,
+      chooseSpecies,
+      get species() {
+        return speciesList;
+      },
       screenOf,
       starWorld,
       get selected() {

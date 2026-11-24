@@ -14,7 +14,7 @@ import { createAudio } from "./audio.js";
 import { loadSettings, openSettings, saveSettings } from "./settings.js";
 import { createTribeStage, loadTribeSave } from "./tribe/stage.js";
 import { createCivStage } from "./civ/stage.js";
-import { CIV_CARDS, CIV_SAVE_KEY, readCivSave } from "./civ/rules.js";
+import { CIV_CARDS, CIV_SAVE_KEY, civLegacy, readCivSave } from "./civ/rules.js";
 import { markSaved } from "./slots.js";
 import { capsuleGap, leadTarget, pointCapsuleGap, resolveCollisions, steerHeading, strokePulse } from "./cell-physics.js";
 import { createCreatureStage } from "./creature/stage.js";
@@ -22,11 +22,12 @@ import { openCreatureEditor } from "./creature/editor.js";
 import { buildCreatureBody } from "./creature/body3d.js";
 import { CREATURE_SAVE_KEY, creatureFromCell, creaturePartIds, partsLimit } from "./creature/format.js";
 import { CREATURE_CARDS, DIET_CARDS } from "./traits.js";
+import { heritageEvents, instinctOf, speciesIdentity } from "./heritage.js";
 import { CHRONICLE_KEY, TRIBE_LEGACY, addEvent, creatureCardFor, eventsFromSaves, readChronicle, trackSummary, tribeLegacy } from "./lineage.js";
 import { regionById } from "./creature/regions.js";
 import { openStore } from "./universe/store.js";
-import { bootUniverses, createUniverse, currentKeys, parkActive } from "./universe/manager.js";
-import { newSeed, summarize, uniqueName } from "./universe/model.js";
+import { activate, bootUniverses, createUniverse, currentKeys, parkActive } from "./universe/manager.js";
+import { newSeed, readMeta, summarize, uniqueName } from "./universe/model.js";
 import { pedia as pediaStore } from "./universe/pedia-store.js";
 import { emptyPedia } from "./pedia/model.js";
 import { createSession } from "./universe/session.js";
@@ -2521,8 +2522,12 @@ function startCivStage(opts = {}) {
     legacy: {
       cellDiet: progress.dietCard || dietPath(state.plants, state.meat),
       creatureCard: creatureCard ? CREATURE_CARDS[creatureCard]?.title : null,
+      // All eight instincts carry on (not just the card's colour); old saves fall back to the card.
+      instinct: instinctOf(cs),
       tribeTrait: ts?.path ? { peace: "Diplomatic", balance: "Industrious", conquest: "Warlike" }[ts.path] : null,
     },
+    // What rival leaders know of your past.
+    heritage: { instinct: instinctOf(cs), tribePath: ts?.path || null, summary: speciesIdentity({ name: ts?.look?.name || cs?.record?.name || state.cellName, cell: { dietCard: progress.cellStageComplete ? progress.dietCard : null }, creature: cs, tribe: ts }).summary },
     // Rival leaders' faces, for the Civilization Stage's conversations.
     portrait: (rec) => creatureSnapshot(rec, { width: 120, height: 120 }),
     sfx: playSfx,
@@ -2531,11 +2536,11 @@ function startCivStage(opts = {}) {
       if (!universe) return;
       universe.session.record({ id: "design:" + kind + ":" + design.role + ":" + Date.now().toString(36), kind, owned: true, name: design.name, sub: (kind === "building" ? "Building" : "Vehicle") + " · " + design.role, stage: "Civilization", design, place: "Home" });
     },
-    onChronicle: (ev) => {
-      recordChronicle(ev);
-      if (/^civ:(war|attacked)/.test(ev?.key || "")) audio.setMusic("civWar");
-      else if (/^civ:peace/.test(ev?.key || "")) audio.setMusic("civ");
-    },
+    onChronicle: recordChronicle,
+    // The war theme follows the real state of the world: any war of yours, or an attack on your
+    // cities (before, a peace with one nation turned it off while another war went on, and a war
+    // that ended when the enemy fell never turned it off).
+    onDanger: (on) => civStage !== null && audio.setMusic(on ? "civWar" : "civ"),
     onHistory: openPath,
     onSettings: openGameSettings,
     onSaved: () => markSaved(localStorage),
@@ -2678,7 +2683,15 @@ function updateMateCall(dt, time) {
   $("#mateCueText").textContent = d < 5 ? "Swim to your mate" : "Your mate is answering… " + Math.ceil(state.mateTimer) + "s";
   // Generous, scale-aware contact range: long cells should not need pixel-perfect positioning to mate.
   const mateReach = playerRadius() + (u.radius || 0.4) + Math.max(1.25, playerRadius() * 0.7);
-  if (d < mateReach) {
+  // Measured surface to surface too: a long cell's mate can only reach its tip, which may be far
+  // from its centre, so a centre-distance check alone left very elongated cells unable to mate.
+  let gap = Infinity;
+  try {
+    if (u.body?.extent) gap = capsuleGap(updatePlayerCapsule(), npcCapsule(m));
+  } catch (e) {
+    gap = Infinity;
+  }
+  if (d < mateReach || gap < Math.max(1.1, playerRadius() * 0.5)) {
     state.courtship = { t: 0, cx: (player.position.x + m.position.x) / 2, cy: (player.position.y + m.position.y) / 2, a: Math.atan2(-dy, -dx), zoom: cameraZoomTarget };
     velocity.set(0, 0);
     jetVel.set(0, 0);
@@ -5793,8 +5806,71 @@ async function initUniverse() {
 /* ---- the galaxy start screen ------------------------------------------------------------------ */
 let galaxyStart = null;
 const BEGIN_KEY = "spore-begin"; // sessionStorage: a homeworld was just chosen, play the arrival
+const CONTINUE_KEY = "spore-continue"; // sessionStorage: a species was chosen in the galaxy, resume it
+/**
+ * Every saved species, for the galaxy: one per universe, with what it has become and where it lives.
+ * The species in play is read from the live keys; the others from their parked copies. Read only.
+ */
+async function speciesSaves() {
+  if (!universe) return [];
+  const { store } = universe;
+  const metas = (await store.all("meta").catch(() => [])).map(readMeta).filter(Boolean);
+  const out = [];
+  for (const m of metas) {
+    const active = m.id === universe.meta.id;
+    let keys = {};
+    try {
+      keys = active ? currentKeys(localStorage) : (await store.get("parked", m.id)) || {};
+    } catch (e) {
+      keys = {};
+    }
+    const info = summarize(keys);
+    let homeStarId = null;
+    try {
+      homeStarId = active ? universe.session.home().starId : ((await pediaStore.get(store, m.id))?.home?.starId ?? null);
+    } catch (e) {
+      homeStarId = null;
+    }
+    const parse = (k) => {
+      try {
+        return keys[k] ? JSON.parse(keys[k]) : null;
+      } catch (e) {
+        return null;
+      }
+    };
+    const cellSave = parse("johnny-spore-cell-stage");
+    const identity = speciesIdentity({
+      name: info.species,
+      cell: { dietCard: cellSave?.progress?.cellStageComplete ? cellSave.progress.dietCard : null },
+      creature: parse("johnny-spore-creature-stage"),
+      tribe: parse("johnny-spore-tribe-stage"),
+      civ: parse("johnny-spore-civ-stage"),
+    });
+    out.push({ id: m.id, active, universe: m.name, seed: m.seed, homeStarId, home: m.home, thumb: m.thumb, lastPlayed: m.lastPlayed || m.createdAt || 0, playtime: m.playtime || 0, ...info, tags: identity.tags });
+  }
+  // Most recently played first; empty universes (nothing evolved yet) last.
+  return out.sort((a, b) => (a.stage === "New") - (b.stage === "New") || b.active - a.active || b.lastPlayed - a.lastPlayed);
+}
+/** A species chosen in the galaxy: make its universe the one in play, then resume it after the reload. */
+async function switchToSpecies(id) {
+  if (!universe) return;
+  if (id === universe.meta.id) {
+    closeStartScreen();
+    continueGame();
+    return;
+  }
+  saveRunningGame();
+  universe.session.flush();
+  await activate(universe.store, localStorage, universe.meta, id);
+  try {
+    window.sessionStorage.setItem(CONTINUE_KEY, "1");
+  } catch (e) {
+    /* the galaxy simply opens on the chosen species */
+  }
+  location.reload();
+}
 /** The game opens on its galaxy. Continue resumes the furthest stage; New Game picks a homeworld. */
-function openStartScreen() {
+async function openStartScreen() {
   audio.setMusic("menu");
   let arrival = null;
   try {
@@ -5804,6 +5880,18 @@ function openStartScreen() {
     arrival = null;
   }
   if (arrival) return arriveOnHomeworld(arrival);
+  // A species was just chosen in the galaxy: go straight back into its game.
+  let resume = false;
+  try {
+    resume = window.sessionStorage.getItem(CONTINUE_KEY) === "1";
+    window.sessionStorage.removeItem(CONTINUE_KEY);
+  } catch (e) {
+    resume = false;
+  }
+  if (resume && universe && summarize(currentKeys(localStorage)).stage !== "New") {
+    document.body.classList.remove("galaxyStart", "gsReady");
+    return continueGame();
+  }
   if (!universe) {
     // No IndexedDB (private mode on some browsers): fall back to the plain title screen.
     document.body.classList.remove("galaxyStart");
@@ -5813,8 +5901,15 @@ function openStartScreen() {
   const info = summarize(currentKeys(localStorage));
   const home = S.home();
   const homePlanet = S.planet(home.planetId);
+  const species = await speciesSaves().catch(() => []);
   try {
     galaxyStart = createGalaxyStart({
+      species,
+      onSwitch: (id) =>
+        switchToSpecies(id).catch((e) => {
+          console.warn(e);
+          galaxyStart?.toast("That species couldn't be loaded: " + (e.message || "storage error"));
+        }),
       renderer,
       seed: universe.meta.seed,
       quality: getQuality(),
@@ -6229,8 +6324,26 @@ function tickPlaytime(dt) {
   playClock = 0;
   universe.store.put("meta", universe.meta.id, universe.meta).catch(() => {});
 }
+/** The species' heritage for the history screen: its identity, and what it carries into Civilization. */
+function heritageView(cs, ts, cv) {
+  const name = ts?.look?.name || cs?.record?.name || state.cellName || "Your species";
+  const heritage = speciesIdentity({ name, cell: { dietCard: progress.cellStageComplete ? progress.dietCard : null }, creature: cs, tribe: ts, civ: cv });
+  const tribeTrait = ts?.path ? { peace: "Diplomatic", balance: "Industrious", conquest: "Warlike" }[ts.path] : null;
+  const card = creatureCardFor(cs);
+  const civLegacyLines = ts ? civLegacy({ cellDiet: progress.dietCard || dietPath(state.plants, state.meat), creatureCard: card ? CREATURE_CARDS[card]?.title : null, instinct: instinctOf(cs), tribeTrait }).lines : [];
+  return { heritage, civLegacy: civLegacyLines };
+}
+/** Turning points the saves prove (instinct, the tribe's path, unification) go into the chronicle once. */
+function recordHeritage() {
+  try {
+    for (const ev of heritageEvents({ creature: loadCreatureSave(), tribe: loadTribeSave(), civ: loadCivSave() })) recordChronicle(ev);
+  } catch (e) {
+    /* a damaged save: the chronicle keeps what it has */
+  }
+}
 function openPath() {
   if (creatureEditor) return;
+  recordHeritage();
   const chronicle = loadChronicle().events;
   const cs = loadCreatureSave();
   if (tribeStage || civStage) {
@@ -6248,6 +6361,7 @@ function openPath() {
       tribe: trackSummary({ tribe: ts }).tribe,
       civ: cv ? { card: cv.won && CIV_CARDS[cv.card] ? CIV_CARDS[cv.card] : null, cities: cv.cities.filter((c) => c.owner === "you").length, total: cv.cities.length, captures: Object.values(cv.captures).reduce((a, b) => a + b, 0) } : null,
       legacy: tribeLegacy(progress.dietCard || dietPath(state.plants, state.meat), creatureCardFor(cs), cs?.instinct || cs?.leaning).lines,
+      ...heritageView(cs, ts, cv),
       identity: identityView(cs),
       chronicle,
       history: progress.history,
@@ -6268,6 +6382,7 @@ function openPath() {
       creature: { brain: st.brain, alliances: st.alliances, extinctions: st.extinctions, deaths: st.deaths, dna: st.dna, card: st.card },
       library: creatureStage.library(),
       identity: identityView(st),
+      ...heritageView({ ...(loadCreatureSave() || {}), instinct: st.instinct ?? loadCreatureSave()?.instinct, leaning: st.leaning ?? loadCreatureSave()?.leaning, alliances: st.alliances, extinctions: st.extinctions }, loadTribeSave(), null),
       tribe: trackSummary({ tribe: loadTribeSave() }).tribe,
       chronicle,
       history: progress.history,
@@ -6288,6 +6403,7 @@ function openPath() {
     meat: state.meat,
     card: progress.cellStageComplete ? progress.dietCard : null,
     tribe: trackSummary({ tribe: loadTribeSave() }).tribe,
+    ...heritageView(loadCreatureSave(), loadTribeSave(), loadCivSave()),
     chronicle,
     history: progress.history,
     stats: progressStats(),
