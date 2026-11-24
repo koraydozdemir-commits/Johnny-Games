@@ -9,6 +9,7 @@
  *
  * Exits non-zero if any check fails. Each check prints ✓ or ✗ with a reason.
  */
+/* global process, getComputedStyle */
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
@@ -185,6 +186,43 @@ for (const [label, size] of Object.entries(SIZES)) {
   const hist = await page.$eval("#pathPanel", (e) => e.textContent.replace(/\s+/g, " "));
   check("Species History shows the heritage", /HERITAGE/.test(hist) && /Pack Hunter/.test(hist) && /Warlike/.test(hist) && /Carried into the Civilization Stage/.test(hist), hist.slice(0, 200));
   check("the chronicle records the turning points", /Became a Pack Hunter species/.test(hist) && /The tribe conquered the island/.test(hist));
+  // The minimap: drawn, a sphere, and a tap moves the camera there.
+  await page.evaluate(() => window.__spore.civStage.debug.cam && document.querySelector("#cvPath, #pathClose")?.click());
+  await page.evaluate(() => document.querySelector("#pathClose")?.click());
+  await sleep(800);
+  const mini = await page.evaluate(() => {
+    const c = document.querySelector("#cvMini");
+    const r = c.getBoundingClientRect();
+    const px = c.getContext("2d").getImageData(150, 150, 1, 1).data;
+    return { w: r.width, h: r.height, drawn: px[3] > 0, has: !!window.__spore.civStage.debug.minimap };
+  });
+  check("the planet minimap is drawn", mini.has && mini.drawn && mini.w >= 90, JSON.stringify(mini));
+  const moved = await page.evaluate(async () => {
+    const dbg = window.__spore.civStage.debug;
+    const f0 = { ...dbg.cam.f };
+    const c = document.querySelector("#cvMini").getBoundingClientRect();
+    document.querySelector("#cvMini").dispatchEvent(new MouseEvent("click", { clientX: c.left + c.width * 0.85, clientY: c.top + c.height * 0.5, bubbles: true }));
+    const f1 = dbg.cam.f;
+    return Math.acos(Math.max(-1, Math.min(1, f0.x * f1.x + f0.y * f1.y + f0.z * f1.z)));
+  });
+  check("tapping the minimap turns the camera there", moved > 0.3, String(moved));
+  // A world event: a disaster damages a city's defences and is told in the news and chronicle.
+  const ev = await page.evaluate(() => {
+    const dbg = window.__spore.civStage.debug;
+    const c = dbg.T.cities.find((x) => x.owner === "you");
+    const hp = c.turretHp;
+    dbg.applyWorldEvent({ id: "disaster", icon: "🌋", title: "Natural disaster", color: 0xff6a3d, seconds: 0, text: "A flood strikes " + c.name + "!", at: c.id, effect: { damage: 0.45, unrest: 1.5, city: c.id } });
+    return { before: hp, after: c.turretHp, unrest: c.unrest, news: dbg.T.newsLog.at(-1)?.text || "", notes: document.querySelectorAll(".cvNote, .cvNotes > *").length };
+  });
+  check("a world event changes the world", ev.after < ev.before && ev.unrest >= 1.5, JSON.stringify(ev));
+  check("a world event is in the news and on screen", /Natural disaster/.test(ev.news) && ev.notes > 0);
+  const boom = await page.evaluate(() => {
+    const dbg = window.__spore.civStage.debug;
+    const s0 = dbg.income();
+    dbg.applyWorldEvent({ id: "boom", icon: "💰", title: "Economic boom", color: 0xf5c75a, seconds: 100, text: "Boom.", effect: { income: 1.25 } });
+    return { s0, s1: dbg.income() };
+  });
+  check("an economic boom raises income", boom.s0 <= 0 || boom.s1 > boom.s0 * 1.2, JSON.stringify(boom));
   check("Civilization: no page errors", errors.length === 0, errors.slice(0, 3).join(" | "));
   await ctx.close();
 }

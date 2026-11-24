@@ -85,6 +85,8 @@ import { createThumbs } from "./thumbs.js";
 import { installIcons, ico } from "./icons.js";
 import { DOMINANT_SHARE, PERSONALITIES, availableOptions, answer, cityPrice, incoming, leaderName, leaderTitle, MESSAGE_TTL, nudge, pairDecision, pairKey, pairRest, personalityFor, respond, silence } from "./leaders.js";
 import { heritageRemark } from "../heritage.js";
+import { createMinimap } from "./minimap.js";
+import { activeEffects, chooseEvent, nextEventIn, readEvents } from "./events.js";
 
 const TAU = Math.PI * 2;
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -194,6 +196,8 @@ export function createCivStage(o) {
     pairs: save?.pairs || {},
     newsLog: save?.news || [],
     moments: save?.moments || [],
+    // World events: what's running, when the next is due, and the last one (never repeated).
+    events: save?.events || readEvents(null),
     selected: new Set(),
     targeting: false,
     lost: false,
@@ -243,7 +247,7 @@ export function createCivStage(o) {
     return s;
   };
   let strengths = myStrengths();
-  const ownerMods = (owner) => (owner === YOU ? { strengths, incomeBonus: mods.incomeBonus, happyBonus: mods.happyBonus } : {});
+  const ownerMods = (owner) => (owner === YOU ? { strengths, incomeBonus: mods.incomeBonus, happyBonus: mods.happyBonus + activeEffects(T.events.active, T.time).happy } : {});
   const unitMods = (owner) => (owner === YOU ? mods : {});
 
   /* ---- shared materials ------------------------------------------------------------------------ */
@@ -937,6 +941,7 @@ export function createCivStage(o) {
     <div class="trGoal" id="cvGoal" role="status" aria-live="polite"></div>
     <div class="trTribes cvNations" id="cvNations" role="list" aria-label="Rival nations"></div>
     <div class="trMarks" id="cvMarks" aria-hidden="true"></div>
+    <div class="cvMini" id="cvMiniWrap"><canvas id="cvMini" width="300" height="300" role="img" aria-label="Planet minimap: tap to look there"></canvas><button class="cvMiniFold" id="cvMiniFold" aria-label="Hide the minimap" aria-pressed="false">${ico("planet")}</button></div>
     <div class="trToast" id="cvToast" role="status" aria-live="polite"></div>
     <div class="cvNotes" id="cvNotes" role="log" aria-live="polite" aria-label="News and messages"></div>
     <div class="trPlace" id="cvTarget" hidden role="status" aria-live="polite"><span id="cvTargetText"></span><button id="cvTargetCancel">Cancel</button></div>
@@ -1864,7 +1869,7 @@ export function createCivStage(o) {
       }
     } else if (v.role === "religious") {
       const faith = cityEconomy(c, ownerMods(c.owner)).faith;
-      const done = preachTo(c, v.owner, preachRate(v.unit.preach, faith) * dt);
+      const done = preachTo(c, v.owner, preachRate(v.unit.preach * (v.owner === YOU ? fx().preach : 1), faith) * dt);
       const n = nationOf(c.owner);
       if (n && v.owner === YOU) n.relation = clampRel(n.relation + DIPLO.preach * dt);
       // Preaching to a rival's city sours that rival on the preachers.
@@ -2262,6 +2267,99 @@ export function createCivStage(o) {
     T.newsLog.push({ t: Math.round(T.time), text });
     if (T.newsLog.length > 40) T.newsLog.shift();
   };
+  /* -- the planet minimap (civ/minimap.js): the hemisphere you're looking at, kept up to date -- */
+  let minimap = null;
+  const miniVec = new THREE.Vector3();
+  function updateMinimap() {
+    const wrap = $h("#cvMiniWrap");
+    if (!wrap || wrap.classList.contains("folded") || arrive) return;
+    if (!minimap) {
+      minimap = createMinimap({
+        canvas: $h("#cvMini"),
+        isLand: (d) => planet.isLand(miniVec.set(d.x, d.y, d.z)),
+        view: () => ({ f: cam.sf, n: cam.sn }),
+        colors: { sea: "#" + new THREE.Color(hw?.water?.color ?? region.water ?? 0x2f78b8).getHexString(), land: "#" + new THREE.Color(palette.grass ?? palette.leaf ?? 0x7fbf6a).getHexString() },
+        world: () => ({
+          cities: T.cities.map((c) => ({ d: c.d, color: c.owner ? ownerColor(c.owner) : null, yours: c.owner === YOU, capital: c.id === 0 && c.owner === YOU, attacked: c.owner === YOU && T.vehicles.some((v) => !v.dead && v.role === "military" && v.owner !== YOU && hostile(v.owner, YOU) && arc(v.d, c.d) < 0.12) })),
+          vehicles: T.vehicles.filter((v) => !v.dead).map((v) => ({ d: v.d, color: ownerColor(v.owner), military: v.role === "military" })),
+          geysers: T.geysers.filter((g) => g.owner).map((g) => ({ d: g.d, color: ownerColor(g.owner) })),
+          events: eventMarks.filter((e) => e.until > T.time),
+        }),
+        onPick: (d) => {
+          focusOn({ x: d.x, y: d.y, z: d.z }, Math.max(cam.alt, ALT.region));
+          o.sfx("select");
+        },
+      });
+    }
+    eventMarks = eventMarks.filter((e) => e.until > T.time);
+    minimap.draw(0.25);
+  }
+
+  /* -- world events: the planet changes without being asked (civ/events.js) -- */
+  let eventMarks = []; // { d, color, until }: rings on the minimap where something happened
+  function worldSnapshot() {
+    const rivals = T.nations.filter((n) => n.alive && n.met !== false).map((n) => ({ id: n.id, name: n.name, war: n.war }));
+    let unhappy = null,
+      worst = 0;
+    for (const c of yourCities()) {
+      const h = cityEconomy(c, ownerMods(YOU)).happiness;
+      if (h < worst) (worst = h), (unhappy = { id: c.id, name: c.name });
+    }
+    return {
+      time: T.time,
+      derricks: T.geysers.filter((g) => g.owner === YOU).length,
+      routes: T.cities.filter((c) => (c.trade?.[YOU] || 0) > 0).length,
+      wars: T.nations.filter((n) => n.alive && n.war).length,
+      yourType: T.startType,
+      cities: T.cities.filter((c) => c.owner).map((c) => ({ id: c.id, name: c.name })),
+      unhappy,
+      rivals,
+      symbiotic: o.heritage?.instinct === "symbiotic",
+      feared: o.heritage?.instinct === "apex" || o.heritage?.tribePath === "conquest",
+    };
+  }
+  function applyWorldEvent(ev) {
+    const f = ev.effect || {};
+    const city = f.city != null ? T.cities.find((c) => c.id === f.city) : null;
+    if (f.price) T.price = Math.min(SPICE_PRICE.max, Math.max(SPICE_PRICE.min, T.price * f.price));
+    if (city && f.damage) {
+      city.turretHp = Math.max(0.15, (city.turretHp ?? 1) - f.damage);
+      city.hallHp = Math.max(0.3, (city.hallHp ?? 1) - f.damage * 0.4);
+    }
+    if (city && f.unrest) city.unrest = Math.min(5, (city.unrest || 0) + f.unrest);
+    const n = f.nation ? nationOf(f.nation) : null;
+    if (n && f.relation) n.relation = clampRel(n.relation + f.relation);
+    if (n && f.rivalMoney) n.money += f.rivalMoney;
+    if (f.pairRel && f.a && f.b) {
+      const k = pairKey(f.a, f.b);
+      T.pairs[k] = T.pairs[k] || { rel: 0, war: false };
+      T.pairs[k].rel = clampRel((T.pairs[k].rel || 0) + f.pairRel);
+    }
+    if (ev.seconds) T.events.active.push({ id: ev.id, until: T.time + ev.seconds, effect: f, at: city ? city.id : null });
+    T.events.active = T.events.active.filter((e) => e.until > T.time).slice(-6);
+    // Seen on the planet as well as read: a flash where it happened, a ring on the minimap.
+    const where = city?.d || (n ? T.cities.find((c) => c.owner === n.id)?.d : null);
+    if (where) {
+      flash(where, 4);
+      eventMarks.push({ d: where, color: ev.color, until: T.time + 45 });
+    }
+    const nation = n || (city ? nationOf(city.owner) : null);
+    notify({ icon: ev.icon, nation, title: ev.title, text: ev.text, level: /disaster|unrest|tension|shortage/.test(ev.id) ? "warn" : "info", seconds: 8, act: where ? () => focusOn(where, ALT.region) : () => openSheet("world"), actLabel: where ? "Look" : "World" });
+    T.newsLog.push({ t: Math.round(T.time), text: ev.title + ": " + ev.text });
+    if (T.newsLog.length > 40) T.newsLog.shift();
+    // Only the memorable ones go into the species' history.
+    if (ev.id === "disaster" || ev.id === "breakthrough" || T.events.count === 0) chronicle({ key: "civ:event:" + ev.id + ":" + Math.floor(T.time), stage: "civ", icon: ev.icon, text: ev.title + ": " + ev.text });
+    T.events.count++;
+    T.events.last = ev.id;
+    o.sfx(/disaster|unrest|tension/.test(ev.id) ? "alarm" : "message");
+  }
+  function updateWorldEvents() {
+    if (arrive || victory || T.lost) return;
+    if (T.time < T.events.next) return;
+    const ev = chooseEvent(worldSnapshot(), T.events.last);
+    T.events.next = T.time + nextEventIn();
+    if (ev) applyWorldEvent(ev);
+  }
   let pairClock = 6;
   function updateRivalDiplomacy(dt) {
     const alive = T.nations.filter((n) => n.alive);
@@ -3317,7 +3415,8 @@ export function createCivStage(o) {
   }
 
   /* ---- HUD refresh -------------------------------------------------------------------------------------- */
-  const income = () => yourCities().reduce((s, c) => s + cityEconomy(c, ownerMods(YOU)).income, 0) + tradeIncome(T.cities, YOU) + pactBonus();
+  const fx = () => activeEffects(T.events.active, T.time);
+  const income = () => (yourCities().reduce((s, c) => s + cityEconomy(c, ownerMods(YOU)).income, 0) + tradeIncome(T.cities, YOU) + pactBonus()) * fx().income;
   /** Trade agreements: your routes with that nation pay half as much again. */
   function pactBonus() {
     let routes = 0;
@@ -3328,7 +3427,7 @@ export function createCivStage(o) {
     }
     return routes * ROUTE_INCOME * 0.5;
   }
-  const spiceIncome = (owner = YOU) => T.geysers.filter((g) => g.owner === owner).reduce((s, g) => s + spiceYield(g), 0) * (owner === YOU ? 1 + (mods.spice || 0) : 1);
+  const spiceIncome = (owner = YOU) => T.geysers.filter((g) => g.owner === owner).reduce((s, g) => s + spiceYield(g), 0) * (owner === YOU ? (1 + (mods.spice || 0)) * fx().spice : 1);
   let hudClock = 0,
     liveClock = 1;
   const marks = new Map();
@@ -3576,6 +3675,29 @@ export function createCivStage(o) {
   $h("#cvDesigns").onclick = openDesigns;
   $h("#cvDesignsMenu").onclick = openDesigns;
   $h("#cvSuper").onclick = startTargeting;
+  // The minimap folds away to a small globe button (remembered for this browser).
+  const MINI_KEY = "johnny-spore-civ-minimap-folded";
+  const setMiniFolded = (on) => {
+    $h("#cvMiniWrap").classList.toggle("folded", on);
+    $h("#cvMiniFold").setAttribute("aria-pressed", String(on));
+    $h("#cvMiniFold").setAttribute("aria-label", on ? "Show the minimap" : "Hide the minimap");
+  };
+  try {
+    setMiniFolded(localStorage.getItem(MINI_KEY) === "1");
+  } catch {
+    /* no storage: shown */
+  }
+  $h("#cvMiniFold").onclick = () => {
+    const on = !$h("#cvMiniWrap").classList.contains("folded");
+    setMiniFolded(on);
+    try {
+      localStorage.setItem(MINI_KEY, on ? "1" : "0");
+    } catch {
+      /* not remembered */
+    }
+    if (!on) updateMinimap();
+    o.sfx("select");
+  };
   $h("#cvMenu").onclick = () => ($h("#cvMenuPanel").hidden = !$h("#cvMenuPanel").hidden);
   $h("#cvResume").onclick = () => ($h("#cvMenuPanel").hidden = true);
   $h("#cvMessages").onclick = () => openSheet("messages");
@@ -3607,6 +3729,7 @@ export function createCivStage(o) {
       pairs: T.pairs,
       news: T.newsLog.slice(-20),
       moments: T.moments.slice(-30),
+      events: { next: Math.round(T.events.next), last: T.events.last, count: T.events.count, active: T.events.active.filter((e) => e.until > T.time) },
       vehicles: T.vehicles.filter((v) => !v.dead).map((v) => ({ owner: v.owner, design: v.key, d: { x: r3(v.d.x), y: r3(v.d.y), z: r3(v.d.z) }, hp: Math.round((v.hp / v.unit.hp) * 100) / 100, city: v.home })),
       designs: T.designs,
       captures: T.captures,
@@ -3758,6 +3881,8 @@ export function createCivStage(o) {
       updateMarks();
       if ((hudClock -= dt) <= 0) {
         hudClock = 0.25;
+        updateWorldEvents();
+        updateMinimap();
         updateHUD();
         hud.classList.toggle("calm", calm());
         if ((liveClock -= 0.25) <= 0 && !sheetPress) {
@@ -3775,6 +3900,7 @@ export function createCivStage(o) {
       o.renderer.render(scene, camera);
     },
     dispose() {
+      minimap?.dispose();
       arrive?.frame.remove(false);
       canvas.removeEventListener("pointerdown", onDown);
       window.removeEventListener("pointermove", onMove);
@@ -3814,6 +3940,11 @@ export function createCivStage(o) {
     debug: {
       T,
       legacy,
+      applyWorldEvent,
+      worldSnapshot,
+      get minimap() {
+        return minimap;
+      },
       cam,
       openPeek,
       notify,

@@ -7,6 +7,7 @@
  */
 import { VEHICLE_CLASSES, designStats, partTotals, vehicleClass, vehicleMode } from "../creations/modular.js";
 import { CIV_INSTINCT } from "../heritage.js";
+import { readEvents } from "./events.js";
 
 export const CIV_SAVE_KEY = "johnny-spore-civ-stage";
 export const CIV_VERSION = 2;
@@ -502,6 +503,8 @@ export function readCivSave(raw) {
     pairs,
     news,
     moments,
+    // World events (saves from before them start with none, the first a few minutes off).
+    events: readEvents(d.events),
     seed: Number.isInteger(d.seed) && d.seed > 0 && d.seed < 2 ** 32 ? d.seed : null,
     clock: Number.isFinite(d.clock) ? num(d.clock, 0, 1e7, 0) : null,
     money: num(d.money, 0, 1e7, START_MONEY),

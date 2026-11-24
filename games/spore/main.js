@@ -6518,8 +6518,6 @@ if (new URLSearchParams(location.search).has("debug")) {
       return galaxyStart;
     },
     closeStartScreen,
-    openPath,
-    closeStartScreen,
     startCivStage,
     startGrowthPullback,
     get growth() {
