@@ -5346,6 +5346,12 @@ export function createCreatureStage(o) {
       return { brain: P.brain, alliances: P.alliances, extinctions: P.extinctions, deaths: P.deaths, nests: nests.length, npcs: npcs.size, dna: P.dna, hunger: P.hunger, health: P.health, card: P.card, instinct, leaning, ledger: { ...ledger }, rep: { ...rep } };
     },
     debug: {
+      callMate,
+      get courtship() {
+        return courtship;
+      },
+      nestAt,
+      nearNest: () => nearNest(),
       ledger,
       note,
       applyEcoActions,
