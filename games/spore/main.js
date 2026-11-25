@@ -1904,6 +1904,12 @@ function dropMeat(x, y, amount = 3) {
 }
 function killNPC(e, playerKill = true) {
   if (!e.userData.alive) return;
+  // A mate answering your call can't be killed: losing it used to leave the call stuck, with no mate
+  // on its way and the mate button doing nothing.
+  if (e.userData.mate && e === state.mate) {
+    e.userData.health = Math.max(1, e.userData.health);
+    return;
+  }
   e.userData.alive = false;
   e.userData.dying = true;
   e.userData.rig.die();
@@ -2594,10 +2600,12 @@ function callMate(confirmed = false) {
   state.mateSignal = true;
   state.mateTimer = 30;
   // Your mate is one of your own species: the nearest relative, or a new one arriving from off screen.
+  // Only a relative you can see answers (one far off screen often never arrived); otherwise a new one
+  // swims in from just inside the edge of the screen.
   let m = null,
-    best = viewRadius() * 1.6;
+    best = viewRadius() * 0.85;
   enemies.forEach((e) => {
-    if (!e.userData.kin || !e.userData.alive) return;
+    if (!e.userData.kin || !e.userData.alive || e.userData.dying || e.userData.epic) return;
     const d = distance2D(e.position, player.position);
     if (d < best) {
       best = d;
@@ -2606,7 +2614,7 @@ function callMate(confirmed = false) {
   });
   if (!m) {
     const a = Math.random() * TAU,
-      r = Math.min(viewRadius() * 0.9, 8);
+      r = Math.max(playerRadius() * 2.5, Math.min(viewRadius() * 0.65, 8 * Math.max(1, state.scale)));
     m = spawnKin({ x: player.position.x + Math.cos(a) * r, y: player.position.y + Math.sin(a) * r });
   }
   m.userData.mate = true;
@@ -2668,10 +2676,13 @@ function updateMateCall(dt, time) {
     d = Math.hypot(dx, dy);
   // The mate answers: it swims toward you with an eager, wiggling approach and calls back.
   u.stroke = (u.stroke ?? 0) + dt * 6;
-  const arrive = Math.min(1, d / 2.5);
-  m.rotation.z = steerHeading(u.velocity, m.rotation.z, (dx / (d || 1)) * 5 * arrive, (dy / (d || 1)) * 5 * arrive, dt, { turnRate: 3.2, stroke: strokePulse(u.stroke) });
+  const arrive = Math.min(1, d / 2.5),
+    pull = 5 + Math.min(6, d * 0.4);
+  m.rotation.z = steerHeading(u.velocity, m.rotation.z, (dx / (d || 1)) * pull * arrive, (dy / (d || 1)) * pull * arrive, dt, { turnRate: 3.2, stroke: strokePulse(u.stroke) });
   u.velocity.multiplyScalar(Math.max(0, 1 - 1.6 * dt));
-  u.velocity.clampLength(0, 2.6);
+  // Fast enough to always catch you, even if you keep swimming (you can reach about 3.2, more with a
+  // jet): quicker the further away it is, and scaled with body size.
+  u.velocity.clampLength(0, (2.6 + Math.min(4, d * 0.35)) * Math.max(1, Math.sqrt(state.scale)));
   m.position.x += u.velocity.x * dt;
   m.position.y += u.velocity.y * dt;
   if (u.heart) u.heart.scale.setScalar(0.6 + Math.sin(time * 7) * 0.08);
@@ -3506,12 +3517,32 @@ function updateAI(dt, time) {
     if (u.dietSprite) u.dietSprite.visible = (dPlayer < 9 && !u.kin) || u.alpha;
   });
   resolveCellCollisions();
+  // A call whose mate has gone (despawned, removed by a world reset…) is cancelled, so you can call again.
+  if (state.mateSignal && !state.courtship && (!state.mate || !state.mate.userData.alive || !enemies.includes(state.mate))) {
+    state.mateSignal = false;
+    state.mate = null;
+    $("#mateCue").classList.remove("show");
+    toast("Your mate was lost. Call again ♡");
+    updateHUD();
+  }
   if (state.mateSignal && state.mate && state.mate.userData.alive) {
     const m = state.mate;
     updateMateCall(dt, time);
     if (!state.mateSignal) return;
     if (state.courtship) return;
     state.mateTimer -= dt;
+    // Still far off with time running out (stuck behind something, or you swam away): it comes
+    // round again at the edge of the screen instead of giving up.
+    if (state.mateTimer <= 8 && !m.userData.rejoined && distance2D(m.position, player.position) > viewRadius() * 0.6) {
+      const a = Math.random() * TAU,
+        r = Math.max(playerRadius() * 2.5, viewRadius() * 0.5);
+      m.position.x = player.position.x + Math.cos(a) * r;
+      m.position.y = player.position.y + Math.sin(a) * r;
+      m.userData.velocity.set(0, 0);
+      m.userData.rejoined = true;
+      state.mateTimer = Math.max(state.mateTimer, 15);
+      spawnBurst(m.position.x, m.position.y, 0xff9ed7, 10);
+    }
     if (state.mateTimer <= 0) {
       state.mateSignal = false;
   state.courtship = null;
@@ -3525,6 +3556,7 @@ function updateAI(dt, time) {
       state.mate = null;
       $("#mateCue").classList.remove("show");
       spawnBurst(m.position.x, m.position.y, 0xffa5db, 8);
+      toast("Your mate swam off. Call again when you're ready ♡");
       updateHUD();
     }
   }
