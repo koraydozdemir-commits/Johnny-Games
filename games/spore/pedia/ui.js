@@ -4,7 +4,7 @@
  * real data (a turning 3D model for creatures), renaming, comparing two entries, exporting, opening a
  * creation in the editor, and showing a find in the galaxy.
  */
-import { CATEGORIES, compareRows, counts, exportEntry, markViewed, nameOf, query, rename, toggleFav } from "./model.js";
+import { CATEGORIES, compareRows, counts, duplicateEntry, exportEntry, isLooseCreation, markViewed, nameOf, query, removeEntry, rename, toggleFav } from "./model.js";
 import { creatureTurntable } from "./preview.js";
 import { CREATION_KINDS, wrapCreation } from "../creations/format.js";
 import { planetImage, plantImage } from "../galaxy/planet-art.js";
@@ -245,6 +245,8 @@ export function openPedia(o) {
       if (!((e.kind === "creature" || e.kind === "cell") && f === "sub")) add(e.owned && f === "place" ? "Made on" : k, e[f]);
     if (e.kind === "planet") add("Status", { discovered: "Discovered", explored: "Explored", catalogued: "Fully catalogued" }[e.status] || "Discovered");
     add(e.owned ? "Created" : e.kind === "history" ? "When" : "Discovered", dateOf(e.discoveredAt || e.at));
+    if (e.owned && e.updatedAt && dateOf(e.updatedAt) !== dateOf(e.discoveredAt || e.at)) add("Last changed", dateOf(e.updatedAt));
+    if (e.copiedFrom && P().entries[e.copiedFrom]) add("Copied from", nameOf(P().entries[e.copiedFrom]));
     if (e.by && !e.owned) add("First discovered by", e.by);
     return r;
   }
@@ -281,8 +283,11 @@ export function openPedia(o) {
         ${EXPORTABLE.has(e.kind) ? `<button class="pdSecondary" id="pdExport">⤓ Export</button>` : ""}
         ${scope === "local" && (e.planetId || e.starId !== undefined) ? `<button class="pdSecondary" id="pdGalaxy">🌌 Show in galaxy</button>` : ""}
         ${scope === "global" && o.onCopyHere ? `<button class="pdSecondary" id="pdCopyHere">⇣ Copy into this universe</button>` : ""}
+        ${e.owned && (e.record || e.design) ? `<button class="pdSecondary" id="pdDup">⧉ Duplicate</button>` : ""}
+        ${(scope === "global" && e.owned) || isLooseCreation(e) ? `<button class="pdSecondary pdDanger" id="pdDelete">🗑 Delete</button>` : ""}
         ${e.owned && (e.record || e.design) && o.onEdit ? `<button class="pdPrimary" id="pdEdit">✏ Open in editor</button>` : ""}
-      </div>`;
+      </div>
+      <div class="pdConfirm" id="pdConfirm" hidden role="alertdialog" aria-labelledby="pdConfirmT"><p id="pdConfirmT">Delete ${esc(nameOf(e))}? This can't be undone.</p><button class="pdSecondary" id="pdNo">Keep it</button><button class="pdPrimary pdDanger" id="pdYes">Delete</button></div>`;
     d.scrollTop = 0;
     if (rec) {
       const host = $("#pdHero");
@@ -318,6 +323,27 @@ export function openPedia(o) {
       openDetail(id);
       renderGrid();
     };
+    on("#pdDup", () => {
+      const c = duplicateEntry(P(), id);
+      if (!c) return msg("That can't be copied.");
+      save();
+      o.sfx?.("click");
+      msg("Made " + nameOf(c) + ". Change it as much as you like: the original stays as it is.");
+      renderTabs();
+      openDetail(c.id);
+    });
+    on("#pdDelete", () => {
+      $("#pdConfirm").hidden = false;
+      $("#pdNo").focus();
+    });
+    on("#pdNo", () => ($("#pdConfirm").hidden = true));
+    on("#pdYes", () => {
+      if (!removeEntry(P(), id, scope === "global")) return;
+      save();
+      o.sfx?.("click");
+      msg(nameOf(e) + " deleted.");
+      closeDetail();
+    });
     on("#pdCompare", () => startCompare(e));
     on("#pdExport", () => download(e));
     on("#pdGalaxy", () => o.onShowInGalaxy?.(e.planetId ? { planetId: e.planetId } : { starId: e.starId }));

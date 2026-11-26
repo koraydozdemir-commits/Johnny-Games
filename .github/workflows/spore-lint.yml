@@ -23,7 +23,8 @@ jobs:
         run: node --test tests/*.test.mjs
   browser:
     # Headless Chrome regression checks (dev/browser-check.mjs): the galaxy save screen, switching
-    # species, heritage in the Civilization Stage, the minimap and world events, at three sizes.
+    # species, heritage in the Civilization Stage, the minimap and world events, at three sizes;
+    # and dev/editor-check.mjs: the creators driven with real touch gestures.
     # Software WebGL on CI runners is slow and occasionally flaky, so this job reports but doesn't block.
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -39,3 +40,5 @@ jobs:
         run: npm install --no-save --no-package-lock three@0.160.0 playwright-core@1
       - name: Browser checks
         run: CHROME=$(which google-chrome || which chromium) node dev/browser-check.mjs
+      - name: Editor checks (touch gestures at phone, landscape, tablet and desktop sizes)
+        run: CHROME=$(which google-chrome || which chromium) node dev/editor-check.mjs

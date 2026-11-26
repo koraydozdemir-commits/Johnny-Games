@@ -156,6 +156,35 @@ export function rename(p, id, name) {
   e.customName = clean && clean !== e.name ? clean : undefined;
   return nameOf(e);
 }
+/** Creations the player made as separate copies (sandbox edits, imports, duplicates): these can be deleted. */
+export const isLooseCreation = (e) => !!e && e.owned && /^(edit|import|copy|dup):/.test(e.id);
+/**
+ * A copy of one of your creations, as a new entry ("Copy of …"), so you can change it without
+ * touching the original. Returns the new entry, or null if it isn't a creation that can be copied.
+ */
+export function duplicateEntry(p, id, now = Date.now()) {
+  const e = p.entries[id];
+  if (!e || !e.owned || !(e.record || e.design)) return null;
+  if (Object.keys(p.entries).length >= MAX_ENTRIES) return null;
+  const nid = "dup:" + now.toString(36) + Math.floor(Math.random() * 1296).toString(36);
+  const copy = { ...JSON.parse(JSON.stringify(e)), id: nid, at: now, updatedAt: now, fav: false, customName: undefined, name: cleanEntryName("Copy of " + nameOf(e), "Copy"), sub: e.sub || "Copy", copiedFrom: id };
+  delete copy.discoveredAt;
+  delete copy.generations;
+  p.entries[nid] = copy;
+  p.recent = [nid, ...p.recent].slice(0, MAX_RECENT);
+  return copy;
+}
+/**
+ * Delete an entry. In this universe's Sporepedia only loose creations can go (everything else is
+ * recreated from the game); `any` allows any entry (the Global Sporepedia holds copies only).
+ */
+export function removeEntry(p, id, any = false) {
+  const e = p.entries[id];
+  if (!e || (!any && !isLooseCreation(e))) return false;
+  delete p.entries[id];
+  p.recent = p.recent.filter((r) => r !== id);
+  return true;
+}
 export function markViewed(p, id) {
   if (!p.entries[id]) return;
   p.recent = [id, ...p.recent.filter((r) => r !== id)].slice(0, MAX_RECENT);

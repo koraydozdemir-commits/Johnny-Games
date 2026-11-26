@@ -105,7 +105,8 @@ export function buildDesignMesh(design, { shadows = false, materials: shared = n
     if (!def) return;
     const geo = geometryFor(def);
     const make = (sign) => {
-      const m = new THREE.Mesh(geo, materials[def.paint]);
+      // A part can be repainted with another of the design's paints (see format.js).
+      const m = new THREE.Mesh(geo, materials[p.paint && materials[p.paint] ? p.paint : def.paint]);
       m.position.set(p.x * sign, p.y, p.z);
       m.rotation.y = (p.ry || 0) * sign;
       m.scale.setScalar(p.s || 1);

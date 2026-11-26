@@ -24,13 +24,17 @@ const MAX_TEXT = 400_000;
  * Modular designs (buildings, vehicles, spaceships) share one shape: a name, colours and a list of parts
  * placed in 3D. Validation clamps every number and drops unknown fields.
  */
+/** The paints a single part can be given (the design's three colours, glass and metal). */
+export const PART_PAINTS = ["base", "accent", "trim", "glass", "metal"];
+
 export function validateModular(raw, kind) {
   if (!raw || typeof raw !== "object") throw new Error("Missing design");
   const n = (v, lo, hi, d = 0) => (Number.isFinite(Number(v)) ? Math.max(lo, Math.min(hi, Number(v))) : d);
   const parts = (Array.isArray(raw.parts) ? raw.parts : []).slice(0, MAX_PARTS[kind] || 40).map((p) => {
     if (!p || typeof p.id !== "string" || !/^[a-zA-Z0-9_-]{1,32}$/.test(p.id)) throw new Error("Bad part");
     if (!partOf(kind, p.id)) throw new Error("Unknown part " + p.id);
-    return { id: p.id, x: n(p.x, -20, 20), y: n(p.y, -20, 20), z: n(p.z, -20, 20), ry: n(p.ry, -7, 7), s: n(p.s, 0.2, 4, 1), mirror: !!p.mirror };
+    // paint: optional, the design colour this part uses instead of its own (painting single parts).
+    return { id: p.id, x: n(p.x, -20, 20), y: n(p.y, -20, 20), z: n(p.z, -20, 20), ry: n(p.ry, -7, 7), s: n(p.s, 0.2, 4, 1), mirror: !!p.mirror, ...(PART_PAINTS.includes(p.paint) ? { paint: p.paint } : {}) };
   });
   if (!parts.length) throw new Error("A design needs at least one part");
   return {
