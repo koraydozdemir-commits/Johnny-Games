@@ -44,6 +44,7 @@ import { STARTER_DESIGNS } from "./creations/modular.js";
 import { CREATURE_PARTS } from "./creature/parts.js";
 import { STARTER_MOUTHS, earnedMouths, progressOf } from "./creature/mouths.js";
 import { partThumb } from "./creature/part-thumbs.js";
+import { openCellPaint } from "./editor/cell-paint.js";
 import { timeUniform } from "./gfx/materials.js";
 import { renderCellSnapshot, renderPartThumbnails } from "./gfx/thumbs.js";
 import { SPECIES, chooseSpecies, speciesRecord } from "./species.js";
@@ -1040,6 +1041,46 @@ function restoreEditState(s) {
   rebuildPlayer();
   renderCatalog();
   updateHUD();
+  cellPaint?.refresh();
+}
+/** The Cell Creator's paint sheet (shared editor design), open while the paint tool is. */
+let cellPaint = null;
+const PAINT_KEYS = { base: "baseColor", pattern: "patternColor", accent: "accentColor" };
+function syncCellPaint() {
+  const want = state.editor && state.paint;
+  if (want && !cellPaint) {
+    document.body.classList.remove("show-genome", "show-parts");
+    cellPaint = openCellPaint({
+      read: () => ({ base: state.baseColor, pattern: state.patternColor, accent: state.accentColor, kind: state.pattern }),
+      onStart: () => saveUndo(),
+      onColor: (layer, c) => {
+        state[PAINT_KEYS[layer]] = c;
+        rebuildPlayer();
+      },
+      onPattern: (id) => {
+        state.pattern = id;
+        $("#patternSelect").value = id;
+        rebuildPlayer();
+      },
+      onClose: () => $("#buildTool").click(),
+    });
+  } else if (!want && cellPaint) {
+    cellPaint.close();
+    cellPaint = null;
+  }
+  frameCellForPaint();
+}
+/** On upright phones the paint sheet covers the lower half: slide the view so the cell sits above it. */
+function frameCellForPaint() {
+  if (!state.editor) return;
+  let y = 0;
+  if (cellPaint && innerWidth < 760 && innerHeight >= 520) {
+    const sheetTop = cellPaint.el.getBoundingClientRect().top;
+    const middle = (90 + sheetTop) / 2;
+    y = -((innerHeight / 2 - middle) / innerHeight) * (camera.top - camera.bottom);
+  }
+  camera.position.y = y;
+  camera.lookAt(camera.position.x, y, 0);
 }
 function undoEdit() {
   const s = undoStack.pop();
@@ -1583,6 +1624,8 @@ function setEditor(on) {
     progress.pendingBanner = 0;
   }
   state.editor = on;
+  if (!on) state.paint = false;
+  syncCellPaint();
   editorStage.visible = on;
   [sceneryGroup, foodGroup, npcGroup, hazardGroup, meteorGroup, currentGroup, deepGroup].forEach((g) => (g.visible = !on));
   $("#partsPanel").style.display = on ? "flex" : "none";
@@ -4824,6 +4867,8 @@ function bindUI() {
     renderCatalog();
     $("#paintTool").classList.remove("active");
     $("#buildTool").classList.add("active");
+    $("#paintBtn").classList.remove("active");
+    syncCellPaint();
     // The hammer always shows the parts (it never hides them), so "tap the hammer" can't backfire.
     document.body.classList.remove("show-genome");
     document.body.classList.add("show-parts");
@@ -4832,10 +4877,10 @@ function bindUI() {
     state.paint = !state.paint;
     $("#paintTool").classList.toggle("active", state.paint);
     $("#buildTool").classList.toggle("active", !state.paint);
-    document.body.classList.remove("show-parts");
-    document.body.classList.toggle("show-genome", state.paint);
+    document.body.classList.remove("show-parts", "show-genome");
     $("#paintBtn").classList.toggle("active", state.paint);
-    toast(state.paint ? "Paint mode · tap the membrane to paint." : "Build mode");
+    syncCellPaint();
+    toast(state.paint ? "Paint mode · pick colours below, or tap the membrane to paint." : "Build mode");
   };
   $("#genomeTool").onclick = () => {
     document.body.classList.toggle("show-genome");
@@ -5162,6 +5207,9 @@ function bindUI() {
   $("#paintBtn").onclick = () => {
     state.paint = !state.paint;
     $("#paintBtn").classList.toggle("active", state.paint);
+    $("#paintTool").classList.toggle("active", state.paint);
+    $("#buildTool").classList.toggle("active", !state.paint);
+    syncCellPaint();
     toast(state.paint ? "Paint mode enabled. Choose the three colour layers." : "Part editing mode");
   };
   $("#mirrorToggle").onclick = () => {
@@ -6463,7 +6511,10 @@ window.addEventListener("resize", () => {
   modularEditor?.resize();
   renderer.setSize(innerWidth, innerHeight);
   renderer.setPixelRatio(basePixelRatio() * perf.scale);
-  if (state.editor) configureEditorViewport();
+  if (state.editor) {
+    configureEditorViewport();
+    frameCellForPaint();
+  }
   else updateCamera();
 });
 // The universe system starts once the game is on screen.

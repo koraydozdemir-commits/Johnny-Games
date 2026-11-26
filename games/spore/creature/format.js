@@ -10,8 +10,10 @@
  *   foot:  part id used on every leg
  *   arms:  [{ t, angle, length, bend, hand }] one mirrored pair per entry, jointed like legs (shoulder,
  *          elbow, wrist); angle around the body as for parts; hand = a grasper or foot part id, or null
- *   parts: [{ id, t, angle, scale, roll }] angle around the body: 0 top, +-PI/2 flanks, PI belly;
- *          off-midline parts mirror. roll turns a part about its own axis.
+ *   parts: [{ id, t, angle, scale, roll, solo? }] angle around the body: 0 top, +-PI/2 flanks, PI belly;
+ *          off-midline parts mirror (a twin on the other flank) unless solo is true (one-sided, for
+ *          asymmetric designs; the twin is only a look, so abilities are the same either way).
+ *          roll turns a part about its own axis.
  * }
  * Pure data: no THREE, no DOM.
  */
@@ -122,6 +124,7 @@ export function validateCreature(raw) {
       angle: clamp(num(p.angle, 0), -Math.PI, Math.PI),
       scale: clamp(num(p.scale, 1), 0.6, 1.6),
       roll: clamp(num(p.roll, 0), -Math.PI, Math.PI),
+      ...(p.solo === true ? { solo: true } : {}),
     }));
   return r;
 }

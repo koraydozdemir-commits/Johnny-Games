@@ -1,0 +1,422 @@
+/*
+ * Johnny Spore editors: the shared design system (creature, building, vehicle and spaceship
+ * creators). Loaded after the game's own styles; every rule is scoped to .edRoot, the class the
+ * new editors put on their root, so nothing else in the game changes.
+ *
+ * One language everywhere: soft rounded glass panels, a warm gold for "selected / go", large touch
+ * targets (44 px or more), and the creation always in the middle of the free space. Each editor sets
+ * its palette through the --ed-* tokens (the Civilization editors keep their parchment look).
+ */
+.edRoot{
+  --ed-glass:#0e2433e8;--ed-glass2:#12303fee;--ed-solid:#0b1d2b;--ed-line:#ffffff26;--ed-ink:#fff;--ed-dim:#a9c0c9;--ed-gold:#f5c75a;--ed-gold2:#ffe08a;--ed-on:#132532;--ed-chip:#ffffff16;--ed-danger:#c9483c;
+  --ed-nav:58px;--ed-safe-b:env(safe-area-inset-bottom,0px);--ed-safe-t:env(safe-area-inset-top,0px);--ed-vh:100vh;--ed-r:18px;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:none
+}
+@supports (height:100dvh){.edRoot{--ed-vh:100dvh}}
+.edRoot input,.edRoot textarea,.edRoot select{-webkit-user-select:text;user-select:text;touch-action:manipulation;font-size:16px}
+.edRoot .ceTab,.edRoot .ceGrid,.edRoot .ceInfo,.edRoot .edScroll{touch-action:pan-y}
+.edRoot .ceRail,.edRoot .edFilters,.edRoot .edMotions,.edRoot .edAbilities,.edRoot .ceChips{touch-action:pan-x}
+.edRoot svg{width:1em;height:1em;flex:none}
+html.edOpen,html.edOpen body{overscroll-behavior:none}
+/* Game controls underneath never show through an open editor. */
+html.edOpen #moveStick,html.edOpen .mobileControls{display:none!important}
+
+/* ---- top bar --------------------------------------------------------------- */
+.edRoot .edTop{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;padding:calc(6px + var(--ed-safe-t)) max(10px,env(safe-area-inset-right)) 6px max(10px,env(safe-area-inset-left));background:linear-gradient(var(--ed-solid),#0b1d2bcc);border-bottom:1px solid var(--ed-line);box-shadow:0 6px 24px #0005;z-index:4}
+.edRoot .edTop button{min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:14px}
+.edRoot .edTop button svg{width:20px;height:20px}
+.edRoot .edBack{border:1px solid var(--ed-line);background:var(--ed-chip);color:var(--ed-ink);font-weight:700;padding:0 12px 0 8px}
+.edRoot #ceName,.edRoot #mdName{flex:1 1 0;min-width:48px;width:0;height:44px;border-radius:14px 12px 15px 11px;border:1px solid #ffffff33;background:#ffffff14;color:#fff;padding:0 12px;font:inherit;font-weight:800;font-size:16px;outline:none}
+.edRoot #ceName:focus,.edRoot #mdName:focus{border-color:var(--ed-gold);box-shadow:0 0 0 2px #f5c75a33}
+.edRoot .ceTopBtns{flex:none;display:flex}
+.edRoot .ceTopBtns button{padding:0 10px}
+.edRoot .edStatus{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.edRoot .ceTopBtns{flex-wrap:nowrap;gap:6px}
+.edRoot .ceTopBtns button.primary{padding:0 18px;font-weight:900;background:linear-gradient(var(--ed-gold2),var(--ed-gold));color:var(--ed-on);border-color:#ffe9a8;box-shadow:0 4px 14px #f5c75a40}
+.edRoot .edSaveState{font-size:11px;font-weight:800;letter-spacing:.02em;padding:3px 9px;border-radius:999px;background:var(--ed-chip);color:var(--ed-dim);display:inline-flex;align-items:center;gap:5px}
+.edRoot .edSaveState::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.edRoot .edSaveState.dirty{color:#ffd98a;background:#f5c75a22}
+.edRoot .edSaveState.draft{color:#9fe3ff;background:#4aa3ff22}
+.edRoot .edSaveState.saved{color:#8ff0a8;background:#3fc26e22}
+
+/* ---- mode bar: Build · Paint · Test ---------------------------------------------- */
+.edRoot .edModes{pointer-events:auto;position:absolute;z-index:3;display:flex;gap:4px;padding:4px;border-radius:999px;background:var(--ed-glass);border:1px solid var(--ed-line);box-shadow:0 8px 26px #0006;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.edRoot .edModes button{min-height:40px;min-width:84px;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:0 16px;border:0;border-radius:999px;background:transparent;color:var(--ed-dim);font-weight:800;font-size:13px;transition:background .18s,color .18s,transform .18s}
+.edRoot .edModes button svg{width:19px;height:19px}
+.edRoot .edModes button[aria-selected=true]{background:linear-gradient(var(--ed-gold2),var(--ed-gold));color:var(--ed-on);box-shadow:0 3px 12px #f5c75a44}
+.edRoot .edModes button:active{transform:scale(.96)}
+.edRoot .edNavOnly{display:none!important}
+.edRoot:not(.phone) .edModes{top:calc(var(--ce-top,60px) + 10px);left:50%;transform:translateX(-50%)}
+.edRoot.side .edModes{left:calc(var(--ce-side) + (100% - var(--ce-side) - 214px) / 2)}
+/* Phones: a bottom bar, thumbs' reach, clear of the home indicator. */
+.edRoot.phone .edModes{left:0;right:0;bottom:0;border-radius:20px 20px 0 0;padding:4px max(6px,env(safe-area-inset-left)) calc(4px + var(--ed-safe-b));display:grid;grid-template-columns:repeat(5,1fr);gap:2px;background:linear-gradient(#12303f,#0b1d2b);border-width:1px 0 0}
+.edRoot.phone .edModes button{flex-direction:column;gap:2px;min-width:0;min-height:50px;padding:0;border-radius:14px;font-size:10.5px}
+.edRoot.phone .edModes button svg{width:22px;height:22px}
+.edRoot.phone .edNavOnly{display:inline-flex!important}
+.edRoot.phone .edModes #ceParts[aria-expanded=true]{color:var(--ed-gold)}
+.edRoot.phone .edMoreTop{display:none}
+
+/* ---- the hint: brief, fades, never parks over the creation -------------------------- */
+.edRoot .ceHint{opacity:0;transition:opacity .35s;pointer-events:none;z-index:2;font-weight:600}
+.edRoot .ceHint.on{opacity:1}
+.edRoot:not(.phone) .ceHint{top:calc(var(--ce-top,60px) + 64px)}
+.edRoot.side .ceHint{left:calc(var(--ce-side) + 14px);right:230px;width:auto;transform:none;text-align:center}
+.edRoot.phone .ceHint{top:calc(var(--ce-top,60px) + 46px);width:min(88vw,420px);font-size:12px;background:#0b1d2bcc;border-radius:12px;padding:6px 10px}
+
+/* ---- view tools: symmetry and camera ------------------------------------------------ */
+.edRoot .edViewTools{pointer-events:auto;position:absolute;z-index:2;display:flex;gap:6px}
+.edRoot .edViewTools button{min-height:44px;min-width:44px;display:inline-flex;align-items:center;gap:6px;padding:0 12px;border-radius:16px;border:1px solid var(--ed-line);background:var(--ed-glass);color:var(--ed-ink);font-weight:800;font-size:12.5px;box-shadow:0 4px 16px #0005;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.edRoot .edViewTools button svg{width:20px;height:20px}
+.edRoot .edOnOff{font-size:10px;letter-spacing:.06em;padding:2px 7px;border-radius:999px;background:#ffffff22;color:var(--ed-dim)}
+.edRoot .edOnOff::after{content:"OFF"}
+.edRoot [aria-pressed=true] .edOnOff{background:#3fc26e;color:#06210f}
+.edRoot [aria-pressed=true] .edOnOff::after{content:"ON"}
+.edRoot #ceSym[aria-pressed=true]{border-color:#3fc26e88;box-shadow:0 0 0 2px #3fc26e33,0 4px 16px #0005}
+.edRoot.side .edViewTools{left:calc(var(--ce-side) + 14px);bottom:calc(16px + var(--ed-safe-b))}
+.edRoot:not(.side) .edViewTools{right:max(8px,env(safe-area-inset-right));top:calc(var(--ce-top,60px) + 8px);flex-direction:column;align-items:flex-end}
+.edRoot:not(.side):not(.phone) .edViewTools{top:calc(var(--ce-top,60px) + 64px)}
+.edRoot.phone .edViewTools #ceSym span{display:none}
+.edRoot.mode-test .edViewTools #ceSym,.edRoot.mode-paint .edViewTools #ceSym{display:none}
+
+/* ---- popovers and menus ------------------------------------------------------------- */
+.edRoot .edPop{pointer-events:auto;position:absolute;z-index:8;display:grid;gap:2px;min-width:190px;padding:6px;border-radius:16px;background:var(--ed-solid);border:1px solid var(--ed-line);box-shadow:0 14px 40px #000a}
+.edRoot .edPop[hidden]{display:none}
+.edRoot .edPop button{min-height:44px;display:flex;align-items:center;gap:10px;padding:0 12px;border:0;border-radius:11px;background:transparent;color:var(--ed-ink);font-weight:700;text-align:left}
+.edRoot .edPop button:hover,.edRoot .edPop button:focus-visible{background:#ffffff14}
+.edRoot .edPop button.danger{color:#ffb3a8}
+.edRoot .edPop button svg{width:18px;height:18px;color:var(--ed-dim)}
+.edRoot .edMenu{right:max(10px,env(safe-area-inset-right));top:calc(var(--ce-top,60px) + 6px)}
+.edRoot.phone .edMenu{top:auto;bottom:calc(var(--ed-navh,64px) + 8px)}
+.edRoot .edViewMenu{grid-template-columns:1fr 1fr;min-width:220px}
+.edRoot.side .edViewMenu{left:calc(var(--ce-side) + 14px);bottom:calc(70px + var(--ed-safe-b))}
+.edRoot:not(.side) .edViewMenu{right:max(8px,env(safe-area-inset-right));top:calc(var(--ce-top,60px) + 112px)}
+.edRoot:not(.side):not(.phone) .edViewMenu{top:calc(var(--ce-top,60px) + 168px)}
+
+/* ---- drawer (phones and portrait tablets) and side panel ------------------------------ */
+.edRoot{--ce-side:clamp(300px,32vw,400px)}
+.edRoot .cePanel{z-index:3;display:flex;flex-direction:column}
+.edRoot.side .cePanel{top:var(--ce-top,60px);bottom:0;left:0;right:auto;width:var(--ce-side);height:auto;border-radius:0 22px 0 0;border-top:0;border-right:1px solid var(--ed-line);box-shadow:10px 0 30px #0005;padding-bottom:var(--ed-safe-b);padding-left:env(safe-area-inset-left)}
+.edRoot:not(.side) .cePanel{height:var(--ed-drag-h,var(--ed-sheet-h));transition:height .26s cubic-bezier(.2,.8,.3,1);bottom:0;border-radius:24px 24px 0 0;padding-bottom:var(--ed-safe-b);overflow:hidden}
+.edRoot:not(.side) .cePanel.ed-dragging{transition:none}
+.edRoot:not(.side) .cePanel.ed-peek{--ed-sheet-h:calc(var(--ed-rail-h,64px) + 30px + var(--ed-safe-b))}
+.edRoot:not(.side) .cePanel.ed-half{--ed-sheet-h:calc(var(--ed-vh) * .42)}
+.edRoot.phone .cePanel.ed-half{--ed-sheet-h:calc(var(--ed-vh) * .52 - var(--ed-navh,64px))}
+.edRoot:not(.side) .cePanel.ed-full{--ed-sheet-h:calc(var(--ed-vh) * .84)}
+.edRoot.phone .cePanel{bottom:var(--ed-navh,calc(var(--ed-nav) + var(--ed-safe-b)));padding-bottom:0}
+.edRoot.phone .cePanel.ed-peek{--ed-sheet-h:calc(var(--ed-rail-h,64px) + 30px)}
+.edRoot.phone .cePanel.ed-full{--ed-sheet-h:calc(var(--ed-vh) - var(--ed-navh,64px) - var(--ce-top,60px) - 12px)}
+.edRoot .edHandle{display:none}
+.edRoot:not(.side) .edHandle{display:flex;flex:none;align-items:center;justify-content:center;width:100%;min-height:26px;padding:0;border:0;background:transparent;cursor:grab;touch-action:none}
+.edRoot .edHandle i{width:44px;height:5px;border-radius:3px;background:#ffffff55}
+.edRoot:not(.side) .cePanel.ed-peek .ceTab{display:none}
+.edRoot.mode-paint .ceRail,.edRoot.mode-test .cePanel{display:none!important}
+.edRoot.mode-paint:not(.side) .cePanel.ed-peek .ceTab[data-pane=paint]{display:block;overflow:hidden}
+.edRoot .ceRail{touch-action:pan-x}
+
+/* The catalogue on phones scrolls down, like the side panel. */
+.edRoot:not(.side) .ceGrid{display:grid;grid-auto-flow:row;grid-template-rows:none;grid-auto-rows:auto;grid-template-columns:repeat(auto-fill,minmax(var(--tile-ph,66px),1fr));overflow-x:hidden;overflow-y:auto;flex:1 1 0;min-height:84px;align-content:start}
+.edRoot:not(.side) .cePart{height:auto;aspect-ratio:1;touch-action:pan-y}
+.edRoot:not(.side) .ceDietHead{display:block;grid-column:1/-1;margin:4px 0 0;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#cfe3ea;border-bottom:2px solid var(--ed-line);padding-bottom:3px}
+.edRoot:not(.side) .ceDietHead.diet-plant{border-color:var(--ce-plant)}.edRoot:not(.side) .ceDietHead.diet-meat{border-color:var(--ce-meat)}.edRoot:not(.side) .ceDietHead.diet-omni{border-color:var(--ce-omni)}
+.edRoot:not(.side) .ceInfo{flex:0 1 auto;max-height:44%}
+.edRoot.phone .ceSelected{display:none}
+
+/* ---- catalogue: search, filters, sort ----------------------------------------------------- */
+.edRoot .edBrowse{flex:none;display:grid;grid-template-columns:1fr auto auto;gap:6px;padding:8px 10px 2px;align-items:center}
+.edRoot .edSearch{display:flex;align-items:center;gap:6px;min-width:0;height:40px;padding:0 6px 0 10px;border-radius:14px;border:1px solid var(--ed-line);background:#ffffff10;color:var(--ed-dim)}
+.edRoot .edSearch:focus-within{border-color:var(--ed-gold);box-shadow:0 0 0 2px #f5c75a33}
+.edRoot .edSearch svg{width:17px;height:17px}
+.edRoot .edSearch input{flex:1;min-width:0;height:100%;border:0;background:transparent;color:var(--ed-ink);outline:none;font:inherit;font-size:16px}
+.edRoot .edSearch input::-webkit-search-cancel-button{display:none}
+.edRoot .edSearch button{min-width:32px;min-height:32px;border:0;border-radius:10px;background:#ffffff1a;color:var(--ed-ink);display:grid;place-items:center;padding:0}
+.edRoot .edFilters{grid-column:1/-1;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;order:3}
+.edRoot .edFilters::-webkit-scrollbar{display:none}
+.edRoot .edFilters button{flex:none;min-height:34px;padding:0 13px;border-radius:999px;border:1px solid var(--ed-line);background:#ffffff10;color:#cfe3ea;font-weight:800;font-size:12px}
+.edRoot .edFilters button[aria-checked=true]{background:var(--ed-gold);border-color:var(--ed-gold);color:var(--ed-on)}
+.edRoot .edSorts{display:contents}
+.edRoot .edBrowse select{height:40px;max-width:118px;border-radius:12px;border:1px solid var(--ed-line);background:#12303f;color:var(--ed-ink);font:inherit;font-size:13px;font-weight:700;padding:0 6px}
+.edRoot .edFiltBtn{display:none;position:relative;min-width:44px;min-height:40px;border-radius:12px;border:1px solid var(--ed-line);background:#ffffff10;color:var(--ed-ink);place-items:center;padding:0}
+.edRoot .edFiltBtn svg{width:19px;height:19px}
+.edRoot .edFiltBtn.on::after{content:"";position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:var(--ed-gold)}
+.edRoot .edFiltBtn[aria-expanded=true]{border-color:var(--ed-gold)}
+.edRoot:not(.side) .edBrowse,.edRoot.side.phone .edBrowse{grid-template-columns:1fr auto}
+.edRoot:not(.side) .edFiltBtn,.edRoot.side.phone .edFiltBtn{display:grid}
+.edRoot:not(.side) .edBrowse:not(.open) .edFilters,.edRoot:not(.side) .edBrowse:not(.open) .edSorts,.edRoot.side.phone .edBrowse:not(.open) .edFilters,.edRoot.side.phone .edBrowse:not(.open) .edSorts{display:none}
+.edRoot:not(.side) .edBrowse.open .edSorts,.edRoot.side.phone .edBrowse.open .edSorts{display:flex;grid-column:1/-1;gap:6px;order:4}
+.edRoot:not(.side) .edBrowse.open .edSorts select,.edRoot.side.phone .edBrowse.open .edSorts select{flex:1;max-width:none}
+.edRoot.phone .cePanel.ed-half .ceInfo{max-height:92px;padding-top:6px;padding-bottom:6px}
+.edRoot.phone .ceCatTitle{margin:4px 12px 2px}
+.edRoot .edEmpty{grid-column:1/-1;margin:6px 2px;color:var(--ed-dim);font-size:12px;line-height:1.4}
+
+/* ---- Body tab: quick shape ------------------------------------------------------------- */
+.edRoot .edSteps{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px}
+.edRoot .edStep{display:flex;align-items:center;gap:4px;padding:3px 3px 3px 10px;border-radius:14px;background:#ffffff0d;border:1px solid var(--ed-line)}
+.edRoot .edStep span{flex:1;font-weight:800;font-size:12px}
+.edRoot .ceGroup .edStep button{min-width:44px;min-height:40px;padding:0;border-radius:11px;display:grid;place-items:center}
+.edRoot .ceGroup button{display:inline-flex;align-items:center;gap:6px;min-height:44px}
+.edRoot .ceLeg button{min-width:40px;justify-content:center}
+
+/* ---- stats: compact on phones, a sheet when opened -------------------------------------- */
+.edRoot .edStatsToggle{display:none}
+.edRoot .ceStats h3{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.edRoot .edDiet{padding:2px 8px;border-radius:999px;font-size:11px;font-weight:900}
+.edRoot .edDiet.diet-plant{background:var(--ce-plant)}.edRoot .edDiet.diet-meat{background:var(--ce-meat)}.edRoot .edDiet.diet-omni{background:var(--ce-omni);color:#201604}
+.edRoot .edCaps{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 6px}
+.edRoot .edCaps span{font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;background:#ffffff18;color:#dbeaf0}
+.edRoot .edWhy{margin:4px 0 2px;font-size:10.5px;color:#d6e6ec;line-height:1.35}
+.edRoot .ceStat .edNum{display:none}
+.edRoot.side .ceStats{top:calc(var(--ce-top,60px) + 8px);overflow:auto;max-height:calc(var(--ed-vh) - var(--ce-top,60px) - 24px)}
+.edRoot.mode-paint .ceStats .edStatsMore{display:none}
+.edRoot:not(.side) .ceStats{top:calc(var(--ce-top,60px) + 8px);bottom:auto;left:max(8px,env(safe-area-inset-left));right:auto;width:auto;max-width:min(62vw,300px);padding:6px 46px 6px 10px;display:block;font-size:11px}
+.edRoot:not(.side) .ceStats h3{margin:0;font-size:12px}
+.edRoot:not(.side) .ceStats .edCaps{margin:3px 0 0}
+.edRoot:not(.side) .edStatsMore{display:none}
+.edRoot:not(.side) .edStatsToggle{display:grid;place-items:center;position:absolute;top:4px;right:4px;width:36px;height:36px;padding:0;border-radius:12px;border:1px solid var(--ed-line);background:#ffffff14;color:var(--ed-ink)}
+.edRoot:not(.side) .edStatsToggle svg{width:18px;height:18px}
+.edRoot:not(.side).statsOpen .ceStats{z-index:6;max-width:none;right:max(8px,env(safe-area-inset-right));max-height:calc(var(--ed-vh) * .62);overflow:auto;padding:10px 12px;background:var(--ed-solid);box-shadow:0 14px 40px #000a}
+.edRoot:not(.side).statsOpen .edStatsMore{display:block}
+.edRoot:not(.side).statsOpen .ceStats h4{display:block}
+.edRoot:not(.side).statsOpen .ceStats .ceStat{display:flex}
+.edRoot:not(.side).statsOpen .ceStats .ceMouthRows,.edRoot:not(.side).statsOpen .ceStats .ceSpecial{display:block}
+.edRoot:not(.side) .ceStats .ceStat .edNum{display:none}
+
+/* ---- the selected part's toolbar --------------------------------------------------------- */
+.edRoot .edCtx{pointer-events:auto;position:fixed;left:0;top:0;z-index:4;display:flex;align-items:center;gap:4px;padding:5px;border-radius:20px 18px 21px 17px;background:var(--ed-solid);border:1px solid #f5c75a66;box-shadow:0 10px 28px #000a;transition:transform .12s ease-out}
+.edRoot .edCtx[hidden]{display:none}
+.edRoot .edCtxName{font-size:11.5px;color:#ffe2a8;padding:0 6px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.edRoot .edCtx button{min-width:48px;min-height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:0 6px;border:0;border-radius:14px;background:#ffffff12;color:var(--ed-ink);font-size:10px;font-weight:800}
+.edRoot .edCtx button svg{width:19px;height:19px}
+.edRoot .edCtx button[aria-pressed=true]{background:#3fc26e;color:#06210f}
+.edRoot .edCtx button.danger{background:#7a2a26;color:#ffd9d4}
+.edRoot .edCtx button:disabled{opacity:.38}
+.edRoot.placing .edCtx,.edRoot.mode-test .edCtx,.edRoot.mode-paint .edCtx{display:none}
+@media (max-width:380px){.edRoot .edCtxName{display:none}}
+.edRoot .ceGrip.girth{background:#ffd25e;border-radius:12px;width:38px}
+
+/* ---- exact numbers ------------------------------------------------------------------------- */
+.edRoot .edDetails{pointer-events:auto;position:absolute;z-index:7;left:50%;transform:translateX(-50%);top:calc(var(--ce-top,60px) + 60px);width:min(94vw,380px);padding:10px 14px 12px;border-radius:20px;background:var(--ed-solid);border:1px solid var(--ed-line);box-shadow:0 18px 50px #000b}
+.edRoot .edDetails h4{display:flex;align-items:center;justify-content:space-between;margin:0 0 6px;font-size:14px}
+.edRoot .edX{min-width:40px;min-height:40px;border:0;border-radius:12px;background:#ffffff14;color:var(--ed-ink);display:grid;place-items:center;padding:0}
+.edRoot .edField{display:grid;grid-template-columns:92px 1fr 62px 14px;gap:8px;align-items:center;margin:6px 0;font-size:12px;color:var(--ed-dim)}
+.edRoot .edField input[type=number]{height:36px;border-radius:10px;border:1px solid var(--ed-line);background:#ffffff10;color:var(--ed-ink);padding:0 6px;font:inherit;font-size:16px;width:100%}
+.edRoot .edField em{font-style:normal}
+.edRoot .edNote{margin:6px 0 0;font-size:11.5px;color:var(--ed-dim)}
+
+/* ---- paint ---------------------------------------------------------------------------------- */
+.edRoot .ceTab[data-pane=paint]{padding:8px 12px 14px}
+.edRoot .edLayers{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.edRoot .edLayers button{min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:16px 14px 17px 13px;border:1px solid var(--ed-line);background:#ffffff0e;color:var(--ed-ink);font-size:11.5px;padding:4px}
+.edRoot .edLayers button i{width:26px;height:26px;border-radius:50%;border:2px solid #ffffffaa;box-shadow:0 2px 6px #0007}
+.edRoot .edLayers button[aria-checked=true]{border-color:var(--ed-gold);background:#f5c75a22;box-shadow:0 0 0 2px #f5c75a55}
+.edRoot .edLayerTools{display:flex;align-items:center;gap:6px;margin:8px 0;font-size:11.5px;color:var(--ed-dim)}
+.edRoot .edLayerTools>span{flex:1}
+.edRoot .edLayerTools button{min-height:40px;display:inline-flex;align-items:center;gap:5px;padding:0 10px;border-radius:12px;border:1px solid var(--ed-line);background:#ffffff12;color:var(--ed-ink);font-weight:800;font-size:12px}
+.edRoot .edLayerTools button i{width:14px;height:14px;border-radius:50%;border:1px solid #fff9}
+.edRoot .edLayerTools button:disabled{opacity:.4}
+.edRoot .edPatterns{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.edRoot .edPatterns button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:5px 3px;min-height:64px;border-radius:14px;border:1px solid var(--ed-line);background:#ffffff0c;color:var(--ed-ink);font-size:11px;font-weight:800}
+.edRoot .edPatterns button i{width:100%;max-width:56px;height:34px;border-radius:10px;background:var(--pa);border:1px solid #ffffff55}
+.edRoot .edPatterns .pat-speckle i{background:radial-gradient(circle at 20% 30%,var(--pb) 0 2px,transparent 3px),radial-gradient(circle at 60% 60%,var(--pb) 0 2px,transparent 3px),radial-gradient(circle at 80% 25%,var(--pc) 0 2px,transparent 3px),radial-gradient(circle at 40% 80%,var(--pb) 0 1.5px,transparent 2.5px),var(--pa)}
+.edRoot .edPatterns .pat-spots i{background:radial-gradient(circle at 25% 35%,var(--pb) 0 5px,transparent 6px),radial-gradient(circle at 70% 60%,var(--pb) 0 6px,transparent 7px),radial-gradient(circle at 52% 22%,var(--pc) 0 3px,transparent 4px),var(--pa)}
+.edRoot .edPatterns .pat-stripes i{background:repeating-linear-gradient(100deg,var(--pa) 0 7px,var(--pb) 7px 11px)}
+.edRoot .edPatterns .pat-gradient i{background:linear-gradient(180deg,var(--pa),var(--pb))}
+.edRoot .edPatterns .pat-glow i{background:radial-gradient(circle at 30% 50%,var(--pb),transparent 60%),radial-gradient(circle at 75% 40%,var(--pc),transparent 45%),var(--pa);box-shadow:inset 0 0 10px var(--pb)}
+.edRoot .edPatterns button[aria-checked=true]{border-color:var(--ed-gold);box-shadow:0 0 0 2px #f5c75a55;background:#f5c75a1c}
+.edRoot .ceGroup h5{display:flex;align-items:center;justify-content:space-between;margin:10px 0 5px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#cfe3ea}
+.edRoot .edSchemes{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px}
+.edRoot .edScheme{min-height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:5px;border-radius:14px;border:1px solid var(--ed-line);background:#ffffff0c;color:var(--ed-ink);font-size:11px;font-weight:700}
+.edRoot .edDots{display:flex}
+.edRoot .edDots i{width:16px;height:16px;border-radius:50%;margin-left:-4px;border:1.5px solid #0b1d2b}
+.edRoot .edDots i:first-child{margin-left:0}
+.edRoot .edSmall{min-height:34px!important;padding:0 10px!important;font-size:11px!important;letter-spacing:0;text-transform:none;border-radius:10px!important}
+
+/* The colour picker */
+.edPicker{display:grid;gap:10px}
+.edPicker .edPickRow{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:stretch}
+.edPicker .edSV{position:relative;height:150px;border-radius:16px;background:linear-gradient(to top,#000,transparent),linear-gradient(to right,#fff,var(--hue));border:1px solid #ffffff44;touch-action:none;cursor:crosshair;box-shadow:inset 0 0 0 1px #0003}
+.edPicker .edSVThumb,.edPicker .edHueThumb{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px #0008,0 3px 8px #0009;pointer-events:none;transition:transform .1s}
+.edPicker .held .edSVThumb,.edPicker .held .edHueThumb{transform:scale(1.25)}
+.edPicker .edHue{position:relative;height:30px;border-radius:15px;background:linear-gradient(90deg,#f00,#ff0 17%,#0f0 33%,#0ff 50%,#00f 67%,#f0f 83%,#f00);touch-action:none;border:1px solid #ffffff44}
+.edPicker .edHueThumb{top:50%;background:transparent}
+.edPicker .edPickSide{display:flex;flex-direction:column;gap:8px;width:96px}
+.edPicker .edPickNow{flex:1;border-radius:16px;border:2px solid #ffffffaa;box-shadow:inset 0 0 0 1px #0004}
+.edPicker .edHex{display:flex;align-items:center;height:40px;border-radius:12px;border:1px solid #ffffff33;background:#ffffff10;padding:0 6px;color:#a9c0c9;font-weight:800}
+.edPicker .edHex input{width:100%;min-width:0;border:0;background:transparent;color:#fff;font:inherit;font-size:16px;text-transform:uppercase;outline:none}
+.edPicker .edSwatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(38px,1fr));gap:6px}
+.edPicker .edSwatches button{aspect-ratio:1;min-height:38px;border-radius:50%;border:2px solid #ffffff44;background:var(--c);padding:0}
+.edPicker .edSwatches button[aria-checked=true]{border-color:#fff;box-shadow:0 0 0 3px var(--ed-gold,#f5c75a)}
+.edPicker .edRecentWrap small{display:block;margin-bottom:4px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#a9c0c9}
+.edPicker .edRecentWrap[hidden]{display:none}
+.edPicker .edSV:focus-visible,.edPicker .edHue:focus-visible{outline:3px solid #ffd98a;outline-offset:2px}
+@media (pointer:coarse){.edPicker .edHex{display:none}.edPicker .edPickSide{width:64px}}
+
+/* ---- test drive ------------------------------------------------------------------------------ */
+.edRoot .ceTestBar{display:grid;gap:8px;justify-items:center;width:min(96vw,720px);padding:8px;border-radius:22px;background:var(--ed-glass);border:1px solid var(--ed-line);box-shadow:0 12px 34px #0008;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.edRoot .ceTestBar[hidden]{display:none}
+.edRoot .edMotions,.edRoot .edAbilities{display:flex;gap:6px;max-width:100%;overflow-x:auto;scrollbar-width:none}
+.edRoot .edMotions::-webkit-scrollbar,.edRoot .edAbilities::-webkit-scrollbar{display:none}
+.edRoot .edMotions button{flex:none;min-height:42px;padding:0 16px;border-radius:999px;border:1px solid var(--ed-line);background:#ffffff12;color:var(--ed-ink);font-weight:800;font-size:13px}
+.edRoot .edMotions button[aria-checked=true]{background:linear-gradient(var(--ed-gold2),var(--ed-gold));color:var(--ed-on);border-color:#ffe9a8}
+.edRoot .ceTestBar .edAbilities button{flex:none;min-height:48px;min-width:64px;font-size:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:4px 10px;border-radius:14px}
+.edRoot .ceTestBar .edMotions button,.edRoot .ceTestBar .edBackBuild{display:inline-flex;flex-direction:row;align-items:center;justify-content:center;font-size:13px}
+.edRoot .edBackBuild{min-height:42px;display:inline-flex;align-items:center;gap:6px;padding:0 16px;border-radius:999px;border:1px solid #f5c75a88;background:#f5c75a22;color:#ffe2a8;font-weight:900}
+.edRoot .edBackBuild svg{width:18px;height:18px}
+.edRoot.mode-test .ceTestBar{left:50%;transform:translateX(-50%);bottom:calc(14px + var(--ed-safe-b))}
+.edRoot.phone.mode-test .ceTestBar{bottom:calc(var(--ed-navh,64px) + 8px)}
+.edRoot.side.mode-test .ceTestBar{left:calc((100% - 214px) / 2)}
+.edRoot.mode-test .ceGrips,.edRoot.mode-paint .ceGrips{display:none}
+
+/* ---- recovery banner, dialogs and tips ---------------------------------------------------------- */
+.edRoot .edRecover{pointer-events:auto;position:absolute;z-index:7;left:50%;transform:translateX(-50%);top:calc(var(--ce-top,60px) + 10px);width:min(94vw,460px);padding:12px 14px;border-radius:18px;background:#0b1d2bf5;border:1px solid #4aa3ff88;box-shadow:0 14px 40px #000a}
+.edRoot .edRecover[hidden]{display:none}
+.edRoot .edRecover p{margin:0 0 8px;font-size:13px;line-height:1.4;color:#dbeaf0}
+.edRoot .edRecover div{display:flex;justify-content:flex-end;gap:8px}
+.edRoot .edRecover button,.edRoot .edDlgBtns button,.edRoot .edTipBtns button{min-height:44px;padding:0 16px;border-radius:14px;border:1px solid var(--ed-line);background:#ffffff14;color:var(--ed-ink);font-weight:800}
+.edRoot .edRecover .primary,.edRoot .edDlgBtns .primary,.edRoot .edTipBtns .primary{background:linear-gradient(var(--ed-gold2),var(--ed-gold));color:var(--ed-on);border-color:#ffe9a8}
+.edRoot .edDlgBtns .danger{background:var(--ed-danger);border-color:#ff8a7e;color:#fff}
+.edRoot .edModal{pointer-events:auto;position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:16px;background:#020a14a6;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+.edRoot .edDialog{width:min(92vw,380px);padding:18px;border-radius:22px;background:var(--ed-solid);border:1px solid var(--ed-line);box-shadow:0 24px 60px #000c;animation:edIn .2s ease-out}
+.edRoot .edDialog h3{margin:0 0 6px;font-size:17px}
+.edRoot .edDialog p{margin:0 0 14px;color:#cfe0e6;line-height:1.45;font-size:13.5px}
+.edRoot .edDlgBtns{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.edRoot .edTips{pointer-events:auto;position:absolute;z-index:9;left:50%;transform:translateX(-50%);top:calc(var(--ce-top,60px) + 70px);width:min(92vw,400px);padding:14px 16px 12px;border-radius:22px 20px 23px 19px;background:linear-gradient(#173a4d,#0b1d2b);border:1px solid #f5c75a77;box-shadow:0 18px 50px #000b;animation:edIn .25s ease-out}
+.edRoot .edTips h4{margin:2px 0 4px;font-size:15px;color:#ffe2a8}
+.edRoot .edTips p{margin:0 0 10px;font-size:13px;line-height:1.45;color:#dbeaf0}
+.edRoot .edTipBtns{display:flex;align-items:center;gap:8px}.edRoot .edTipBtns span{flex:1}
+.edRoot .edTipBtns [data-a=off]{background:transparent;border-color:transparent;color:var(--ed-dim);font-weight:700;padding:0 6px}
+.edRoot .edTipDots{display:flex;gap:5px}.edRoot .edTipDots i{width:7px;height:7px;border-radius:50%;background:#ffffff33}.edRoot .edTipDots i.on{background:var(--ed-gold)}
+.edRoot.phone .edTips{top:auto;bottom:calc(var(--ed-navh,64px) + 12px)}
+
+/* ---- ghost of a part being dragged from the catalogue ----------------------------------------- */
+.edRoot .ceGhost{transition:border-color .12s,transform .12s;transform:scale(1.05)}
+.edRoot .ceGhost.ok{border-color:#ffe08a;transform:scale(1.18);box-shadow:0 0 0 4px #ffe08a44}
+
+/* ---- motion -------------------------------------------------------------------------------- */
+@keyframes edIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes edPopK{0%{transform:scale(.9)}55%{transform:scale(1.06)}100%{transform:scale(1)}}
+.edRoot .edPop:not([hidden]){animation:edIn .16s ease-out}
+.edRoot .edPop.edPop,.edRoot button.edPop{animation:edPopK .3s ease-out}
+.edRoot .edTips,.edRoot .edDetails{animation:edIn .22s ease-out}
+.edRoot .ceTab{animation:edFade .18s ease-out}
+@keyframes edFade{from{opacity:.4}to{opacity:1}}
+.edRoot button:focus-visible,.edRoot input:focus-visible,.edRoot select:focus-visible{outline:3px solid #ffd98a;outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.edRoot *,.edRoot{animation:none!important;transition:none!important}}
+body.reducedMotion .edRoot *{animation:none!important;transition:none!important}
+
+/* ---- keyboard up (iOS): keep the name field and dialogs in view --------------------------- */
+.edRoot.edKeyboard .cePanel,.edRoot.edKeyboard .edModes{visibility:hidden}
+
+/* ---- short landscape phones: a slimmer top and nav ---------------------------------------- */
+@media (max-height:500px){
+  .edRoot{--ed-nav:50px}
+  .edRoot.phone .edModes button{min-height:44px;flex-direction:row;gap:5px}
+  .edRoot .edTop{padding-top:calc(3px + var(--ed-safe-t));padding-bottom:3px}
+  .edRoot.phone .cePanel.ed-half{--ed-sheet-h:calc(var(--ed-vh) * .5)}
+  .edRoot .ceTestBar{gap:5px;padding:6px;width:min(96vw,760px)}
+  .edRoot .ceTestBar .edBackBuild{display:none}
+  .edRoot .ceTestBar .edMotions button{min-height:38px}
+  .edRoot .ceTestBar .edAbilities button{min-height:40px;flex-direction:row;gap:5px}
+}
+.edRoot .edPlan{white-space:nowrap}
+@media (max-width:560px){
+  .edRoot .edBack span{display:none}.edRoot .edBack{padding:0;width:44px}
+  .edRoot .edStatus{position:absolute;left:max(8px,env(safe-area-inset-left));top:calc(100% + 6px);gap:6px}
+  .edRoot .edStatus .ceDna{background:#0b1d2bd9;border:1px solid var(--ed-line);border-radius:999px;padding:3px 9px;font-size:12px}
+  .edRoot .edStatus .edSaveState{background:#0b1d2bd9}
+  .edRoot:not(.side) .ceStats{top:calc(var(--ce-top,60px) + 40px)}
+  .edRoot.phone .ceHint{top:calc(var(--ce-top,60px) + 118px)}
+}
+
+/* ---- the construction workshop (buildings, vehicles, spaceships) ---------------------------- */
+.mdEditor.edRoot .ceTab[data-pane=parts]{display:flex;flex-direction:column;overflow:hidden;padding:0 10px 10px}
+.mdEditor.edRoot .ceTab[data-pane=parts][hidden]{display:none}
+.mdEditor.edRoot .mdBrowse{grid-template-columns:1fr;padding:6px 0 6px}
+.mdEditor.edRoot .ceChips{flex:none}
+.mdEditor.edRoot .ceCards{display:grid;grid-template-columns:repeat(auto-fill,minmax(98px,1fr));grid-auto-rows:auto;align-content:start;gap:8px;overflow-y:auto;overflow-x:hidden;flex:1 1 0;min-height:90px;padding:2px 2px 8px;touch-action:pan-y}
+.mdEditor.edRoot .cePart{width:auto;flex:none;min-height:104px;border-radius:16px 14px 17px 13px;background:radial-gradient(circle at 50% 35%,#2c5a70,#173448 65%,#10283a);touch-action:pan-y}
+.mdEditor.edRoot .cePart small{color:#cfe0e6}
+.mdEditor.edRoot.mode-paint .ceTabs{display:none}
+.mdEditor.edRoot .ceTabs button{min-height:44px}
+.mdEditor.edRoot .mdSlots{grid-template-columns:repeat(3,1fr);margin-bottom:10px}
+.mdEditor.edRoot .mdSlots button{flex-direction:column;gap:3px}
+.mdEditor.edRoot .mdSlots i{width:26px;height:26px;border:2px solid #ffffffaa}
+.mdEditor.edRoot .mdPartPaint button{display:inline-flex;align-items:center;gap:6px}
+.mdEditor.edRoot .mdPartPaint i{width:14px;height:14px;border-radius:50%;border:1px solid #fff9}
+.mdEditor.edRoot .ceTab[data-pane=paint],.mdEditor.edRoot .ceTab[data-pane=style]{padding:10px 12px 14px;overflow:auto}
+.mdEditor.edRoot .mdTools{z-index:4;border-radius:22px 18px 21px 19px;background:var(--ed-solid);box-shadow:0 10px 28px #000a}
+.mdEditor.edRoot .mdTools button svg{width:19px;height:19px}
+.mdEditor.edRoot .mdPad button{min-width:44px;min-height:44px;display:inline-grid;place-items:center}
+.mdEditor.edRoot.side .mdTools{left:calc(var(--ce-side) + (100% - var(--ce-side) - 214px) / 2)}
+.mdEditor.edRoot.mode-test .mdTools,.mdEditor.edRoot.mode-paint .mdTools,.mdEditor.edRoot.placing .mdTools{display:none}
+.mdEditor.edRoot.side .mdStats{top:calc(var(--ce-top,60px) + 8px);width:200px}
+.mdEditor.edRoot .mdTestNote{margin:0;font-size:12.5px;color:#dbeaf0;text-align:center}
+.mdEditor.edRoot:not(.side) .mdStats{top:calc(var(--ce-top,60px) + 6px)}
+.mdEditor.edRoot.phone .mdStats{top:calc(var(--ce-top,60px) + 40px)}
+.mdEditor.edRoot.phone .edViewTools #mdSnap span{display:none}
+.mdEditor.edRoot.mode-test .edViewTools #mdSnap,.mdEditor.edRoot.mode-paint .edViewTools #mdSnap{display:none}
+.mdEditor.edRoot.md-kind-ship{--ed-gold:#7fd8ff;--ed-gold2:#bdf0ff}
+.mdEditor.edRoot .mdStats{position:absolute}
+.mdEditor.edRoot:not(.side) .mdStats{left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));width:auto;padding-right:50px;display:block}
+.mdEditor.edRoot:not(.side):not(.statsOpen) .mdStats .ceStat,.mdEditor.edRoot:not(.side):not(.statsOpen) .mdStats .mdClass{display:none}
+.mdEditor.edRoot:not(.side) .mdStats h3,.mdEditor.edRoot:not(.side) .mdStats .mdMode{display:inline-block;margin:0 8px 0 0}
+.mdEditor.edRoot:not(.side) .mdStats .mdReady,.mdEditor.edRoot:not(.side) .mdStats .mdProblems{margin:2px 0 0}
+.mdEditor.edRoot:not(.side) .edStatsToggle{display:grid}
+.mdEditor.edRoot.statsOpen:not(.side) .mdStats{z-index:6;background:var(--ed-solid);box-shadow:0 14px 40px #000a}
+.mdEditor.edRoot.statsOpen:not(.side) .mdStats .ceStat{display:flex}
+
+/* ---- phones on their side: catalogue on the left, mode bar along the bottom ----------------- */
+.edRoot.side.phone{--ce-side:clamp(260px,36vw,320px)}
+.edRoot.side.phone .cePanel{bottom:var(--ed-navh,56px);border-radius:0 22px 22px 0;padding-bottom:0}
+.edRoot.side.phone .edModes{grid-template-columns:repeat(5,minmax(0,140px));justify-content:center}
+.edRoot.side.phone .edViewTools{left:auto;right:max(8px,env(safe-area-inset-right));bottom:calc(var(--ed-navh,56px) + 8px)}
+.edRoot.side.phone .ceHint{right:12px}
+.edRoot.side.phone .ceStats{top:calc(var(--ce-top,60px) + 8px);left:auto;right:max(8px,env(safe-area-inset-right));width:auto;max-width:240px;max-height:none;overflow:visible;padding:6px 46px 6px 10px}
+.edRoot.side.phone .ceStats h3{margin:0;font-size:12px}
+.edRoot.side.phone:not(.statsOpen) .edStatsMore{display:none}
+.edRoot.side.phone .edStatsToggle{display:grid;place-items:center;position:absolute;top:4px;right:4px;width:36px;height:36px;padding:0;border-radius:12px;border:1px solid var(--ed-line);background:#ffffff14;color:var(--ed-ink)}
+.edRoot.side.phone .edStatsToggle svg{width:18px;height:18px}
+.edRoot.side.phone.statsOpen .ceStats{z-index:6;max-height:calc(var(--ed-vh) - var(--ce-top,60px) - var(--ed-navh,56px) - 16px);overflow:auto;background:var(--ed-solid)}
+.edRoot.side.phone .edViewMenu{left:auto;right:max(8px,env(safe-area-inset-right));bottom:calc(var(--ed-navh,56px) + 64px);top:auto}
+.edRoot.side.phone.mode-test .ceTestBar{left:50%;bottom:calc(var(--ed-navh,56px) + 6px)}
+.edRoot.side.phone .edStatus{position:static}
+.mdEditor.edRoot.side.phone .mdStats{left:auto;right:max(8px,env(safe-area-inset-right));width:auto;max-width:260px;padding-right:50px}
+.mdEditor.edRoot.side.phone:not(.statsOpen) .mdStats .ceStat,.mdEditor.edRoot.side.phone:not(.statsOpen) .mdStats .mdClass{display:none}
+.mdEditor.edRoot.side.phone .edStatsToggle{display:grid}
+.mdEditor.edRoot.side.phone.statsOpen .mdStats{z-index:6;background:var(--ed-solid)}
+.mdEditor.edRoot.side.phone .mdTools{left:calc(var(--ce-side) + (100% - var(--ce-side)) / 2)}
+/* On phones the part toolbar is one slim row that scrolls sideways, so the model keeps its space. */
+.mdEditor.edRoot:not(.side) .mdTools{flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;scrollbar-width:none;width:calc(100% - 16px);max-width:640px;padding:5px 6px;gap:6px;touch-action:pan-x}
+.mdEditor.edRoot:not(.side) .mdTools::-webkit-scrollbar{display:none}
+.mdEditor.edRoot:not(.side) .mdSel{flex:none;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.mdEditor.edRoot:not(.side) .mdPad{flex-wrap:nowrap;flex:none}
+.edRoot.side.phone #ceParts,.edRoot.side.phone #mdParts{display:none!important}
+.edRoot.side.phone .edModes{grid-template-columns:repeat(4,minmax(0,150px))}
+
+/* ---- Cell Creator paint sheet ------------------------------------------------------------ */
+.edCellPaint{position:fixed;z-index:40;left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));bottom:calc(66px + env(safe-area-inset-bottom));max-height:calc(var(--ed-vh) * .5);overflow:auto;padding:8px 12px 12px;border-radius:22px;background:linear-gradient(#12303fee,#0b1d2bf5);border:1px solid var(--ed-line);box-shadow:0 14px 40px #000a;color:#fff;touch-action:pan-y;animation:edIn .22s ease-out;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.edCellPaint .edCellHead{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.edCellPaint .edCellHead b{font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:#ffe2a8}
+.edCellPaint .edCellHead span{flex:1;font-size:11.5px;color:var(--ed-dim)}
+.edCellPaint .edLayers{grid-template-columns:repeat(3,1fr);margin-bottom:10px}
+.edCellPaint .edPatterns{margin-top:10px}
+.edCellPaint .edPicker .edSV{height:120px}
+@media (min-width:760px){.edCellPaint{left:24px;right:auto;top:120px;bottom:auto;width:360px;max-height:calc(var(--ed-vh) - 230px)}}
+@media (max-height:520px){.edCellPaint{left:auto;right:max(8px,env(safe-area-inset-right));top:56px;bottom:calc(62px + env(safe-area-inset-bottom));width:min(360px,46vw);max-height:none}}
+@media (max-width:759px) and (min-height:521px){
+  .edCellPaint{max-height:calc(var(--ed-vh) * .46);padding:6px 10px 10px}
+  .edCellPaint .edCellHead span{display:none}
+  .edCellPaint .edLayers button{min-height:44px;flex-direction:row;gap:6px}
+  .edCellPaint .edLayers button i{width:20px;height:20px}
+  .edCellPaint .edPicker{gap:8px}
+  .edCellPaint .edPicker .edSV{height:92px}
+  .edCellPaint .edPicker .edSwatches{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:38px;overflow-x:auto;scrollbar-width:none;padding:2px}
+  .edCellPaint .edPatterns button{min-height:52px}
+  .edCellPaint .edPatterns button i{height:24px}
+}
+.edCellPaint .edCellHead .edX{margin-left:auto}
+
+/* ---- creation library (Sporepedia) actions -------------------------------------------------- */
+.pd .pdSecondary.pdDanger,.pd .pdPrimary.pdDanger{background:#7a2a26;border:1px solid #c9483c;color:#fff}
+.pd .pdConfirm{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;padding:10px 12px;border-radius:14px;background:#2a1416;border:1px solid #c9483c88}
+.pd .pdConfirm[hidden]{display:none}
+.pd .pdConfirm p{flex:1 1 100%;margin:0 0 4px;color:#ffd9d4}

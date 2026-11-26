@@ -5,11 +5,11 @@
  *   ocean/turquoise  the planet, looking and moving       leaf green  building, agreeing, good news
  *   orange & gold    money, spice, important actions      red         danger, war, hostility
  *   purple           faith and the strange                 brown/navy  text
- * Everything here is scoped to .civHUD (the Civilization Stage's interface) and to the building and
- * vehicle editors (.mdEditor.md-building / .md-vehicle), so the other stages keep their own look.
+ * Everything here is scoped to .civHUD (the Civilization Stage's interface), so the other stages keep
+ * their own look. (The building and vehicle editors share every editor's design system: editor/editor.css.)
  * Selectors start ".tribeHUD.civHUD" so they win over the shared tribal HUD rules they restyle.
  */
-.civHUD,.mdEditor.md-vehicle,.mdEditor.md-building{
+.civHUD{
   --cv-cream:#fff6e3;--cv-cream2:#f7e6c4;--cv-cream3:#eccf9c;--cv-edge:#b88a4e;--cv-edge2:#8f6434;
   --cv-ink:#3a2414;--cv-ink2:#6e4f33;--cv-ink3:#9b7a58;--cv-navy:#1d3550;
   --cv-ocean:#2aa6c8;--cv-ocean2:#17799a;--cv-sky:#bff0ff;
@@ -550,41 +550,6 @@
 .civHUD.calm *,.civHUD.calm *::before,.civHUD.calm *::after{animation-duration:.001s!important;animation-iteration-count:1!important;transition-duration:.001s!important}
 @media (prefers-reduced-motion:reduce){.civHUD *,.civHUD *::before,.civHUD *::after{animation-duration:.001s!important;animation-iteration-count:1!important;transition-duration:.001s!important}}
 
-/* ---- the building and vehicle editors: a sibling of the creature creator ------------------------- */
-.mdEditor.md-vehicle,.mdEditor.md-building{color:var(--cv-ink);font-family:var(--cv-font)}
-.mdEditor.md-vehicle .ceTop,.mdEditor.md-building .ceTop{background:linear-gradient(#fff6e3f5,#fff6e3d0);border-bottom:3px solid var(--cv-edge);box-shadow:0 4px 0 #6e4f3322}
-.mdEditor.md-vehicle #mdName,.mdEditor.md-building #mdName{flex:1 1 140px;min-width:0;border:2.5px solid var(--cv-edge);background:#fff;color:var(--cv-ink);border-radius:14px 12px 15px 11px;padding:9px 12px;font:inherit;font-weight:900;font-size:16px;box-shadow:inset 0 2px 3px #0001}
-.mdEditor.md-vehicle .ceDna,.mdEditor.md-building .ceDna{color:var(--cv-gold2);background:#fff3d0;border:2px solid #ffd77a;border-radius:12px;padding:4px 10px}
-.mdEditor.md-vehicle .ceTopBtns button,.mdEditor.md-building .ceTopBtns button{border:2.5px solid var(--cv-edge);border-radius:14px;background:linear-gradient(#fff,var(--cv-cream2));color:var(--cv-ink);box-shadow:0 3px 0 var(--cv-edge2);font-weight:900;min-height:42px}
-.mdEditor.md-vehicle .ceTopBtns button.primary,.mdEditor.md-building .ceTopBtns button.primary{background:linear-gradient(#8fe26f,var(--cv-leaf));border-color:var(--cv-leaf2);box-shadow:0 3px 0 var(--cv-leaf2);color:#fff;text-shadow:0 1px 0 #0005}
-.mdEditor.md-vehicle .ceTopBtns button:active,.mdEditor.md-building .ceTopBtns button:active{transform:translateY(3px);box-shadow:none}
-.mdEditor.md-vehicle .ceHint,.mdEditor.md-building .ceHint{color:var(--cv-ink);text-shadow:0 1px 0 #fff,0 0 6px #fff;font-weight:700}
-.mdEditor.md-vehicle .mdStats,.mdEditor.md-building .mdStats{background:radial-gradient(120% 90% at 18% 0%,#fffdf7,var(--cv-cream) 50%,var(--cv-cream2));border:3px solid var(--cv-edge);border-radius:var(--cv-r);box-shadow:var(--cv-shadow);color:var(--cv-ink)}
-.mdEditor.md-vehicle .mdStats h3,.mdEditor.md-building .mdStats h3{color:var(--cv-ink);font-weight:900}
-.mdEditor.md-vehicle .ceStat,.mdEditor.md-building .ceStat{font-weight:800;color:var(--cv-ink2)}
-.mdEditor.md-vehicle .ceStat i b,.mdEditor.md-building .ceStat i b{width:10px;height:10px;border-radius:3px 4px 3px 4px;background:#e6d3ad}
-.mdEditor.md-vehicle .ceStat i b.on,.mdEditor.md-building .ceStat i b.on{background:linear-gradient(#ffd36a,var(--cv-gold));box-shadow:inset 0 -1px 0 var(--cv-gold2)}
-.mdEditor.md-vehicle .mdReady,.mdEditor.md-building .mdReady{color:var(--cv-leaf2);font-weight:900}
-.mdEditor.md-vehicle .mdProblems,.mdEditor.md-building .mdProblems{color:var(--cv-red2)}
-.mdEditor.md-vehicle .mdMode,.mdEditor.md-vehicle .mdClass{color:var(--cv-ink2)}
-.mdEditor.md-vehicle .cePanel,.mdEditor.md-building .cePanel{background:radial-gradient(120% 90% at 18% 0%,#fffdf7,var(--cv-cream) 45%,var(--cv-cream2));border-top:3px solid var(--cv-edge);border-radius:30px 30px 0 0/26px 26px 0 0;box-shadow:0 -4px 0 #6e4f3318,0 -10px 30px #0003}
-.mdEditor.md-vehicle .ceTabs button,.mdEditor.md-building .ceTabs button{color:var(--cv-ink3);border-radius:14px 14px 0 0}
-.mdEditor.md-vehicle .ceTabs button[aria-selected=true],.mdEditor.md-building .ceTabs button[aria-selected=true]{background:#fff;color:var(--cv-ink);box-shadow:inset 0 -4px var(--cv-gold)}
-.mdEditor.md-vehicle .ceChips button,.mdEditor.md-building .ceChips button{border:2px solid var(--cv-cream3);background:#fff;color:var(--cv-ink2);font-weight:900;box-shadow:0 2px 0 var(--cv-cream3)}
-.mdEditor.md-vehicle .ceChips button[aria-selected=true],.mdEditor.md-building .ceChips button[aria-selected=true]{background:linear-gradient(#7fd8ee,var(--cv-ocean));border-color:var(--cv-ocean2);color:#fff;box-shadow:0 2px 0 var(--cv-ocean2);text-shadow:0 1px 0 #0004}
-.mdEditor.md-vehicle .cePart,.mdEditor.md-building .cePart{border:2.5px solid #9fd8e8;border-radius:18px 15px 19px 14px/15px 19px 14px 18px;background:linear-gradient(#e3f8ff,#fff 60%);color:var(--cv-ink);box-shadow:0 4px 0 #6fb4ca;transition:transform .15s cubic-bezier(.3,1.6,.5,1)}
-.mdEditor.md-vehicle .cePart:hover,.mdEditor.md-building .cePart:hover{transform:translateY(-3px) rotate(-1.5deg)}
-.mdEditor.md-vehicle .cePart:active,.mdEditor.md-building .cePart:active{transform:translateY(3px) scale(.96);box-shadow:none}
-.mdEditor.md-vehicle .cePart:disabled,.mdEditor.md-building .cePart:disabled{filter:saturate(.2);opacity:.6}
-.mdEditor.md-vehicle .cePart small,.mdEditor.md-building .cePart small{color:var(--cv-ink2);font-weight:700}
-.mdEditor.md-vehicle .cePart .thumb img,.mdEditor.md-building .cePart .thumb img{filter:drop-shadow(0 3px 2px #3a241433)}
-.mdEditor.md-vehicle .ceGroup h4,.mdEditor.md-building .ceGroup h4{color:var(--cv-ink);font-weight:900}
-.mdEditor.md-vehicle .ceGroup button,.mdEditor.md-vehicle .ceRow button,.mdEditor.md-building .ceGroup button,.mdEditor.md-building .ceRow button{border:2.5px solid var(--cv-cream3);background:#fff;color:var(--cv-ink);font-weight:900;border-radius:14px;box-shadow:0 3px 0 var(--cv-cream3)}
-.mdEditor.md-vehicle .ceRow button[aria-checked=true],.mdEditor.md-building .ceRow button[aria-checked=true]{background:linear-gradient(#ffe08a,var(--cv-gold));border-color:var(--cv-gold2);box-shadow:0 3px 0 var(--cv-gold2)}
-.mdEditor.md-vehicle .mdNote,.mdEditor.md-building .mdNote{color:var(--cv-ink2)}
-.mdEditor.md-vehicle .mdTools,.mdEditor.md-building .mdTools{background:var(--cv-cream);border:3px solid var(--cv-edge);border-radius:20px;box-shadow:var(--cv-shadow);color:var(--cv-ink)}
-.mdEditor.md-vehicle .mdTools button,.mdEditor.md-building .mdTools button{border:2px solid var(--cv-cream3);background:#fff;color:var(--cv-ink);border-radius:12px;box-shadow:0 2px 0 var(--cv-cream3);font-weight:800}
-.mdEditor.md-vehicle .mdBudget.full,.mdEditor.md-vehicle .ceBudget.full{color:var(--cv-red2)}
 
 /* ---- clearing the older civilization styles these components replace ----------------------------- */
 .tribeHUD.civHUD .cvSpeech{font-style:normal}

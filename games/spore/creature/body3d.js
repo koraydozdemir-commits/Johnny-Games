@@ -98,6 +98,9 @@ function sweepBody(spine, rings, around) {
   return { geometry, surface, head, tail, minX, maxX, maxR };
 }
 
+/** Parts this far off the spine's top or belly line have a mirror twin (see format.js). */
+export const offMidline = (angle) => Math.abs(angle) > 0.15 && Math.abs(angle) < Math.PI - 0.15;
+
 /** Orient a part so its +x points along `outward`, keeping it as upright as possible. */
 function orient(obj, outward, fallbackUp) {
   const x = outward.clone().normalize();
@@ -441,6 +444,7 @@ export function buildCreatureBody(record, opts = {}) {
     mesh.scale.setScalar(scale);
     mesh.userData.baseQuat = mesh.quaternion.clone();
     mesh.userData.glider = (creaturePart(id)?.abilities.glide || 0) > 0;
+    mesh.userData.mirror = mirror;
     if (mirror) {
       // A true mirror image of the other side, not a rotated copy (three.js flips the winding for us).
       const holder = new THREE.Group();
@@ -481,6 +485,7 @@ export function buildCreatureBody(record, opts = {}) {
       m.userData.partIndex = index;
       m.userData.partId = id;
       m.userData.eye = true;
+      m.userData.mirror = mirror;
       partMeshes.push(m);
     });
     if (mirror) {
@@ -498,15 +503,15 @@ export function buildCreatureBody(record, opts = {}) {
     if (EYE_SPECS[p.id]) {
       const s = sweep.surface(p.t, p.angle);
       placeEye(p.id, s.point, s.normal, scale, index, false);
-      if (Math.abs(p.angle) > 0.15 && Math.abs(p.angle) < Math.PI - 0.15) placeEye(p.id, s.point, s.normal, scale, index, true);
+      if (!p.solo && offMidline(p.angle)) placeEye(p.id, s.point, s.normal, scale, index, true);
       return;
     }
     const m = mount(def, p.t, p.angle);
     if (def.slot === "mouth" && m.tip) scale *= Math.max(0.8, sweep.head.r * 2.2);
     place(p.id, m.point, m.out, scale, index, false, p.roll || 0);
     if (def.slot === "mouth") mouth = m.point.clone().addScaledVector(m.out, 0.35);
-    // Anything off the midline gets its mirror twin on the other flank.
-    if (!m.tip && Math.abs(p.angle) > 0.15 && Math.abs(p.angle) < Math.PI - 0.15) place(p.id, m.point, m.out, scale, index, true, p.roll || 0);
+    // Anything off the midline gets its mirror twin on the other flank, unless it was made one-sided.
+    if (!m.tip && !p.solo && offMidline(p.angle)) place(p.id, m.point, m.out, scale, index, true, p.roll || 0);
   });
   mouth.y += lift;
   // Eyes judge directions from the head.
