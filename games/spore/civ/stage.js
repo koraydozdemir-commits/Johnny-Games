@@ -86,6 +86,7 @@ import { installIcons, ico } from "./icons.js";
 import { DOMINANT_SHARE, PERSONALITIES, availableOptions, answer, cityPrice, incoming, leaderName, leaderTitle, MESSAGE_TTL, nudge, pairDecision, pairKey, pairRest, personalityFor, respond, silence } from "./leaders.js";
 import { heritageRemark } from "../heritage.js";
 import { createMinimap } from "./minimap.js";
+import { CIV_TIPS, createStageCoach } from "../tutorials.js";
 import { activeEffects, chooseEvent, nextEventIn, readEvents } from "./events.js";
 
 const TAU = Math.PI * 2;
@@ -1050,6 +1051,9 @@ export function createCivStage(o) {
   function updateNotes(dt) {
     for (const n of [...notes]) if ((n.t -= dt) <= 0) dropNote(n);
   }
+  // First steps as short tips, one at a time, instead of a help sheet on arrival.
+  const coach = createStageCoach({ tips: CIV_TIPS, key: "johnny-spore-tips-civ", storage: typeof localStorage !== "undefined" ? localStorage : null, fresh: !o.save, toast });
+  let cityOpened = false;
   const seenTips = new Set();
   const tipOnce = (key, text, s = 4.5) => {
     if (seenTips.has(key)) return;
@@ -2495,8 +2499,10 @@ export function createCivStage(o) {
     }
     el.hidden = false;
     let html = "";
-    if (sheet.kind === "city") html = cityHtml(sheet.city);
-    else if (sheet.kind === "nation") html = nationHtml(sheet.nation);
+    if (sheet.kind === "city") {
+      cityOpened = true;
+      html = cityHtml(sheet.city);
+    } else if (sheet.kind === "nation") html = nationHtml(sheet.nation);
     else if (sheet.kind === "designs") html = designsHtml();
     else if (sheet.kind === "spice") html = spiceHtml(sheet.gz);
     else if (sheet.kind === "economy") html = economyHtml();
@@ -3776,9 +3782,7 @@ export function createCivStage(o) {
     spawnVehicle(YOU, T.startType + ":land", T.cities[0]);
     T.nations.forEach((n) => citiesOf(n.id).slice(0, 1).forEach((c) => spawnVehicle(n.id, c.type + ":land", c)));
     chronicle({ key: "civ:start", stage: "civ", icon: "🏛", text: `Founded the ${CITY_TYPES[T.startType].name.toLowerCase()} city of ${o.name}.` });
-    // After the arrival from the Tribal Stage, if there is one: the help would cover it.
-    if (arrive) arrive.after = () => openSheet("help");
-    else setTimeout(() => openSheet("help"), 600);
+    // No help sheet on arrival: the coach shows the first steps as short tips (☰ How to play has the rest).
   }
   if (!yourCities().length) T.lost = true;
   focusOn(capital().d, ALT.city * 1.6);
@@ -3833,6 +3837,7 @@ export function createCivStage(o) {
     update(dt) {
       if (paused) return;
       if (toastT > 0 && (toastT -= dt) <= 0) $h("#cvToast").classList.remove("show");
+      if (!arrive && !victory) coach.tick(dt, () => ({ playing: !sheet && toastT <= 0 && !T.lost, selected: T.selected.size, cityOpened }));
       updateNotes(dt);
       if (victory) dragBy(-innerHeight * 0.06 * dt, 0);
       thumbs.pump(2);

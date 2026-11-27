@@ -112,7 +112,11 @@
 
 /* ---- the bottom: orders, your vehicles, the action bar ------------------------------------------- */
 .tribeHUD.civHUD .trBottom{background:linear-gradient(#0000,#1d355044 60%,#1d355077)}
-.tribeHUD.civHUD .trActions{gap:7px;max-width:560px}
+.tribeHUD.civHUD .trActions{gap:7px;max-width:560px;grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr)}
+/* However many buttons show, they share the width: a long label ("Designs") can't push the last one off a 390 px phone. */
+.tribeHUD.civHUD .trActions button{min-width:0}
+.tribeHUD.civHUD .trActions button small{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:430px){.tribeHUD.civHUD .trActions{gap:5px}.tribeHUD.civHUD .trActions button{padding-left:0;padding-right:0}.tribeHUD.civHUD .trActions button small{font-size:9.5px;letter-spacing:-.02em}}
 .tribeHUD.civHUD .trActions button{position:relative;min-height:58px;border-radius:18px 15px 19px 14px/15px 19px 14px 18px;border:2.5px solid var(--cv-edge);background:linear-gradient(#fffdf6,var(--cv-cream2));box-shadow:0 4px 0 var(--cv-edge2),0 8px 14px #0003;gap:0;padding-top:3px;transition:transform .1s,box-shadow .1s}
 .tribeHUD.civHUD .trActions button .ic{width:30px;height:30px;vertical-align:0;transition:transform .2s cubic-bezier(.3,1.6,.5,1)}
 .tribeHUD.civHUD .trActions button small{font-size:11px;font-weight:900;color:var(--cv-ink2)}
@@ -542,7 +546,7 @@
   @keyframes cvPeekIn{from{opacity:0;transform:translateY(24px) scale(.9)}}
   .civHUD .cvNotes{width:300px;top:calc(max(8px,env(safe-area-inset-top)) + 50px)}
   .civHUD.sheetOpen .cvNotes{right:auto;left:8px}
-  .tribeHUD.civHUD .trActions{grid-template-columns:repeat(6,54px)}
+  .tribeHUD.civHUD .trActions{grid-template-columns:none;grid-auto-columns:54px}
   .tribeHUD.civHUD .trActions button{min-height:50px}.tribeHUD.civHUD .trActions button small{display:none}
 }
 

@@ -21,7 +21,8 @@ export const MUSIC_BASE = "https://pub-c7061cceb949469685093ccc3a5dd0ba.r2.dev/"
 export const TRACKS = {
   menu: { file: "Spore OST/Main Menu.mp3", gain: 0.85, loop: true, resume: true },
   cell: { file: "Spore OST/Cell Stage.mp3", gain: 1, loop: true, resume: true },
-  land: { file: "Spore OST/Entering Land.mp3", gain: 1, loop: false, then: "creature" },
+  // Plays through the crawl-out and on to its end; arriving at the nest doesn't cut it short either.
+  land: { file: "Spore OST/Entering Land.mp3", gain: 1, loop: false, then: "creature", holdFor: ["nest"] },
   creature: { file: "Spore OST/Creature Stage Roaming.mp3", gain: 1, loop: true, resume: true },
   nest: { file: "Spore OST/At Your Nest.mp3", gain: 0.95, loop: true, resume: true },
   mating: { file: "Spore OST/Creature Mating.mp3", gain: 0.95, loop: true },
@@ -66,6 +67,27 @@ export function resolveRequest(requested, playing, playingSince, now) {
 }
 /** The calm theme a war theme falls back to. */
 const sameFamily = (a, b) => (a === "civ" && b === "civWar") || (a === "tribe" && b === "tribeWar");
+
+/**
+ * The one track that fits what is on screen. main.js describes the moment; every hook (nest, courtship,
+ * danger, closing a menu) asks this rather than picking a track itself, so they can't contradict each other.
+ * @param {{ menu?:boolean, stage?:string, danger?:boolean, mating?:boolean, editor?:boolean, founding?:boolean, intro?:boolean, courting?:boolean, atNest?:boolean }} s
+ * @returns {string}
+ */
+export function stageTrack(s) {
+  if (s.menu) return "menu";
+  if (s.stage === "civ") return s.danger ? "civWar" : "civ";
+  if (s.stage === "tribe") return s.danger ? "tribeWar" : "tribe";
+  if (s.stage === "cell") return s.mating ? "mating" : "cell";
+  if (s.stage === "creature") {
+    if (s.editor) return "creature";
+    if (s.founding) return "founding";
+    if (s.intro) return "land";
+    if (s.courting) return "mating";
+    return s.atNest ? "nest" : "creature";
+  }
+  return "menu";
+}
 
 /** A tenth of a second of silence as a WAV data URI: enough to unlock a deck without downloading a track. */
 let silence = null;
@@ -313,6 +335,7 @@ export function createMusic(o) {
         // A one-shot hands over to what the game wants now (or its own follow-on theme).
         a.handing = true;
         const next = wanted && wanted !== a.id ? wanted : tr.then;
+        wanted = next; // so asking for the cue again later plays it again
         switchTo(next, { fade: FADE.cross * 1.5 }).then(() => (a.handing = false));
       }
     }
@@ -321,12 +344,17 @@ export function createMusic(o) {
 
   /** Requests settle briefly so flickering triggers (in and out of the nest) don't thrash. */
   function request(id, opts = {}) {
-    wanted = id || null;
+    id = id || null;
+    // The same request again (hooks repeat theirs every frame or tenth of a second) changes nothing:
+    // restarting the settle wait each time meant the change never happened.
+    if (id === wanted && unlocked && !opts.now) return;
+    wanted = id;
     clearTimeout(settleTimer);
     const first = (!current && !active) || opts.now;
     const go = () => {
       // A one-shot still playing keeps going if it's asked to hand over to what's wanted now.
-      if (TRACKS[current] && !TRACKS[current].loop && TRACKS[current].then === wanted && active?.id === current) return;
+      const cue = TRACKS[current];
+      if (cue && !cue.loop && active?.id === current && (cue.then === wanted || cue.holdFor?.includes(wanted))) return;
       const next = resolveRequest(wanted, current, since, now());
       if (next !== current || (next && !active)) switchTo(next);
       // A held war theme: look again once the hold is over.

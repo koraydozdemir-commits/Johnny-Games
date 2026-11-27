@@ -959,16 +959,16 @@ export function createIsland(scene, quality = "medium", regionId = "coast", opts
       sun.position.set(focus.x + Math.cos(t * TAU) * 60, Math.max(8, sunHeight * 80), focus.z + 30);
       sun.target.position.set(focus.x, 0, focus.z);
       sun.target.updateMatrixWorld();
-      // Night is properly dark and moonlit blue; day is warm.
-      sun.intensity = (0.1 + daylight * 1.55) * sunK;
-      hemi.intensity = 0.24 + daylight * 0.86;
+      // Night is moonlit blue but light enough to play in (phones are often turned down); day is warm.
+      sun.intensity = (0.34 + daylight * 1.31) * sunK;
+      hemi.intensity = 0.56 + daylight * 0.54;
       const moon = 1 - THREE.MathUtils.smoothstep(daylight, 0.15, 0.6);
       hemi.color.copy(hemiDay).lerp(hemiNight, moon);
       sun.color.copy(sunDay).lerp(sunNight, moon);
       const sky = scene.background;
       if (daylight > 0.6) sky.copy(skyDay);
       else if (daylight > 0.25) sky.copy(skyDusk).lerp(skyDay, (daylight - 0.25) / 0.35);
-      else sky.copy(skyNight).lerp(skyDusk, daylight / 0.25);
+      else sky.copy(skyNight).lerp(skyDusk, 0.2 + 0.8 * (daylight / 0.25));
       scene.fog.color.copy(sky);
       let moved = false;
       fruits.forEach((f) => {
