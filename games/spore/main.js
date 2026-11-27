@@ -11,6 +11,7 @@ import { createTipEngine } from "./tutorials.js";
 import { hideTip, openHistoryScreen, pathScreenOpen, popCard, showTip, showTraitCard, updateDietMeter } from "./progression-ui.js";
 import { CELL_PASSIVES, INSTINCTS, instinctCard, leaningFor, profileOf, readLedger, seedLedger } from "./creature/identity.js";
 import { createAudio } from "./audio.js";
+import { stageTrack } from "./music.js";
 import { loadSettings, openSettings, saveSettings } from "./settings.js";
 import { createTribeStage, loadTribeSave } from "./tribe/stage.js";
 import { createCivStage } from "./civ/stage.js";
@@ -48,6 +49,7 @@ import { openCellPaint } from "./editor/cell-paint.js";
 import { timeUniform } from "./gfx/materials.js";
 import { renderCellSnapshot, renderPartThumbnails } from "./gfx/thumbs.js";
 import { SPECIES, chooseSpecies, speciesRecord } from "./species.js";
+import { attitude, fade as fadeGrudges, grewUp, grudgeMessage, readMemory, remember } from "./cell/memory.js";
 import {
   createCellRecord,
   defaultNodes as defaultSpine,
@@ -368,6 +370,20 @@ const progress = {
   pendingBanner: 0,
   firstBuild: false,
 };
+/** What the soup's species remember of you (cell/memory.js): saved with the cell. */
+let cellMemory = readMemory(null);
+/** You hurt or killed one of a species' cells: it remembers, and tells you if that changes things. */
+function grudge(e, what) {
+  const u = e.userData;
+  if (!u.species || u.kin || u.epic || u.giant || u.mate) return;
+  const change = remember(cellMemory, u.species, what);
+  if (!change) return;
+  const sp = SPECIES[u.species];
+  const name = sp?.plural || (sp?.name ? sp.name + "s" : "locals");
+  toast(grudgeMessage(name, u.diet, change));
+  spawnFloatLabel(e.position.x, e.position.y + 0.5, u.diet === "meat" ? "⚔ Remembered" : "💨 Remembered", u.diet === "meat" ? 0xff9a8a : 0xffe29a);
+  recordChronicle({ key: "cell:grudge:" + u.species + ":" + change, stage: "cell", icon: u.diet === "meat" ? "⚔" : "💨", text: change === "feud" ? "Started a feud with the " + name + "." : "The " + name + " learned to " + (u.diet === "meat" ? "hunt" : "fear") + " you." });
+}
 const progressStats = () => ({
   plants: state.plants,
   meat: state.meat,
@@ -2074,14 +2090,14 @@ function dieAndRespawn(reason) {
   updateHUD();
   showDialog(
     "Your cell died",
-    (reason || "Something got you.") +
-      " A new cell of your species hatches nearby. You lost " +
-      lostFood +
-      " growth and " +
-      lostDna +
-      " DNA. Keep away from red-rimmed hunters until you can fight back.",
+    (reason || "Something got you.") + " A new cell of your species hatches nearby. " + deathLosses(lostFood, lostDna) + " Keep away from red-rimmed hunters until you can fight back.",
     [{ label: "Keep going", primary: true, action: () => {} }],
   );
+}
+/** What a death cost, in words: only what was actually lost (never "You lost 0 growth"). */
+function deathLosses(food, dna) {
+  const lost = [food > 0 && food + " growth", dna > 0 && dna + " DNA"].filter(Boolean);
+  return lost.length ? "You lost " + lost.join(" and ") + "." : "You had nothing to lose this time.";
 }
 /** Asked before leaving the water, since it ends the Cell Stage. */
 function promptLand() {
@@ -2248,7 +2264,9 @@ function startCreatureStage(resume = false, intro = false) {
   audio.setAmbient("land");
   const cellCard = progress.dietCard || dietPath(state.plants, state.meat);
   const fresh = !save;
-  audio.setMusic(fresh && intro ? "land" : "creature");
+  creatureMoment = { courting: false, intro: false, founding: false };
+  // Roaming (the arrival editor plays it too); the nest theme follows once the HUD sees the nest.
+  audio.setMusic("creature");
   const record = save?.record || creatureFromCell(currentRecord(), state.cellName);
   creatureStage = createCreatureStage({
     renderer,
@@ -2260,12 +2278,20 @@ function startCreatureStage(resume = false, intro = false) {
     sfx: playSfx,
     isTouch: isTouchUI,
     onMate: (d) => openCreatureEditorFor({ ...d, mated: true }, false),
-    onCourtship: (active) => audio.setMusic(active ? "mating" : creatureAtNest ? "nest" : "creature"),
+    // Courtship keeps its track to the end: the nest and roaming themes wait.
+    onCourtship: (active) => {
+      creatureMoment.courting = active;
+      syncMusic();
+    },
     // The stick throw is timed to "Founding A Tribe", which plays on into the Tribal Stage.
-    onFoundingMusic: () => audio.setMusic("founding", { now: true }),
+    onFoundingMusic: () => {
+      creatureMoment.founding = true;
+      audio.setMusic("founding", { now: true });
+    },
+    // Asked every HUD tick: only a change does anything (music.js ignores repeats).
     onNestProximity: (near) => {
       creatureAtNest = near;
-      if (!creatureEditor) audio.setMusic(near ? "nest" : "creature");
+      syncMusic();
     },
     onGeneration: endCreatureGeneration,
     onChronicle: recordChronicle,
@@ -2308,7 +2334,9 @@ function startCreatureStage(resume = false, intro = false) {
     intro: fresh && intro,
     deferIntro: fresh && intro,
     onIntroDone: () => {
-      audio.setMusic("creature");
+      // "Entering Land" plays on to its end, then hands over to roaming (or the nest).
+      creatureMoment.intro = false;
+      syncMusic();
       document.body.classList.remove("cinematic");
     },
   });
@@ -2320,8 +2348,6 @@ function startCreatureStage(resume = false, intro = false) {
 }
 function openCreatureEditorFor(d, arrival) {
   if (!creatureStage || creatureEditor) return;
-  // Courtship music is handled by the Creature Stage animation; the editor gets its own track.
-  audio.setMusic("creature");
   creatureStage.setPaused(true);
   document.body.classList.add("creatureEditing");
   stickEnd();
@@ -2346,10 +2372,14 @@ function openCreatureEditorFor(d, arrival) {
       if (arrival || d.mated) beginCreatureGeneration();
     },
   });
+  // The editor plays the roaming theme.
+  syncMusic();
 }
 function closeCreatureEditor() {
   creatureEditor = null;
-  audio.setMusic(introAfterEditor ? "land" : creatureAtNest ? "nest" : "creature");
+  // Saving the first design starts the crawl-out, and "Entering Land" with it.
+  if (introAfterEditor) creatureMoment.intro = true;
+  syncMusic();
   document.body.classList.remove("creatureEditing");
   creatureStage?.setPaused(false);
   if (introAfterEditor && creatureStage) {
@@ -2362,6 +2392,12 @@ function closeCreatureEditor() {
 }
 let introAfterEditor = false;
 let creatureAtNest = false;
+/** What the Creature Stage is doing, for its music. */
+let creatureMoment = { courting: false, intro: false, founding: false };
+/** Danger in the Tribal and Civilization Stages (raiders, wars), so menus give the war theme back. */
+let stageDanger = false;
+/** The Cell Stage's mate call and courtship. */
+let cellMating = false;
 /** A trait card earned while the editor was open waits until it closes. */
 let pendingReveal = null;
 function flushReveal() {
@@ -2416,7 +2452,7 @@ function beginCreatureGeneration() {
   });
   storeHistory();
   syncPedia();
-  audio.setMusic("creature");
+  syncMusic();
 }
 function stopCreatureStage(toSoup = true) {
   if (!creatureStage) return;
@@ -2496,6 +2532,7 @@ function startTribeStage(fallbackRecord = null, opts = {}) {
   state.paused = true;
   document.body.classList.add("creatureMode", "tribeMode");
   audio.setAmbient("land");
+  stageDanger = false;
   audio.setMusic("tribe");
   // The tribe settles in the species' home region, with what its earlier stages earned.
   const creatureSave = loadCreatureSave();
@@ -2512,7 +2549,11 @@ function startTribeStage(fallbackRecord = null, opts = {}) {
     onSettings: openGameSettings,
     onSaved: () => markSaved(localStorage),
     // The soundtrack turns to war while raiders are at the village.
-    onDanger: (on) => tribeStage !== null && audio.setMusic(on ? "tribeWar" : "tribe"),
+    onDanger: (on) => {
+      if (tribeStage === null) return;
+      stageDanger = !!on;
+      syncMusic();
+    },
     portrait: (rec) => creatureSnapshot(rec, { width: 96, height: 96 }),
     intro: opts.cinematic ? "campfire" : null,
     frame: opts.frame || null,
@@ -2556,6 +2597,7 @@ function startCivStage(opts = {}) {
   $("#intro").style.display = "none";
   state.runStarted = true;
   audio.setAmbient("land");
+  stageDanger = false;
   audio.setMusic("civ");
   const creatureCard = creatureCardFor(cs);
   civStage = createCivStage({
@@ -2589,7 +2631,11 @@ function startCivStage(opts = {}) {
     // The war theme follows the real state of the world: any war of yours, or an attack on your
     // cities (before, a peace with one nation turned it off while another war went on, and a war
     // that ended when the enemy fell never turned it off).
-    onDanger: (on) => civStage !== null && audio.setMusic(on ? "civWar" : "civ"),
+    onDanger: (on) => {
+      if (civStage === null) return;
+      stageDanger = !!on;
+      syncMusic();
+    },
     onHistory: openPath,
     onSettings: openGameSettings,
     onSaved: () => markSaved(localStorage),
@@ -2642,6 +2688,7 @@ function callMate(confirmed = false) {
   state.finalMate = finalReady();
   state.mateSignal = true;
   state.mateTimer = 30;
+  syncCellMating();
   // Your mate is one of your own species: the nearest relative, or a new one arriving from off screen.
   // Only a relative you can see answers (one far off screen often never arrived); otherwise a new one
   // swims in from just inside the edge of the screen.
@@ -2802,6 +2849,12 @@ function makeHeartSprite() {
   s.scale.set(0.65, 0.65, 1);
   return s;
 }
+/** The mating track plays from the call to the egg (or until the call is lost), then the cell theme returns. */
+function syncCellMating() {
+  if (cellMating === state.mateSignal) return;
+  cellMating = state.mateSignal;
+  if (!creatureStage && !tribeStage && !civStage) syncMusic();
+}
 function finishMate() {
   if (!state.mateSignal) return;
   playSfx("mate");
@@ -2823,6 +2876,7 @@ function finishMate() {
   state.mateSignal = false;
   state.courtship = null;
   state.mateTimer = 0;
+  syncCellMating();
   spawnBurst(player.position.x, player.position.y, 0x80edff, 34);
   spawnFloatLabel(player.position.x, player.position.y + 0.5, "+6 DNA", 0xffe7a2);
   if (state.finalMate) {
@@ -2848,6 +2902,7 @@ function finishMate() {
 function advanceTier() {
   if (growth || state.tier >= LAST_TIER) return;
   const fromScale = state.scale;
+  grewUp(cellMemory); // new neighbours: old grudges fade to half
   state.tier = Math.min(LAST_TIER, state.tier + 1);
   const stage = stageFor(state.tier);
   state.food = 0;
@@ -3353,6 +3408,7 @@ function updateAI(dt, time) {
       isSmall = u.size < playerSize * 0.88,
       playerBigger = playerSize > u.size * 1.18;
     if (!u.radius) u.radius = cellRadius(u.body.extent, u.size);
+    const mood = u.kin ? attitude(0) : attitude(cellMemory.grudges[u.species]);
     // Behaviours add up to one desired acceleration; the cell then turns and swims toward it.
     const desire = aiDesire.set(0, 0);
     let target = null,
@@ -3397,12 +3453,18 @@ function updateAI(dt, time) {
       // Aim where the prey is going, not where it is.
       target = leadTarget(e.position, prey.position, prey.userData.velocity, u.velocity.length() + 1);
       u.state = "hunt";
-    } else if (u.diet === "meat" && !u.kin && u.size > state.scale * 0.7 && playerDist < 10 + state.tier * 1.5) {
+    } else if (u.diet === "meat" && !u.kin && u.size > (state.scale * 0.7) / mood.huntBigger && playerDist < 10 + state.tier * 1.5 + mood.huntRange) {
       target = leadTarget(e.position, player.position, velocity, u.velocity.length() + 1);
+      // A species with a grudge announces itself as it comes.
+      if (mood.label && u.state !== "hunt" && gameTime - (u.grudgeCry || -9) > 8) {
+        u.grudgeCry = gameTime;
+        spawnFloatLabel(e.position.x, e.position.y + u.size * 0.6, "!", 0xff7a66);
+      }
       u.state = "hunt";
     }
     u.fleeTimer = Math.max(0, (u.fleeTimer || 0) - dt);
-    const fearPlayer = !u.kin && (u.fleeTimer > 0 || (isSmall && (playerThreat || playerBigger) && playerDist < 8 && u.diet !== "meat"));
+    // Prey that remembers you flees sooner, and even when you're no bigger than it.
+    const fearPlayer = !u.kin && (u.fleeTimer > 0 || ((isSmall || mood.fear > 0) && (playerThreat || playerBigger || mood.fear > 0) && playerDist < 8 + mood.fear && u.diet !== "meat"));
     if (!target && !u.kin && (fearPlayer || threat)) {
       u.state = "flee";
       const from = fearPlayer && (!threat || playerDist < threatD) ? player.position : threat.position;
@@ -3536,10 +3598,12 @@ function updateAI(dt, time) {
         u.velocity.addScaledVector(away, 1.6);
         u.fleeTimer = u.diet === "meat" && !isSmall ? 0 : 2.6; // prey panics; predators fight back
         damageNPC(e, bite, u.epic);
+        grudge(e, u.alive ? "bite" : "kill");
       }
       if (spikeTouch && (u.spikeCooldown = (u.spikeCooldown || 0) - dt) <= 0) {
         u.spikeCooldown = 0.8;
         damageNPC(e, 1.4 * state.scale, false, player.position);
+        grudge(e, u.alive ? "bite" : "kill");
         spawnBurst(e.position.x, e.position.y, 0xffc27d, 5);
       }
       // Hunters bite back if they are anywhere near your size.
@@ -3560,6 +3624,8 @@ function updateAI(dt, time) {
     if (u.dietSprite) u.dietSprite.visible = (dPlayer < 9 && !u.kin) || u.alpha;
   });
   resolveCellCollisions();
+  syncCellMating();
+  fadeGrudges(cellMemory, dt);
   // A call whose mate has gone (despawned, removed by a world reset…) is cancelled, so you can call again.
   if (state.mateSignal && !state.courtship && (!state.mate || !state.mate.userData.alive || !enemies.includes(state.mate))) {
     state.mateSignal = false;
@@ -4774,7 +4840,10 @@ function updateGame(dt, time) {
         pulse.material.dispose();
       }, 300);
       enemies.forEach((e) => {
-        if (e.userData.alive && distance2D(e.position, player.position) < 2.4) damageNPC(e, 5, true, player.position);
+        if (e.userData.alive && distance2D(e.position, player.position) < 2.4) {
+          damageNPC(e, 5, true, player.position);
+          grudge(e, e.userData.alive ? "bite" : "kill");
+        }
       });
       state.electricCooldown = 3.2;
     }
@@ -4952,6 +5021,7 @@ function bindUI() {
     state.foodSinceMate = 0;
     state.dietHintAt = 0;
     state.foodGoal = GROWTH_STAGES[0].foodGoal;
+    cellMemory = readMemory(null);
     Object.assign(progress, {
       kills: 0,
       regions: new Set(),
@@ -5519,6 +5589,7 @@ function saveGame(silent = false) {
       editorPass: progress.editorPass && state.runStarted && state.tier > 1,
       zones: [...zonesSeen],
       scavenged: progress.scavenged || 0,
+      memory: cellMemory,
     },
   };
   try {
@@ -5573,6 +5644,7 @@ function loadGame() {
       pendingBanner: pr.editorPass ? state.tier : 0,
       scavenged: pr.scavenged || 0,
     });
+    cellMemory = readMemory(pr.memory);
     (Array.isArray(pr.zones) ? pr.zones : []).forEach((z) => ZONES[z] && zonesSeen.add(z));
     worldSize = Math.pow(1.4, state.tier - 1);
     cameraZoom = 9 * stageScale(state.tier);
@@ -6112,11 +6184,13 @@ function saveRunningGame() {
 }
 /** The music of whatever is under the universe screens: the stage in play, or the galaxy menu. */
 function stageMusic() {
-  if (galaxyStart || document.body.classList.contains("galaxyStart")) return "menu";
-  if (civStage) return "civ";
-  if (tribeStage) return "tribe";
-  if (creatureStage) return creatureAtNest ? "nest" : "creature";
-  return state.runStarted ? "cell" : "menu";
+  const menu = !!galaxyStart || document.body.classList.contains("galaxyStart");
+  const stage = civStage ? "civ" : tribeStage ? "tribe" : creatureStage ? "creature" : state.runStarted ? "cell" : null;
+  return stageTrack({ menu, stage, danger: stageDanger, mating: cellMating, editor: !!creatureEditor, atNest: creatureAtNest, ...creatureMoment });
+}
+/** Ask for the stage's track (unless a universe screen is over it: closing it asks again). */
+function syncMusic() {
+  if (!universeOpen) audio.setMusic(stageMusic());
 }
 /** @param {string} [over] the universe screen this one opens on top of (it gets its music back) */
 function openUniverseScreen(screen, arg, over = null) {

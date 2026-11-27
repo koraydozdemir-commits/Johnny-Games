@@ -77,6 +77,7 @@ import {
 import { ACTIVITIES, JOBS, LEANINGS, LOAD, PRIORITIES, SOURCE_INFO, emptyCulture, foodSources, jobsFor, speciesStyle, tribePersonality } from "./life.js";
 import { createVillage } from "./village.js";
 import { createVillagers } from "./villagers.js";
+import { TRIBE_TIPS, createStageCoach } from "../tutorials.js";
 
 const TAU = Math.PI * 2;
 const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -947,6 +948,8 @@ export function createTribeStage(o) {
     el.classList.add("show");
     toastTimer = seconds;
   }
+  // First steps as short tips, one at a time, instead of a help sheet on arrival.
+  const coach = createStageCoach({ tips: TRIBE_TIPS, key: "johnny-spore-tips-tribe", storage: typeof localStorage !== "undefined" ? localStorage : null, fresh: !o.save, toast });
   const seenTips = new Set();
   function tipOnce(key, text, seconds = 4.5) {
     if (seenTips.has(key)) return;
@@ -1724,8 +1727,7 @@ export function createTribeStage(o) {
      night falls on the village, its huts rise in stone behind a new wall, and dawn comes up over a city.
      Both hold the camera, show a letterbox, and can be skipped. */
   let cine = null,
-    disposed = false,
-    helpAfterIntro = false;
+    disposed = false;
   const v3 = new THREE.Vector3();
   /** Everyone of yours round the fire, facing it. */
   function gatherAtFire() {
@@ -1896,10 +1898,7 @@ export function createTribeStage(o) {
     hud.classList.remove("cine");
     if (fires[0]?.flame) fires[0].flame.scale.setScalar(1);
     saveState();
-    if (helpAfterIntro) {
-      helpAfterIntro = false;
-      setTimeout(showHelp, 300);
-    }
+
   }
 
   /* ---- camera and input --------------------------------------------------------------- */
@@ -3814,6 +3813,7 @@ export function createTribeStage(o) {
       updateHUD();
     }
     if (toastTimer > 0 && (toastTimer -= dt) <= 0) $h("#trToast").classList.remove("show");
+    coach.tick(dt, () => ({ playing: !sheet && toastTimer <= 0, selected: T.selected.size, food: Math.floor(T.food), babyCost: BABY_COST, diet, legacy: legacy.lines.length }));
     if ((mapClock -= dt) <= 0) {
       mapClock = 0.12;
       minimap.draw({ x: cam.sx, z: cam.sz, yaw: Math.PI / 2, heading: Math.PI / 2, time: T.time, markers: mapMarkers(false), range: Math.max(70, cam.sd * 1.6) });
@@ -3827,9 +3827,7 @@ export function createTribeStage(o) {
   placeCamera(1);
   updateHUD();
   if (!save) {
-    // After the campfire arrival, if there is one: the help would cover it.
-    if (o.intro !== "campfire") setTimeout(showHelp, 400);
-    else helpAfterIntro = true;
+    // No help sheet on arrival: the coach shows the first steps as short tips (☰ How to play has the rest).
     chronicle({ key: "tribe:start", stage: "tribe", icon: "🛖", text: "Founded the " + look.name + " tribe in the " + world.region.name + "." });
   }
 

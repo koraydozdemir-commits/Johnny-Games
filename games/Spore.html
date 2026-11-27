@@ -824,6 +824,13 @@ body.designing>:not(#scene):not(.mdEditor):not(script){visibility:hidden!importa
 /* Consequences & Immersion: quiet hints, the species' character badge, the field guide */
 .creatureHUD .chHint{position:absolute;left:50%;top:calc(max(10px,env(safe-area-inset-top)) + 156px);transform:translate(-50%,-6px);max-width:min(86vw,420px);padding:6px 13px;border-radius:999px;background:#0d2232cc;border:1px solid #ffffff1f;color:#e8f4f7;font-size:13px;font-weight:600;line-height:1.3;text-align:center;opacity:0;pointer-events:none;transition:opacity .35s,transform .35s;z-index:2}
 .creatureHUD .chHint.show{opacity:1;transform:translate(-50%,0)}
+/* One lane for the Creature Stage's messages, so they never pile up: the world toast takes the hint's
+   place under the objective, the hint steps down below it or below a big warning, and on phones the
+   hint stays clear of the pack portraits down the left edge. */
+body.creatureMode .worldToast{top:calc(max(10px,env(safe-area-inset-top)) + 156px)}
+body.creatureMode #toast.show~.creatureHUD .chHint{top:calc(max(10px,env(safe-area-inset-top)) + 204px)}
+.creatureHUD .chToast.show~.chHint,body.creatureMode #toast.show~.creatureHUD .chToast.show~.chHint{top:calc(30% + 52px)}
+@media (max-width:600px){.creatureHUD .chHint{max-width:calc(100vw - 136px)}body.creatureMode .worldToast{max-width:calc(100vw - 136px)}}
 .creatureHUD .chHistBtn{position:relative}
 .creatureHUD .chLean{position:absolute;right:-6px;bottom:-6px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-style:normal;background:#0d2232;border:2px solid var(--c,#f5c75a);box-shadow:0 0 0 1px #0008}
 .creatureHUD .chLean.pulse{animation:chLeanPulse 1.2s ease-in-out infinite}
@@ -1559,6 +1566,11 @@ body.cellEditorMode #partsPanel .catalog{overflow-y:auto;overflow-x:hidden;min-h
 .gsBack{position:absolute;top:max(14px,env(safe-area-inset-top));right:68px}
 .gsZoom{position:absolute;right:14px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px}
 .gs.cinema .gsZoom,.gs.cinema .gsGear,.gs.cinema .gsLogo{opacity:0;pointer-events:none;transition:opacity .6s}
+/* Legibility over the galaxy: a dark wash across the top keeps the logo and the species strip clear of
+   the stars (above all when the camera flies into a home star), and the save line gets its own backing. */
+.gs::before{content:"";position:absolute;left:0;right:0;top:0;height:calc(max(16px,env(safe-area-inset-top)) + 150px);background:linear-gradient(#02030af2,#02030ab3 50%,#02030a00);pointer-events:none;transition:opacity .6s}
+.gs.cinema::before{opacity:0}
+.gsSave{align-self:center;max-width:100%;padding:6px 16px 7px;border-radius:16px;background:#0b0a1fd9;border:1px solid #ffffff22;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);box-shadow:0 4px 16px #0007}
 .gsToast{position:absolute;left:50%;top:calc(max(14px,env(safe-area-inset-top)) + 58px);transform:translateX(-50%);max-width:min(440px,calc(100vw - 30px));text-align:center;background:#0b0a1fe8;border:1px solid #ffffff2a;border-radius:14px;padding:9px 14px;font-weight:700;opacity:0;transition:opacity .3s}
 .gsToast.show{opacity:1}
 .gsPanel{position:absolute;left:0;right:0;bottom:0;max-height:62dvh;overflow:auto;overscroll-behavior:contain;pointer-events:auto;background:linear-gradient(170deg,#1d1940f2,#0a0918f8);border-top:1px solid #ffffff2a;border-radius:20px 20px 0 0;padding:14px 16px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -10px 40px #000a;animation:gsUp .35s ease-out}
