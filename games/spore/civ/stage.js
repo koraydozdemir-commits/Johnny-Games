@@ -2997,11 +2997,15 @@ export function createCivStage(o) {
         <p class="cvVictoryHow">${esc(verdict)} <small>${clockText(T.time)} of play · ${vehiclesOf(YOU).length} vehicles · ${T.geysers.filter((g) => g.owner === YOU).length} derricks · §${Math.floor(T.money)} in the treasury</small></p>
         ${o.heritage?.summary ? `<p class="cvVictoryHow cvLineage">${esc(o.heritage.summary.replace(/\.$/, ""))}, and now unites its world.</p>` : ""}
         ${picks.length ? `<h5 class="tsKind cvKind">Your story</h5><ol class="cvMoments">${picks.map((x) => (x ? `<li><span>${esc(x.icon)}</span><small>${clockText(x.t)}</small>${esc(x.text)}</li>` : `<li class="gap">…</li>`)).join("")}</ol>` : ""}
-        <p class="tsHint">The Space Stage comes next and isn't part of the game yet: keep playing here, or go back to the Tribal Stage.</p>
-        <div class="tsBtns"><button class="good" id="cvKeep">${ico("play")} Keep playing</button><button id="cvStory">${ico("history")} Species history</button></div>
+        <p class="tsHint">Your species is ready for the stars. Take to space, or keep playing here.</p>
+        <div class="tsBtns"><button class="good" id="cvSpace">🚀 Go to Space</button><button id="cvKeep">${ico("play")} Keep playing</button><button id="cvStory">${ico("history")} Species history</button></div>
       </div>`;
     el.hidden = false;
     el.querySelector("#cvKeep").onclick = hideVictory;
+    el.querySelector("#cvSpace").onclick = () => {
+      saveState();
+      location.href = "Spore Space.html";
+    };
     el.querySelector("#cvStory").onclick = () => {
       hideVictory();
       o.onHistory?.();
