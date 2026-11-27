@@ -139,8 +139,11 @@ export function activityWeights(c) {
     if (!c.available?.[s] || c.homeHold) continue;
     // A hunt brings in a whole carcass: with the stores already full, nobody goes hunting.
     if (s === "hunt" && c.full) continue;
-    let v = need * (s === "hunt" && mood === "plenty" ? 0.35 : 1);
-    if (jobCovers(c.job, s)) v *= 4;
+    // A job is a job: someone given one keeps at it through the day even with the stores stocked,
+    // easing off only once they're overflowing. Everyone else gathers by need.
+    const own = jobCovers(c.job, s);
+    let v = (own ? Math.max(need, c.full ? 0.3 : 0.75) : need) * (s === "hunt" && mood === "plenty" ? 0.35 : 1);
+    if (own) v *= 4;
     else if (foodJob) v *= 0.45;
     else if (c.job === "guard") v *= mood === "short" ? 0.35 : 0.06;
     else if (c.job === "work") v *= 0.55;
