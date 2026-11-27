@@ -1007,7 +1007,7 @@ export function createTribeStage(o) {
     o.sfx("click");
   };
   $h("#trBoxBtn").onclick = () => setBoxMode(!T.boxMode);
-  $h("#trRetreat").onclick = retreat;
+  $h("#trRetreat").onclick = () => (workMode() ? everyoneToWork() : retreat());
   $h("#trHome").onclick = () => {
     cam.x = HOME.x;
     cam.z = HOME.z;
@@ -1035,6 +1035,42 @@ export function createTribeStage(o) {
       pop(HOME.x, HOME.z, "↩", "good");
       o.sfx("click");
     }
+  }
+  /**
+   * Back to work: your orders are lifted (where to stand, coming home, staying home) and everyone
+   * returns to their job or whatever the tribe needs. Food runs you ordered finish their trip first.
+   */
+  function backToWork(u) {
+    const t = u.task;
+    if (t && !t.auto) {
+      if (["gather", "fish", "forage", "haul"].includes(t.type)) t.auto = true;
+      else if (["move", "retreat", "equip"].includes(t.type)) {
+        // Carrying food home from a retreat: it still goes on the pile.
+        if (t.type === "retreat" && u.carry) t.auto = true;
+        else u.task = null;
+      }
+    }
+    u.holdUntil = 0;
+    life.stop(u);
+    u.decide = Math.random() * 0.6;
+  }
+  function everyoneToWork() {
+    const who = T.selected.size ? [...T.selected] : mine().filter((u) => !u.child);
+    if (!T.selected.size) T.homeHold = 0;
+    who.forEach(backToWork);
+    if (who.length) {
+      toast(who.length === 1 ? "Back to work." : "Back to work: everyone returns to their jobs.", 2.5);
+      o.sfx("click");
+    }
+    if (sheet?.kind === "life") renderSheet();
+  }
+  /** The Retreat button turns into Back to work once retreating has nothing left to do. */
+  function workMode() {
+    if (life.L.threat) return false;
+    if (T.homeHold > 0 && !T.selected.size) return true;
+    const who = T.selected.size ? [...T.selected] : mine().filter((u) => !u.child);
+    // Already sent home (or told to stand somewhere): another retreat does nothing, so offer work.
+    return who.some((u) => u.holdUntil > T.time || (u.task && !u.task.auto && (u.task.type === "retreat" || u.task.type === "move")));
   }
   function showHelp() {
     openSheet("help");
@@ -1156,7 +1192,7 @@ export function createTribeStage(o) {
           .map((id) => `<button role="radio" aria-checked="${T.priority === id}" data-prio="${id}"><span>${id === "balanced" ? "⚖" : SOURCE_INFO[id].icon}</span><small>${id === "balanced" ? "Balanced" : SOURCE_INFO[id].name}</small></button>`)
           .join("")}</div>
         <p class="tsHint">Your tribe gathers on its own. A priority sends more of the free hands that way; they still drop everything for danger.</p>
-        <div class="tsBtns tsWide"><button id="tsHomeAll" ${T.homeHold > 0 ? 'aria-pressed="true"' : ""}>↩ ${T.homeHold > 0 ? "Staying home…" : "Everyone back to the village"}</button></div>
+        <div class="tsBtns tsWide">${T.homeHold > 0 ? `<button id="tsWorkAll" class="good">⚒ Back to work (staying home ${Math.ceil(T.homeHold)} s)</button>` : `<button id="tsHomeAll">↩ Everyone back to the village</button><button id="tsWorkAll">⚒ Everyone back to work</button>`}</div>
         <h5 class="tsKind">Jobs</h5><div class="tsRoles">${jobsFor(diet)
           .filter((r) => r !== "free")
           .map(
@@ -1194,7 +1230,7 @@ export function createTribeStage(o) {
           <li><b>Grow:</b> 🥚 Baby costs ${BABY_COST} food. 🔨 Build places shacks, upgrades tools to bronze, and enlarges the chief's hut for more room.</li>
           <li><b>Five rivals:</b> tap a village to see what it wants. Play the instrument they call for (or press 1-3), send gifts, trade, or make peace.</li>
           <li><b>Allies</b> send food, help against raiders, trade cheaply and let you recruit their people.</li>
-          <li><b>Or fight:</b> raid their food, or attack and knock their hut down. Torches burn huts fast. ↩ Retreat brings everyone home.</li>
+          <li><b>Or fight:</b> raid their food, or attack and knock their hut down. Torches burn huts fast. ↩ Retreat brings everyone home; once they're home it becomes ⚒ Work, which sends them back to their jobs.</li>
           <li><b>Goal:</b> make every tribe an ally, or bring it down. How you do it shapes your species.</li>
         </ul>
         ${legacy.lines.length ? `<h5 class="tsKind">Your species' legacy</h5><ul class="tsHelp tsLegacy">${legacy.lines.map((l) => `<li>${l.icon} <b>${esc(l.name)}</b> (${l.stage === "cell" ? "Cell" : "Creature"} Stage): ${esc(l.text)}</li>`).join("")}</ul>` : ""}`;
@@ -1216,6 +1252,12 @@ export function createTribeStage(o) {
           renderSheet();
         }),
     );
+    const workAll = el.querySelector("#tsWorkAll");
+    if (workAll)
+      workAll.onclick = () => {
+        T.selected.clear();
+        everyoneToWork();
+      };
     const homeAll = el.querySelector("#tsHomeAll");
     if (homeAll)
       homeAll.onclick = () => {
@@ -2672,13 +2714,16 @@ export function createTribeStage(o) {
       }
       if (!task.fruit || !task.fruit.alive) {
         if (task.fruit) task.fruit.claimed = false;
-        task.fruit = nearestFruit(task.origin, 26);
+        // The next fruit: the closest to hand first, then anywhere round the patch they were sent to.
+        // Sent by you, they work the whole area (every bush nearby), not just the one you tapped.
+        const reach = task.auto ? 26 : 40;
+        task.fruit = nearestFruit(u.pos, 14) || nearestFruit(task.origin, reach);
         if (task.fruit) task.fruit.claimed = true;
         u.work = 0;
       }
       // No fruit on the bushes: shake a fruit tree, then pick up what falls.
       if (!task.fruit && !task.shaken) {
-        task.tree = task.tree || world.fruitTreeNear(task.origin.x, task.origin.z, 22);
+        task.tree = task.tree || world.fruitTreeNear(task.origin.x, task.origin.z, task.auto ? 22 : 34);
         if (task.tree) {
           const t = task.tree;
           if (!walk(u, t.x, t.z, 5, dt, 1.1 + 0.9 * (t.s || 1))) return;
@@ -2688,22 +2733,27 @@ export function createTribeStage(o) {
             u.work = 0;
             u.body.playAbility(u.body.armCount ? "strike" : "charge");
             o.sfx("chop", { pitch: 0.7, gain: 0.35 });
-            if (world.shakeTree(u.pos.x, u.pos.z, 2.8) || (task.tries = (task.tries || 0) + 1) > 3) {
-              task.shaken = true;
+            if (world.shakeTree(u.pos.x, u.pos.z, 2.8)) {
+              // Shaken down: gather what fell, then the next tree with fruit still in it.
               task.origin = { x: t.x, z: t.z };
+              task.tree = null;
+              task.tries = 0;
+            } else if ((task.tries = (task.tries || 0) + 1) > 3) {
+              task.shaken = true;
+              task.tree = null;
             }
           }
           return;
         }
       }
       if (!task.fruit) {
-        // Picked clean: bring back what there is, then rest.
+        // Picked clean: bring back what there is, then go back to their own work (never stand idle).
         if (u.carry) task.deliver = true;
         else if (task.auto) life.giveUp(u, "fruit");
         else {
-          u.task = null;
-          pop(u.pos.x, u.pos.z, "…");
-          tipOnce("bare", "That patch is picked clean. Fruit grows back; try other bushes meanwhile.");
+          backToWork(u);
+          pop(u.pos.x, u.pos.z, "✓");
+          tipOnce("bare", "That area is picked clean. Fruit grows back; they go back to their jobs meanwhile.");
         }
         return;
       }
@@ -3529,6 +3579,15 @@ export function createTribeStage(o) {
       : T.placing
         ? "Placing a shack"
         : "Ally with or conquer the five rival tribes · " + done + " / " + T.tribes.length;
+    // Retreat, or Back to work once there's nothing to retreat from.
+    const work = workMode(),
+      rb = $h("#trRetreat");
+    if (rb.dataset.work !== String(work)) {
+      rb.dataset.work = String(work);
+      rb.innerHTML = work ? "<span>⚒</span><small>Work</small>" : "<span>↩</span><small>Retreat</small>";
+      rb.setAttribute("aria-label", work ? "Back to work: lift your orders and return to jobs" : "Retreat to the village");
+      if (work) tipOnce("towork", "⚒ Work sends them back to their jobs.", 4);
+    }
     // Member chips.
     const key = own.map((u) => u.id + (u.tool || "") + u.role + (u.child ? "c" : "") + (T.selected.has(u) ? "s" : "") + life.iconOf(u)).join(",");
     const list = $h("#trUnits");

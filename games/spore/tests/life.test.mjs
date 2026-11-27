@@ -183,3 +183,15 @@ test("saves: new fields are read safely, old saves gain defaults", () => {
   assert.deepEqual(old.auto, []);
   assert.equal(old.structures[0].id, "lookout");
 });
+
+test("someone with a job keeps at it by day, even with the stores stocked", () => {
+  const gatherer = activityWeights({ ...base, job: "gather", mood: "plenty" });
+  assert.ok(share(gatherer, ["fruit", "forage"]) > 0.5, "a gatherer mostly gathers: " + share(gatherer, ["fruit", "forage"]).toFixed(2));
+  const fisher = activityWeights({ ...base, job: "fish", mood: "plenty" });
+  assert.equal(topActivity(fisher), "fish");
+  // Overflowing stores and night still ease them off.
+  assert.ok(share(activityWeights({ ...base, job: "gather", mood: "plenty", full: true }), ["fruit", "forage"]) < share(gatherer, ["fruit", "forage"]));
+  assert.equal(topActivity(activityWeights({ ...base, job: "gather", phase: "night", mood: "plenty" })), "sleep");
+  // The unassigned still relax when there's plenty.
+  assert.ok(share(activityWeights({ ...base, mood: "plenty" }), ["fruit", "forage"]) < 0.3);
+});
