@@ -9,6 +9,7 @@
  * gen.js, so what you see is the universe you will play.
  */
 import * as THREE from "three";
+import { radialGlowTexture } from "../gfx/soft-textures.js";
 import { GALAXY_LY, STAR_KINDS, findHomeWorld, makeGalaxy, makeSystem, terraformLevel } from "./gen.js";
 import { hashSeed, rng32 } from "./names.js";
 import { makePlanetGlobe, planetTextures } from "./planet-tex.js";
@@ -106,18 +107,12 @@ function cloudTexture(seed) {
   return t;
 }
 function glowTexture() {
-  const size = 128;
-  const cv = document.createElement("canvas");
-  cv.width = cv.height = size;
-  const ctx = cv.getContext("2d");
-  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  g.addColorStop(0, "rgba(255,255,255,1)");
-  g.addColorStop(0.18, "rgba(255,255,255,0.55)");
-  g.addColorStop(0.45, "rgba(255,255,255,0.14)");
-  g.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, size, size);
-  return new THREE.CanvasTexture(cv);
+  return radialGlowTexture(128, [
+    [0, "rgba(255,255,255,1)"],
+    [0.18, "rgba(255,255,255,0.55)"],
+    [0.45, "rgba(255,255,255,0.14)"],
+    [1, "rgba(255,255,255,0)"],
+  ]);
 }
 function ringTexture() {
   const size = 128;

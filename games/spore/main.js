@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import { buildCellBody, getQuality, pointInPolygon, QUALITY_PRESETS, setQuality, snapPartsToSurface, surfacePoint } from "./gfx/body.js";
 import { createBackground, createWaterFx } from "./gfx/background.js";
+import { createOcean } from "./gfx/ocean.js";
+import { createPost } from "./gfx/post.js";
+import { skinCell } from "./gfx/cellskin.js";
 import { createFoodBatch, createFoodModel } from "./gfx/food.js";
 import { createDebris, createPlantColony } from "./gfx/flora.js";
 import { createFxPool } from "./gfx/fx.js";
@@ -92,11 +95,28 @@ const QUALITY_KEY = "johnny-spore-quality";
 const perf = { time: 0, frames: 0, scale: 1 };
 const basePixelRatio = () => Math.min(devicePixelRatio, QUALITY_PRESETS[getQuality()].pixelRatio);
 renderer.setPixelRatio(basePixelRatio() * perf.scale);
+const rootsBefore = new Set(scene.children);
 const background = createBackground(scene, getQuality());
+const backgroundRoot = scene.children.find((c) => !rootsBefore.has(c));
 // Gentle underwater wobble over the whole picture (off on low quality and in the editor).
 const waterFx = createWaterFx(renderer);
 waterFx.setQuality(getQuality());
 const softGlowTexture = background.glowTexture;
+/* The new look (medium and high quality): layered water, bloom and colour grading around see-through cells.
+   Low quality and the cell editor keep the original background and plain render. */
+const ocean = createOcean(scene);
+const post = createPost(renderer, scene, camera);
+post.setQuality(getQuality());
+const fancyLook = () => getQuality() !== "low" && !state.editor;
+const lookFx = { hurt: 0, pulse: 0 };
+const applyRenderSize = () => {
+  const pr = basePixelRatio() * perf.scale;
+  renderer.setPixelRatio(pr);
+  renderer.setSize(innerWidth, innerHeight);
+  post.setSize(innerWidth, innerHeight, pr);
+  ocean.setPixelRatio(pr);
+};
+applyRenderSize();
 const world = new THREE.Group();
 scene.add(world);
 const editorStage = new THREE.Group();
@@ -826,6 +846,7 @@ function rebuildPlayer() {
     rimColor: 0xbff8ff,
   });
   playerBody.rig.setFrozen(state.editor);
+  if (!state.editor && getQuality() !== "low") skinCell(playerBody, { color: currentRecord().colors.base, seed: 1 });
   player.add(playerBody.root);
   boundary = playerBody.outline;
   parts.forEach((p, i) => {
@@ -1831,6 +1852,7 @@ function makeNPC(options = {}) {
     shadow: getQuality() === "high",
     eyeColor: species?.eyeColor,
   });
+  if (getQuality() !== "low") skinCell(body, { color: record.colors.base, seed: 3 + Math.floor(Math.random() * 40), lite: getQuality() !== "high" || !!options.lite });
   const g = new THREE.Group();
   g.add(body.root);
   const widest = Math.max(...record.body.nodes.map((n) => n.r));
@@ -1906,6 +1928,7 @@ function eat(f) {
   spawnBurst(f.position.x, f.position.y, type === "plant" ? 0x8cffb8 : 0xffc891, f.userData.kind === "chunk" ? 20 : 12);
   playSfx("eat");
   playerBody?.rig.eat();
+  lookFx.pulse = 1;
   if (navigator.vibrate)
     try {
       navigator.vibrate(7);
@@ -2059,6 +2082,7 @@ function hurt(amount, reason, from = null) {
   spawnBurst(player.position.x, player.position.y, damage > 18 ? 0xff526f : 0xff8796, damage > 18 ? 24 : 10);
   playSfx("damage");
   playerBody?.rig.hit(1);
+  lookFx.hurt = 1;
   if (navigator.vibrate)
     try {
       navigator.vibrate(24);
@@ -5740,7 +5764,7 @@ function adaptResolution(rawDt) {
   const before = perf.scale;
   if (avg > 0.024) perf.scale = Math.max(0.6, perf.scale - 0.1);
   else if (avg < 0.0155) perf.scale = Math.min(1, perf.scale + 0.05);
-  if (perf.scale !== before) renderer.setPixelRatio(basePixelRatio() * perf.scale);
+  if (perf.scale !== before) applyRenderSize();
   perf.time = perf.frames = 0;
 }
 function frame(t) {
@@ -5803,9 +5827,22 @@ function frame(t) {
       playerBody?.rig.update(dt, gameTime, { speed: 0 });
     } else handleGroup.visible = false;
   }
-  background.update(gameTime, dt, camera);
   foodBatch.sync(food);
-  waterFx.render(scene, camera, gameTime, !state.editor);
+  if (fancyLook()) {
+    backgroundRoot.visible = false;
+    ocean.setVisible(true);
+    ocean.update(gameTime, camera);
+    lookFx.hurt = Math.max(0, lookFx.hurt - dt * 2);
+    lookFx.pulse = Math.max(0, lookFx.pulse - dt * 2.5);
+    post.grade.uniforms.uHurt.value = lookFx.hurt;
+    post.grade.uniforms.uPulse.value = lookFx.pulse;
+    post.render(gameTime, dt);
+  } else {
+    backgroundRoot.visible = true;
+    ocean.setVisible(false);
+    background.update(gameTime, dt, camera);
+    waterFx.render(scene, camera, gameTime, !state.editor);
+  }
 }
 requestAnimationFrame(frame);
 
@@ -5941,6 +5978,7 @@ async function initUniverse() {
     const profile = session.homeProfile();
     setHomeworld(profile);
     background.setPlanet(profile);
+    ocean.setPlanet(profile);
     // The home world and its star are known from the start: this is where the species began.
     const home = session.home();
     const planet = session.planet(home.planetId);
@@ -6569,8 +6607,8 @@ function applyQuality(name) {
   try {
     localStorage.setItem(QUALITY_KEY, getQuality());
   } catch (e) {}
-  renderer.setPixelRatio(basePixelRatio() * perf.scale);
-  renderer.setSize(innerWidth, innerHeight);
+  applyRenderSize();
+  post.setQuality(getQuality());
   background.setQuality(getQuality());
   waterFx.setQuality(getQuality());
   spawnWorld();
@@ -6583,8 +6621,7 @@ window.addEventListener("resize", () => {
   galaxyStart?.resize();
   creatureEditor?.resize();
   modularEditor?.resize();
-  renderer.setSize(innerWidth, innerHeight);
-  renderer.setPixelRatio(basePixelRatio() * perf.scale);
+  applyRenderSize();
   if (state.editor) {
     configureEditorViewport();
     frameCellForPaint();

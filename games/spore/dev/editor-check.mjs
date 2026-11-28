@@ -16,7 +16,7 @@
 /* global process, getComputedStyle */
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
-import { extname, join, normalize } from "node:path";
+import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
@@ -66,7 +66,10 @@ async function newPage(size, keepStorage = null) {
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e.message || e)));
-  await page.route("https://cdn.jsdelivr.net/**", (r) => r.fulfill({ path: THREE, contentType: "text/javascript" }));
+  await page.route("https://cdn.jsdelivr.net/**", (r) => {
+    const addon = r.request().url().split("three@0.160.0/")[1];
+    r.fulfill({ path: addon?.startsWith("examples/") ? join(dirname(THREE), "../..", addon) : THREE, contentType: "text/javascript" });
+  });
   await page.route(/r2\.dev/, (r) => r.fulfill({ status: 404, body: "" }));
   const cdp = await ctx.newCDPSession(page);
   return { ctx, page, errors, cdp };
