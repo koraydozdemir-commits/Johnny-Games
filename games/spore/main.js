@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import { buildCellBody, getQuality, pointInPolygon, QUALITY_PRESETS, setQuality, snapPartsToSurface, surfacePoint } from "./gfx/body.js";
 import { createBackground, createWaterFx } from "./gfx/background.js";
+import { applyGrip, jetStep, movementOf, spinStep } from "./cell/movement.js";
+import { chaseStep, dodgeStep, endChase, lungeStep, newBrain, paceOf, staminaStep, LUNGE } from "./cell/brain.js";
+import { radialGlowTexture } from "./gfx/soft-textures.js";
 import { createOcean } from "./gfx/ocean.js";
 import { createPost } from "./gfx/post.js";
 import { skinCell } from "./gfx/cellskin.js";
@@ -199,9 +202,9 @@ const defs = [
     unlock: 5,
     complex: 10,
     turn: 2.4,
-    speed: 1,
-    desc: "Fast turning, quick acceleration and precise movement.",
-    stats: { turn: 3, thrust: 1 },
+    speed: 0.4,
+    desc: "Grip the water: much faster turning, snappy acceleration and a little extra speed.",
+    stats: { turn: 4, thrust: 1 },
     col: 0x91f0d5,
   },
   {
@@ -212,10 +215,10 @@ const defs = [
     cost: 10,
     unlock: 10,
     complex: 12,
-    turn: 0.55,
-    speed: 4,
-    desc: "Long trailing tail gives strong forward propulsion, but a wide turning radius.",
-    stats: { thrust: 4, turn: 1 },
+    turn: -0.4,
+    speed: 3,
+    desc: "Steady, constant propulsion: the fastest way to swim and never slows or surges, but it turns wide.",
+    stats: { thrust: 5, turn: 1 },
     col: 0x80edf0,
   },
   {
@@ -226,9 +229,9 @@ const defs = [
     cost: 15,
     unlock: 15,
     complex: 14,
-    speed: 2,
-    desc: "Press Space for a powerful impulse burst. Recharges over time.",
-    stats: { burst: 5, thrust: 2 },
+    speed: 0.5,
+    desc: "Fires short bursts of thrust by itself while you swim, shoving you forward in surges.",
+    stats: { burst: 4, thrust: 2 },
     col: 0x8ce6ff,
   },
   {
@@ -240,7 +243,7 @@ const defs = [
     unlock: 5,
     complex: 9,
     attack: 3,
-    desc: "Contact weapon inflicting damage when an enemy bumps this part.",
+    desc: "Hits hard on contact, and hurts any cell that bites or rams you. More spikes, more damage.",
     stats: { damage: 3 },
     col: 0xffa0a4,
   },
@@ -253,7 +256,7 @@ const defs = [
     unlock: 10,
     complex: 15,
     attack: 2,
-    desc: "Leaves poisonous green droplets behind you. Clouds damage cells over time.",
+    desc: "Releases drifting clouds of poison behind you. Cells inside lose health and slow down.",
     stats: { damage: 2, trail: 1 },
     col: 0xa8ef8a,
   },
@@ -266,7 +269,7 @@ const defs = [
     unlock: 15,
     complex: 16,
     attack: 5,
-    desc: "Periodic area pulse damages and stuns cells nearby.",
+    desc: "Wraps you in a crackling electric field that shocks nearby cells, with a stunning pulse every few seconds.",
     stats: { shock: 5, radius: 2 },
     col: 0x9aaaff,
   },
@@ -451,7 +454,7 @@ let food = [],
    really moves you; each fades on its own clock. Jets glide out, knockback is a short sharp shove. */
 const jetVel = new THREE.Vector2(),
   knockVel = new THREE.Vector2();
-const JET_FADE = 2.4,
+const JET_FADE = 3.2,
   KNOCK_FADE = 9;
 const aiDesire = new THREE.Vector2();
 /** Collision radius of a cell body: between its half-width and half-length, since cells are oval. */
@@ -1485,12 +1488,10 @@ function updateHUD() {
   $("#tierLabel").title = stage.name;
   $("#stageName").textContent = "STAGE " + state.tier + " · " + stage.name.toUpperCase();
   updateDietMeter(state.plants, state.meat);
-  const hasJet = parts.some((p) => p.id === "jet");
   // Keep the HUD lean: stamina only matters with a Jet, and the growth bar at the top already shows food.
-  $("#staminaFill").closest(".metric").hidden = !hasJet;
+  $("#staminaFill").closest(".metric").hidden = true;
   $("#foodFill").closest(".metric").hidden = true;
-  $("#touchBoost").classList.toggle("lockedAbility", !hasJet);
-  $("#touchBoost").title = hasJet ? "Jet boost · spends stamina" : "Unlock a Jet in the Cell Editor to boost";
+  $("#touchBoost").style.display = "none"; // the jet fires by itself now; there is no boost button
   $("#touchMate").classList.toggle("readyAbility", finalReady() && !state.mateSignal);
   if ($("#touchMate").firstChild) $("#touchMate").firstChild.textContent = state.mateSignal ? "♥" : "♡";
   $("#healthValue").textContent = Math.round((state.health / state.maxHealth) * 100) + "%";
@@ -1733,7 +1734,7 @@ function pauseGame() {
   Object.keys(input).forEach((k) => (input[k] = false));
   showDialog(
     "PAUSED",
-    "Take a breath. Your cell, DNA, and current evolution progress are safe.\n\nWASD / arrows: swim · move the mouse to steer · Space: jet boost · M: call mate · Tab: cell editor.",
+    "Take a breath. Your cell, DNA, and current evolution progress are safe.\n\nWASD / arrows: swim · move the mouse to steer · M: call mate · Tab: cell editor.",
     [
       {
         label: "Resume",
@@ -1773,9 +1774,14 @@ function showDialog(title, text, buttons) {
   });
   $("#dialogOverlay").style.display = "flex";
 }
+function applyFoodScale() {
+  const k = foodScale();
+  food.forEach((f) => f.scale.setScalar(k));
+}
 function addFood(type, x, y, kind = "particle") {
   const g = createFoodModel(type, kind);
   g.rotation.z = Math.random() * TAU;
+  g.scale.setScalar(foodScale());
   g.position.set(x, y, 0.2);
   g.userData = {
     renderKey: g.userData.renderKey,
@@ -1877,7 +1883,13 @@ function makeNPC(options = {}) {
   healthGroup.add(bar);
   g.add(healthGroup);
   const initialAngle = Math.random() * Math.PI * 2;
-  const maxHealth = alpha ? 24 : (6 + size * 4) * (species?.soft ?? 1); // easy prey is soft-bodied
+  const ids = record.parts.map((p) => p.id);
+  const count = (id) => ids.filter((x) => x === id).length;
+  const widthAll = Math.max(...record.body.nodes.map((n) => n.x + n.r)) - Math.min(...record.body.nodes.map((n) => n.x - n.r));
+  const traits = movementOf(ids, { length: widthAll, size: 0 }); // size scaling is applied live in updateAI
+  // Cells are tougher than they were: a hunter's bite should be a real threat, and killing one a real fight.
+  const maxHealth = (alpha ? 40 : (10 + size * 8) * (species?.soft ?? 1)) * (1 + (state.tier - 1) * 0.25);
+  const armourCount = Math.min(3, count("armour"));
   g.userData = {
     alive: true,
     size: size,
@@ -1889,6 +1901,14 @@ function makeNPC(options = {}) {
     overlayY: overlayY,
     health: maxHealth,
     maxHealth: maxHealth,
+    traits,
+    brain: newBrain(),
+    ids,
+    spikes: count("spike"),
+    poisonGlands: count("poison"),
+    electric: Math.min(2, count("electric")),
+    jaw: count("jaw") > 0,
+    armourCount,
     alpha: alpha,
     elite: alpha,
     mate: !!options.mate,
@@ -1953,7 +1973,7 @@ function eat(f) {
   const base = stageScale(state.tier);
   state.scale = Math.min(base * 1.18, state.scale + (0.066 / state.foodGoal) * base);
   player.scale.setScalar(state.scale);
-  cameraZoomTarget = Math.min(9 * base * 1.15 + stats().sight * 0.5, cameraZoomTarget + 0.04 * base);
+  cameraZoomTarget = Math.min(stageZoom(state.tier) * 1.15 + stats().sight * 0.5, cameraZoomTarget + 0.04 * base);
   state.health = Math.min(state.maxHealth, state.health + 2);
   updateHUD();
   saveGame(true);
@@ -1969,6 +1989,19 @@ function eat(f) {
       } catch (e) {}
   }
   respawnFood(f, 7500);
+}
+/** A mini-cell goes down in one bite: no meat, just growth. */
+function eatMini(e) {
+  const u = e.userData;
+  if (!u.alive) return;
+  u.alive = false;
+  u.dying = false;
+  e.visible = false;
+  spawnBurst(e.position.x, e.position.y, u.color || 0xffc891, 10);
+  spawnFloatLabel(e.position.x, e.position.y + 0.3, "Gulp!", 0xffe29a);
+  progress.kills++;
+  const type = stats().diet === "plant" ? "plant" : "meat";
+  eat({ userData: { alive: true, type, kind: "mini" }, position: e.position, visible: true, parent: null });
 }
 function dropMeat(x, y, amount = 3) {
   for (let i = 0; i < amount; i++) {
@@ -2046,7 +2079,7 @@ function damageNPC(e, dmg, stun = false, from = null) {
     return;
   }
   if (from && !e.userData.epic) knockNPC(e, from, 1 + Math.min(2.5, dmg * 0.2));
-  e.userData.health -= dmg;
+  e.userData.health -= dmg * Math.pow(0.85, e.userData.armourCount || 0);
   const b = e.userData.bar;
   if (b) {
     b.scale.x = Math.max(0.001, e.userData.health / e.userData.maxHealth);
@@ -2057,10 +2090,24 @@ function damageNPC(e, dmg, stun = false, from = null) {
   if (e.userData.health <= 0) killNPC(e, true);
   else e.userData.rig.hit(0.8);
 }
+/** Damage over time (poison): no knockback or flinch every frame, but it does panic the victim and can kill. */
+function dotNPC(e, dmg) {
+  const u = e.userData;
+  if (!u.alive || (u.giant && !u.epic)) return;
+  u.health -= dmg * Math.pow(0.85, u.armourCount || 0);
+  const b = u.bar;
+  if (b) {
+    b.scale.x = Math.max(0.001, u.health / u.maxHealth);
+    b.position.x = -(1 - b.scale.x) * 0.42;
+    b.material.color.set(u.health / u.maxHealth < 0.35 ? 0xff5353 : 0x66ee8c);
+  }
+  if (u.diet !== "meat") u.fleeTimer = Math.max(u.fleeTimer || 0, 1.2);
+  if (u.health <= 0) killNPC(e, true);
+}
 function hurt(amount, reason, from = null) {
   if (state.damageCooldown > 0 || state.courtship) return;
   const s = stats(),
-    damage = Math.max(1, amount - s.armour * 1.5);
+    damage = Math.max(1, amount * Math.pow(0.8, s.armour / 2));
   state.health -= damage;
   if (from) {
     // Spore's knockback: a short sharp shove away from the biter (about a body length) and the
@@ -2934,7 +2981,7 @@ function advanceTier() {
   state.foodSinceMate = 0;
   state.epicTimer = EPIC_INTERVAL();
   state.eliteTimer = 28 + Math.random() * 20;
-  worldSize *= 1.4;
+  worldSize = worldSizeFor(state.tier);
   regionCache.clear(); // each area's residents are chosen per stage
   // Who is big and who is small, now that you have grown. Giants of the stage you grew into shrink
   // from their towering size down to your own during the growth.
@@ -2957,11 +3004,16 @@ function advanceTier() {
   state.health = state.maxHealth;
   state.dna += 6;
   autoSaveTimer = 28;
-  startGrowthPullback(state.tier, fromScale, Math.max(fromScale, stage.scale), 9 * stage.scale);
+  startGrowthPullback(state.tier, fromScale, Math.max(fromScale, stage.scale), stageZoom(state.tier));
   // Rewards wait until the growth is over, so nothing covers the moment.
   const rewards = () => (stage.rewards || []).forEach((id) => unlockPart(id, "Reward for reaching the " + stage.name + " stage"));
-  if (growth) growth.after = rewards;
-  else rewards();
+  const after = () => {
+    rewards();
+    applyFoodScale();
+    spawnGiantWave();
+  };
+  if (growth) growth.after = after;
+  else after();
   saveGame(true);
   updateHUD();
 }
@@ -3349,7 +3401,7 @@ canvas.addEventListener(
         }
       }
     } else {
-      cameraZoomTarget = THREE.MathUtils.clamp(cameraZoomTarget + Math.sign(e.deltaY) * 0.6, 7, 12 + stats().sight * 1.7);
+      cameraZoomTarget = THREE.MathUtils.clamp(cameraZoomTarget + Math.sign(e.deltaY) * 0.6 * (stageZoom(state.tier) / 9), 7 * (stageZoom(state.tier) / 9), (12 + stats().sight * 1.7) * (stageZoom(state.tier) / 9));
     }
     e.preventDefault();
   },
@@ -3378,6 +3430,214 @@ function distance2D(a, b) {
 }
 function targetAngle() {
   return Math.atan2(state.mouseWorld.y - player.position.y, state.mouseWorld.x - player.position.x);
+}
+
+/* ---- Weapons -----------------------------------------------------------------
+   Poison glands release drifting clouds; electric organs wrap the cell in a crackling field with a
+   stunning pulse every few seconds; spikes hurt whatever bites or rams you. Other cells carry the same
+   parts and use them the same way. */
+const poisonClouds = [];
+let poisonTexture = null;
+const tierPower = () => 1 + (state.tier - 1) * 0.35;
+function releasePoison(x, y, radius, owner, dps = 2.4, life = 5) {
+  poisonTexture ||= radialGlowTexture(96, [
+    [0, "rgba(150,255,120,0.8)"],
+    [0.55, "rgba(110,230,90,0.42)"],
+    [1, "rgba(90,200,70,0)"],
+  ]);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: poisonTexture, transparent: true, depthWrite: false }));
+  sp.position.set(x, y, 0.35);
+  sp.scale.set(radius * 0.5, radius * 0.5, 1);
+  hazardGroup.add(sp);
+  poisonClouds.push({ sp, x, y, r: radius * 0.25, max: radius, life, maxLife: life, owner, dps, puff: 0 });
+  while (poisonClouds.length > 36) {
+    const old = poisonClouds.shift();
+    hazardGroup.remove(old.sp);
+    old.sp.material.dispose();
+  }
+}
+let poisonHud = 0;
+/** Damage over time: no knockback, no invulnerability window, so a cloud really does wear you down. */
+function poisonHurt(dmg) {
+  if (state.courtship || growth || state.damageCooldown > 0.5) return;
+  state.health -= dmg;
+  lookFx.hurt = Math.max(lookFx.hurt, 0.4);
+  if ((poisonHud -= dmg) <= 0) {
+    poisonHud = 2;
+    updateHUD();
+  }
+  if (state.health <= 0) dieAndRespawn("Poisoned");
+}
+function updateToxins(dt) {
+  for (let i = poisonClouds.length - 1; i >= 0; i--) {
+    const c = poisonClouds[i];
+    c.life -= dt;
+    if (c.life <= 0) {
+      hazardGroup.remove(c.sp);
+      c.sp.material.dispose();
+      poisonClouds.splice(i, 1);
+      continue;
+    }
+    c.r = Math.min(c.max, c.r + dt * c.max * 0.9);
+    c.x += Math.sin(gameTime * 0.7 + i) * dt * 0.05;
+    c.sp.position.x = c.x;
+    c.sp.scale.set(c.r * 2, c.r * 2, 1);
+    c.sp.material.opacity = Math.min(1, c.life / 1.3) * (0.78 + 0.12 * Math.sin(gameTime * 2 + i));
+    if ((c.puff -= dt) <= 0) {
+      c.puff = 0.35;
+      const a = Math.random() * TAU,
+        d = Math.random() * c.r * 0.8;
+      spawnBurst(c.x + Math.cos(a) * d, c.sp.position.y + Math.sin(a) * d, 0x9cff7f, 1);
+    }
+    if (c.owner === "player") {
+      for (const e of enemies) {
+        const u = e.userData;
+        if (!u.alive || u.kin || u.mate || u.epic) continue;
+        if (Math.hypot(e.position.x - c.x, e.position.y - c.sp.position.y) < c.r + (u.radius || 0.3) * 0.6) {
+          dotNPC(e, c.dps * dt);
+        }
+      }
+    } else if (Math.hypot(player.position.x - c.x, player.position.y - c.sp.position.y) < c.r + playerRadius() * 0.6) {
+      poisonHurt(c.dps * dt);
+    }
+  }
+}
+
+/* Electric field: a glowing disc and ring round the cell, lightning to whatever is inside it. */
+let electricFx = null;
+const electricSparks = [];
+let electricTexture = null;
+function buildElectricFx() {
+  electricTexture ||= radialGlowTexture(64, [
+    [0, "rgba(220,230,255,1)"],
+    [0.4, "rgba(150,175,255,0.6)"],
+    [1, "rgba(120,150,255,0)"],
+  ]);
+  const group = new THREE.Group();
+  const disc = new THREE.Sprite(new THREE.SpriteMaterial({ map: electricTexture, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.3 }));
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.965, 1, 64), new THREE.MeshBasicMaterial({ color: 0xa9bcff, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending }));
+  const pulse = new THREE.Mesh(new THREE.RingGeometry(0.94, 1, 64), new THREE.MeshBasicMaterial({ color: 0xe4ecff, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+  group.add(disc, ring, pulse);
+  const sparks = [];
+  for (let i = 0; i < 56; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: electricTexture, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+    sp.visible = false;
+    group.add(sp);
+    sparks.push(sp);
+  }
+  group.renderOrder = 15;
+  scene.add(group);
+  electricFx = { group, disc, ring, pulse, sparks, arcT: 0, tick: 0, pulseT: 2.5, pulseAnim: 0, used: 0 };
+  void electricSparks;
+}
+/** A jagged bolt from (ax,ay) to (bx,by) laid down as a chain of glowing sparks. */
+function lightning(fx, ax, ay, bx, by, size = 0.09) {
+  const n = 7,
+    dx = bx - ax,
+    dy = by - ay,
+    len = Math.hypot(dx, dy) || 1;
+  for (let i = 0; i <= n && fx.used < fx.sparks.length; i++) {
+    const t = i / n,
+      jag = i === 0 || i === n ? 0 : (Math.random() - 0.5) * len * 0.22;
+    const sp = fx.sparks[fx.used++];
+    sp.visible = true;
+    sp.position.set(ax + dx * t - (dy / len) * jag, ay + dy * t + (dx / len) * jag, 0);
+    sp.scale.setScalar(size * state.scale * (0.7 + Math.random() * 0.8));
+    sp.material.opacity = 0.9;
+  }
+}
+function updatePlayerWeapons(dt, time) {
+  const ids = parts.map((p) => p.id),
+    glands = parts.filter((p) => p.id === "poison"),
+    electric = ids.filter((id) => id === "electric").length;
+  // Poison: a cloud released behind each gland every second or two, quicker when a hunter is close.
+  if (glands.length && !state.editor) {
+    const hunted = enemies.some((e) => e.userData.alive && e.userData.diet === "meat" && !e.userData.kin && distance2D(e.position, player.position) < 5 * state.scale + e.userData.size * 2);
+    state.poisonT = (state.poisonT ?? 0) - dt * (hunted ? 1.8 : 1) * (velocity.length() > 0.3 || hunted ? 1 : 0.35);
+    if (state.poisonT <= 0) {
+      state.poisonT = 2.2 / Math.sqrt(glands.length);
+      const g = localNodeWorld(glands[Math.floor(Math.random() * glands.length)]);
+      const back = { x: -Math.cos(angle) * 0.5 * state.scale, y: -Math.sin(angle) * 0.5 * state.scale };
+      releasePoison(g.x + back.x, g.y + back.y, 1.25 * state.scale * (1 + 0.25 * (glands.length - 1)), "player", 2.9 * Math.pow(glands.length, 0.7) * Math.sqrt(state.scale) * tierPower());
+      spawnBurst(g.x, g.y, 0x9cff7f, 8);
+    }
+  }
+  // Electric field.
+  if (!electric) {
+    if (electricFx) electricFx.group.visible = false;
+    return;
+  }
+  if (!electricFx) buildElectricFx();
+  const fx = electricFx;
+  fx.group.visible = !state.editor;
+  if (state.editor) return;
+  const R = playerRadius() + (1.15 + 0.3 * (electric - 1)) * state.scale;
+  fx.group.position.set(player.position.x, player.position.y, 0.9);
+  fx.disc.scale.set(R * 2.1, R * 2.1, 1);
+  fx.disc.material.opacity = 0.22 + 0.08 * Math.sin(time * 9) + 0.05 * Math.sin(time * 23);
+  fx.ring.scale.setScalar(R * (1 + 0.012 * Math.sin(time * 14)));
+  fx.ring.material.opacity = 0.45 + 0.2 * Math.sin(time * 17);
+  fx.used = 0;
+  fx.sparks.forEach((sp) => {
+    sp.material.opacity *= Math.max(0, 1 - dt * 14);
+    sp.visible = false;
+  });
+  const targets = enemies.filter((e) => e.userData.alive && !e.userData.kin && !e.userData.mate && distance2D(e.position, player.position) < R + (e.userData.radius || 0.3));
+  fx.arcT -= dt;
+  const arcNow = fx.arcT <= 0;
+  if (arcNow) fx.arcT = 0.06;
+  if (fx.lastArcs && !arcNow) {
+    // keep the last bolts visible between rerolls
+    fx.lastArcs.forEach((a) => lightning(fx, a[0], a[1], a[2], a[3]));
+  } else {
+    fx.lastArcs = [];
+    const bolts = 3 + electric;
+    for (let i = 0; i < bolts; i++) {
+      const t = targets.length ? targets[i % targets.length] : null;
+      let bx, by;
+      if (t && (i < targets.length || Math.random() < 0.5)) {
+        bx = t.position.x - player.position.x;
+        by = t.position.y - player.position.y;
+      } else {
+        const a = Math.random() * TAU,
+          d = R * (0.65 + Math.random() * 0.35);
+        bx = Math.cos(a) * d;
+        by = Math.sin(a) * d;
+      }
+      const sx = (Math.random() - 0.5) * playerRadius();
+      const sy = (Math.random() - 0.5) * playerRadius();
+      fx.lastArcs.push([sx, sy, bx, by]);
+      lightning(fx, sx, sy, bx, by);
+    }
+  }
+  // Shock tick on everything inside the field.
+  fx.tick -= dt;
+  if (fx.tick <= 0) {
+    fx.tick = 0.45;
+    for (const e of targets) {
+      damageNPC(e, 1.5 * Math.pow(electric, 0.8) * Math.sqrt(state.scale) * tierPower(), false, null);
+      e.userData.shocked = 0.5;
+      grudge(e, e.userData.alive ? "bite" : "kill");
+    }
+  }
+  // Overload pulse every few seconds: a bright ring sweeps out and stuns and shoves everything it reaches.
+  fx.pulseT -= dt;
+  if (fx.pulseT <= 0 && targets.length) {
+    fx.pulseT = 4.2 / Math.sqrt(electric);
+    fx.pulseAnim = 0.5;
+    playSfx("damage");
+    spawnBurst(player.position.x, player.position.y, 0xb7c6ff, 16);
+    for (const e of targets) {
+      damageNPC(e, 4.5 * electric * Math.sqrt(state.scale) * tierPower(), true, player.position);
+      e.userData.stunned = Math.max(e.userData.stunned || 0, 1.3);
+    }
+  }
+  if (fx.pulseAnim > 0) {
+    fx.pulseAnim = Math.max(0, fx.pulseAnim - dt);
+    const k = 1 - fx.pulseAnim / 0.5;
+    fx.pulse.scale.setScalar(R * (0.5 + 1.2 * k));
+    fx.pulse.material.opacity = 0.9 * (1 - k);
+  } else fx.pulse.material.opacity = 0;
 }
 function updateAI(dt, time) {
   const playerMouths = parts
@@ -3414,6 +3674,15 @@ function updateAI(dt, time) {
     if (u.epic) {
       updateEpic(e, u, dt);
       return;
+    }
+    // Last stage's neighbours have become mini-cells: tiny next to you, and swallowed whole.
+    u.mini = !!u.prey && !u.kin && u.size < state.scale * 0.5;
+    if (u.mini && !growth && !state.courtship && !state.editor) {
+      const mouth = playerMouths.find((m) => distance2D(e.position, m.pos) < m.reach * 0.9 + u.size * 0.5);
+      if (mouth) {
+        eatMini(e);
+        return;
+      }
     }
     if (u.stunned > 0) {
       u.stunned -= dt;
@@ -3473,6 +3742,10 @@ function updateAI(dt, time) {
         school++;
       }
     }
+    const br = u.brain,
+      tr = u.traits;
+    let sprint = false,
+      lunging = false;
     if (prey) {
       // Aim where the prey is going, not where it is.
       target = leadTarget(e.position, prey.position, prey.userData.velocity, u.velocity.length() + 1);
@@ -3486,6 +3759,15 @@ function updateAI(dt, time) {
       }
       u.state = "hunt";
     }
+    // Hunters tire and give up: they chase for a while, sprint when close, then lose interest and wander.
+    if (target && u.state === "hunt" && !u.kin && !u.epic) {
+      const c = chaseStep(br, { dt, now: gameTime, dist: prey ? preyD : playerDist, sight: 9 + state.tier * 1.5 + mood.huntRange });
+      if (!c.pursue) {
+        target = null;
+        prey = null;
+        u.state = "idle";
+      } else sprint = c.sprint;
+    } else endChase(br);
     u.fleeTimer = Math.max(0, (u.fleeTimer || 0) - dt);
     // Prey that remembers you flees sooner, and even when you're no bigger than it.
     const fearPlayer = !u.kin && (u.fleeTimer > 0 || ((isSmall || mood.fear > 0) && (playerThreat || playerBigger || mood.fear > 0) && playerDist < 8 + mood.fear && u.diet !== "meat"));
@@ -3495,14 +3777,18 @@ function updateAI(dt, time) {
       let fx = e.position.x - from.x,
         fy = e.position.y - from.y;
       const fl = Math.hypot(fx, fy) || 1;
-      // Panicked zig-zag: real prey jinks rather than fleeing in a straight line.
-      const jink = Math.sin(time * 4.3 + u.phase * 3) * 0.55,
+      // Prey doesn't run in a line: it curves away, and when the hunter closes in (or lunges) it sidesteps hard.
+      const chaser = threat && (!fearPlayer || threatD < playerDist) ? threat.userData : null;
+      const d = Math.min(threatD, fearPlayer ? playerDist : Infinity);
+      const dodge = dodgeStep(br, { dt, dist: d, trigger: 1.8 + (chaser?.size ?? state.scale) * 1.4, lunging: !!(chaser?.brain?.lunge > 0) });
+      const jink = Math.sin(time * 1.7 + u.phase * 3) * 0.45 + (dodge.dodge ? dodge.side * 1.35 : 0),
         c = Math.cos(jink),
         sn = Math.sin(jink);
       fx /= fl;
       fy /= fl;
       desire.x += (fx * c - fy * sn) * 7.5;
       desire.y += (fx * sn + fy * c) * 7.5;
+      sprint = !br.tired && d < 7;
     } else if (!target) {
       u.state = "forage";
       let best = null,
@@ -3560,6 +3846,10 @@ function updateAI(dt, time) {
         ty = target.y - e.position.y,
         tl = Math.hypot(tx, ty);
       if (tl > 0.01) {
+        if (u.state === "hunt" && !u.kin) {
+          const hr = prey ? prey.userData.radius || 0.3 : playerRadius();
+          lunging = lungeStep(br, { dt, dist: tl, reach: (u.radius || 0.4) + hr, facing: (Math.cos(e.rotation.z) * tx + Math.sin(e.rotation.z) * ty) / tl });
+        }
         pace = (u.state === "hunt" ? 2.6 : 1.2) * (0.8 + 0.3 * u.size);
         // Ease off when arriving at food instead of overshooting it.
         const arrive = u.state === "hunt" ? 1 : Math.min(1, 0.35 + tl / 1.4);
@@ -3567,12 +3857,19 @@ function updateAI(dt, time) {
         desire.y += (ty / tl) * pace * 2.4 * arrive;
       }
     }
+    if (!(target && u.state === "hunt")) lungeStep(br, { dt, dist: 1e9, reach: 1, facing: 0 });
+    if (lunging) {
+      // A lunge is committed: straight ahead along the current heading, so a good sidestep makes it miss.
+      desire.x = Math.cos(e.rotation.z) * 8;
+      desire.y = Math.sin(e.rotation.z) * 8;
+    }
+    staminaStep(br, dt, sprint, u.size);
     u.stroke = (u.stroke ?? u.phase) + dt * (3.5 + u.velocity.length() * 2.2);
-    const turnRate = (u.alpha ? 3.6 : 2.7) / Math.sqrt(Math.max(0.45, u.size)) + (u.state === "flee" ? 1 : 0);
+    const turnRate = (tr.turnMax * 1.6) / Math.sqrt(Math.max(0.45, u.size)) + (u.state === "flee" ? 1 : 0) - (lunging ? 1.7 : 0);
     e.rotation.z = steerHeading(u.velocity, e.rotation.z, desire.x, desire.y, dt, { turnRate, stroke: strokePulse(u.stroke) });
-    u.velocity.multiplyScalar(Math.max(0, 1 - 1.05 * dt));
+    u.velocity.multiplyScalar(Math.max(0, 1 - tr.drag * 1.2 * dt));
     // Bigger cells are faster in absolute terms, and hunters put on a burst when they chase.
-    const cap = (u.alpha ? 3.1 : 2.35) * (0.8 + 0.3 * u.size) * (u.state === "hunt" ? 1.18 : 1) * (SPECIES[u.species]?.slow ?? 1);
+    const cap = (tr.top / 0.8) * (0.8 + 0.3 * u.size) * (u.alpha ? 1.2 : 1) * (SPECIES[u.species]?.slow ?? 1) * paceOf(br, sprint) * (lunging ? LUNGE : 1);
     u.velocity.clampLength(0, cap);
     e.position.x += u.velocity.x * dt;
     e.position.y += u.velocity.y * dt;
@@ -3592,7 +3889,7 @@ function updateAI(dt, time) {
       u.state = "attack";
       u.attackCooldown -= dt;
       if (u.attackCooldown <= 0) {
-        prey.userData.health -= u.alpha ? 4 : 1.7;
+        prey.userData.health -= (u.alpha ? 6 : 3.2) * (u.jaw ? 1.3 : 1);
         u.attackCooldown = 0.7;
         knockNPC(prey, e.position, 1.1);
         if (prey.userData.health <= 0) killNPC(prey, false);
@@ -3611,7 +3908,7 @@ function updateAI(dt, time) {
       const biter = mouthParts.find((p) => p.id === "jaw") || mouthParts.find((p) => p.id === "proboscis");
       if (mouthTouch && biter && s.diet !== "plant" && progress.biteCooldown <= 0) {
         // A bite hurts; it doesn't swallow. Damage grows with the mouth, attack parts and your size.
-        const bite = ((biter.id === "jaw" ? 3.2 : 2.1) + s.damage * 0.35) * state.scale;
+        const bite = ((biter.id === "jaw" ? 4.4 : 2.8) + s.damage * 0.5) * state.scale * tierPower();
         progress.biteCooldown = 0.5;
         playerBody?.rig.eat();
         playSfx("damage");
@@ -3623,10 +3920,12 @@ function updateAI(dt, time) {
         u.fleeTimer = u.diet === "meat" && !isSmall ? 0 : 2.6; // prey panics; predators fight back
         damageNPC(e, bite, u.epic);
         grudge(e, u.alive ? "bite" : "kill");
+        // Biting a spiky cell hurts: thorns prick the biter.
+        if (u.spikes) hurt(Math.min(7, 1.6 * u.spikes) * (1 + (state.tier - 1) * 0.3), "Pricked by spikes", e.position);
       }
       if (spikeTouch && (u.spikeCooldown = (u.spikeCooldown || 0) - dt) <= 0) {
-        u.spikeCooldown = 0.8;
-        damageNPC(e, 1.4 * state.scale, false, player.position);
+        u.spikeCooldown = 0.6;
+        damageNPC(e, (2.4 + velocity.length() * 0.9) * state.scale * tierPower(), false, player.position);
         grudge(e, u.alive ? "bite" : "kill");
         spawnBurst(e.position.x, e.position.y, 0xffc27d, 5);
       }
@@ -3637,11 +3936,30 @@ function updateAI(dt, time) {
         u.attackCooldown -= dt;
         if (u.attackCooldown <= 0) {
           const ratio = THREE.MathUtils.clamp(u.size / state.scale, 0.6, u.giant ? 1.7 : 2.2); // giants: dangerous, not unfair
-          const damage = Math.round((7 + state.tier * 2) * ratio * (u.alpha ? 1.8 : 1) * (u.epic ? 2.2 : 1));
+          const damage = Math.round((11 + state.tier * 4 + u.spikes * 1.5) * ratio * (u.alpha ? 1.6 : 1) * (u.epic ? 2.2 : 1) * (u.jaw ? 1.25 : 1) * (lunging ? 1.5 : 1));
+          br.lunge = 0; // the lunge has landed
           u.rig.eat?.();
           hurt(damage, "A " + (SPECIES[u.species]?.name || "predator") + " bit you!", e.position);
           u.attackCooldown = 0.8;
         }
+      }
+    }
+    if (!u.kin && u.poisonGlands && (u.state === "hunt" || u.state === "flee") && dPlayer < 10 && (u.poisonT = (u.poisonT ?? 1) - dt) <= 0) {
+      u.poisonT = 3.2 / u.poisonGlands;
+      releasePoison(e.position.x - Math.cos(e.rotation.z) * u.radius, e.position.y - Math.sin(e.rotation.z) * u.radius, 0.7 + u.size * 0.9, "npc", 1.9 * (1 + (state.tier - 1) * 0.3), 4.5);
+    }
+    if (!u.kin && u.electric && dPlayer < u.radius + 1.3 * u.size * (1 + 0.3 * (u.electric - 1)) + playerRadius()) {
+      u.shockT = (u.shockT ?? 0.3) - dt;
+      if (u.shockT <= 0) {
+        u.shockT = 0.5;
+        poisonHurt(1.4 * u.electric * (1 + (state.tier - 1) * 0.3));
+        spawnBurst((e.position.x + player.position.x) / 2, (e.position.y + player.position.y) / 2, 0xb7c6ff, 3);
+      }
+      u.zapT = (u.zapT ?? 3) - dt;
+      if (u.zapT <= 0) {
+        u.zapT = 4.5 / u.electric;
+        state.stun = Math.max(state.stun || 0, 1.0); // an overload: you can barely swim for a moment
+        hurt(4 + state.tier * 2, "Shocked by an electric cell", e.position);
       }
     }
     if (u.healthGroup) u.healthGroup.visible = u.health < u.maxHealth && dPlayer < 12;
@@ -3988,6 +4306,13 @@ const WORLD_TUNING = {
 const crowdScale = () => (getQuality() === "low" ? 0.7 : getQuality() === "medium" ? 0.85 : 1);
 const tuned = (list) => Math.max(1, Math.round(list[tierIndex()] * crowdScale()));
 const tierIndex = () => Math.min(3, Math.max(0, state.tier - 1));
+/** Each stage you look a bit bigger on screen than the last (the camera pulls back less than you grow). */
+const STAGE_ZOOM = 0.8;
+const stageZoom = (tier) => 9 * stageScale(tier) * Math.pow(STAGE_ZOOM, tier - 1);
+/** How wide the world feels at a stage: tracks how big you are, a little slower. */
+const worldSizeFor = (tier) => Math.pow(stageScale(tier), 0.85);
+/** Food gets bigger with you, but not as fast, so the bigger stages still feel like grazing. */
+const foodScale = () => Math.pow(stageScale(state.tier), 0.55);
 const TAU = Math.PI * 2;
 function viewRadius() {
   return Math.hypot(camera.right - camera.left, camera.top - camera.bottom) / 2;
@@ -4122,7 +4447,24 @@ function respawnFood(f, delay) {
  * Most arrivals are local residents. Some are last stage's species, now small prey, and once in a
  * while one of the next stage's giants drifts through.
  */
-const GIANT_BOOST = 2.3;
+const GIANT_BOOST = 1.25; // next-stage cells are already native-size (a stage up); this makes them towering until you grow
+/** A new wave of giants arrives once you have grown: the next stage's cells, towering over you. */
+function spawnGiantWave() {
+  const giants = stageFor(state.tier).giants;
+  if (!giants.length) return;
+  const a0 = Math.random() * TAU;
+  for (let i = 0; i < 3; i++) {
+    const sp = giants[i % giants.length],
+      a = a0 + (i * TAU) / 3 + (Math.random() - 0.5) * 0.6,
+      r = viewRadius() * (0.95 + Math.random() * 0.3);
+    const e = makeNPC({ x: player.position.x + Math.cos(a) * r, y: player.position.y + Math.sin(a) * r, species: sp, diet: SPECIES[sp]?.diet, size: speciesSize(sp) });
+    e.userData.giant = true;
+    e.userData.giantBoost = GIANT_BOOST;
+    e.userData.size *= GIANT_BOOST;
+    e.scale.setScalar(e.userData.size);
+  }
+  spawnFloatLabel(player.position.x, player.position.y + 1.6 * state.scale, "Giants stir in the deep", 0xcfe8ff);
+}
 function spawnRegionNPC(spot, pack = null) {
   const roll = pack ? 1 : Math.random(),
     prey = preyFor(state.tier),
@@ -4433,7 +4775,11 @@ let growth = null;
 function startGrowthPullback(tier, fromScale = state.scale, toScale = state.scale, toZoom = cameraZoomTarget) {
   if (growth) return;
   const reduced = settings.reducedMotion;
-  growth = { t: 0, dur: reduced ? 1.8 : 4.2, from: cameraZoom, to: toZoom, zoom: cameraZoom, fromScale, toScale };
+  const ratio = toScale / fromScale;
+  // On-screen size = scale / zoom. `f` is how big you look compared with before: it dips as the camera
+  // pulls out, then climbs as you swell, then settles a little above where you started.
+  const f1 = (cameraZoom * ratio) / toZoom;
+  growth = { t: 0, dur: reduced ? 2 : 6, from: cameraZoom, to: toZoom, zoom: cameraZoom, fromScale, toScale, ratio, f1, peak: f1 * (1 + 0.55 * Math.min(1, ratio - 1)) };
   cameraZoomTarget = toZoom;
   state.damageCooldown = Math.max(state.damageCooldown, growth.dur); // nothing bites mid-growth
   velocity.set(0, 0);
@@ -4451,23 +4797,24 @@ function updateGrowthPullback(dt) {
   g.t += dt;
   const k = Math.min(1, g.t / g.dur);
   /*
-   * Spore's growth, in two beats. First the cell swells on screen while the camera holds still and
-   * the world slows: you are visibly bigger than everything around you. Then the camera draws back
-   * until you are your usual size on screen again, so everything else shrinks away round you, and
-   * the giants of your new stage shrink down to your size (see advanceTier).
+   * Three beats. (A) The camera draws right back and the world slows: everything looks small and far.
+   * (B) You swell, far bigger than anything that was your size a moment ago; those cells are now mini-cells.
+   * (C) The camera settles in, a little closer than before, with you towering over your old neighbours
+   * and the giants of the new stage shrinking down to your size.
    */
-  const SWELL = 0.42;
-  const a = Math.min(1, k / SWELL),
-    b = Math.max(0, (k - SWELL) / (1 - SWELL));
-  // Swell with a little overshoot, like a breath in.
-  const swell = a < 1 ? 1 + 2.4 * Math.pow(a - 1, 3) + 1.4 * Math.pow(a - 1, 2) : 1;
-  const ratio = g.toScale / g.fromScale;
-  const settle = b * b * (3 - 2 * b);
-  const peak = ratio * 1.12; // at the top of the swell you look this much bigger on screen
-  state.scale = g.fromScale * (b > 0 ? peak + (ratio - peak) * settle : 1 + (peak - 1) * swell);
-  g.zoom = g.from + (g.to - g.from) * settle;
+  const ease = (x) => x * x * (3 - 2 * x),
+    clamp01 = (x) => Math.min(1, Math.max(0, x));
+  const a = ease(clamp01(k / 0.3)),
+    b = ease(clamp01((k - 0.3) / 0.4)),
+    c = ease(clamp01((k - 0.7) / 0.3));
+  const over = 1.07; // a little overshoot at the top of the swell, like a breath in
+  const scaleK = k < 0.7 ? 1 + (g.ratio * over - 1) * b : g.ratio * over + (g.ratio - g.ratio * over) * c;
+  const f = k < 0.3 ? 1 + (0.62 - 1) * a : k < 0.7 ? 0.62 + (g.peak - 0.62) * b : g.peak + (g.f1 - g.peak) * c;
+  state.scale = g.fromScale * (g.ratio === 1 ? 1 : scaleK);
+  g.zoom = (g.from * (state.scale / g.fromScale)) / f;
   player.scale.setScalar(state.scale);
-  // Former giants shrink down to your new size while the camera draws back.
+  // Former giants shrink down to your new size while you swell.
+  const settle = ease(clamp01((k - 0.3) / 0.6));
   for (const e of enemies) {
     const u = e.userData;
     if (u.shrinkTo === undefined) continue;
@@ -4484,7 +4831,7 @@ function updateGrowthPullback(dt) {
     g.after?.();
     saveGame(true);
   }
-  return dt * (k < SWELL ? 0.3 : 0.3 + 0.7 * settle); // the world holds its breath while you swell
+  return dt * (k < 0.7 ? 0.3 : 0.3 + 0.7 * c); // the world holds its breath while you swell
 }
 
 /* ---- Epic cells -------------------------------------------------------------
@@ -4750,8 +5097,7 @@ function updateGame(dt, time) {
     state.mouseWorld.copy(toWorld({ clientX: state.pointerScreen.x, clientY: state.pointerScreen.y }));
   if (growth) cameraZoom = growth.zoom;
   else cameraZoom += (cameraZoomTarget - cameraZoom) * (1 - Math.exp(-dt * 2.25));
-  const s = stats(),
-    keyForward = (input.ArrowUp || input.w ? 1 : 0) - (input.ArrowDown || input.s ? 1 : 0),
+  const keyForward = (input.ArrowUp || input.w ? 1 : 0) - (input.ArrowDown || input.s ? 1 : 0),
     keyTurn = (input.ArrowRight || input.d ? 1 : 0) - (input.ArrowLeft || input.a ? 1 : 0),
     joy = state.joystick || { x: 0, y: 0 },
     joyMag = Math.min(1, Math.hypot(joy.x, joy.y)),
@@ -4760,61 +5106,63 @@ function updateGame(dt, time) {
   let forward = THREE.MathUtils.clamp(keyForward + (pointerThrust ? 0.75 : 0), -1, 1);
   if (forward !== 0 || turn !== 0) dismissControlHint();
   if (keyForward !== 0 || keyTurn !== 0 || Math.abs(joy.x) + Math.abs(joy.y) > 0.05) state.mouseActive = false;
-  let desiredTurn = turn * s.turn * 0.9;
+  const mv = movementOf(
+    parts.map((p) => p.id),
+    { length: Math.abs(nodes[nodes.length - 1].x - nodes[0].x), size: state.scale },
+  );
+  let desiredTurn = turn * mv.turnMax * 0.9;
   if (joyActive) {
     // Direction steering: the cell turns to face where the stick points (screen and world share axes)
     // and swims that way. The turn rate is proportional to the remaining angle, so it settles on the
     // heading instead of overshooting, and thrust is held back until the cell is roughly facing it.
     const delta = THREE.MathUtils.euclideanModulo(Math.atan2(joy.y, joy.x) - angle + Math.PI, TAU) - Math.PI;
-    const maxTurn = 1.9 + s.turn * 0.8; // the turning stat still matters, but no cell feels unsteerable
+    const maxTurn = mv.turnMax; // cilia turn quickly, a flagellum turns wide
     desiredTurn = THREE.MathUtils.clamp(delta * 4, -maxTurn, maxTurn);
     // Angular inertia: the spin builds up and dies down instead of snapping.
-    turnVelocity += (desiredTurn - turnVelocity) * (1 - Math.exp(-dt * 5.5));
+    turnVelocity = spinStep(turnVelocity, desiredTurn, mv.turnResponse * 1.4, dt);
     if (Math.abs(delta) < Math.abs(turnVelocity * dt)) turnVelocity = delta / Math.max(dt, 1e-3);
     const throttle = (joyMag - STICK_DEAD_ZONE) / (1 - STICK_DEAD_ZONE);
     forward = Math.max(forward, throttle * (0.2 + 0.8 * Math.max(0, Math.cos(delta))));
   } else if (state.mouseActive) {
     const delta = THREE.MathUtils.euclideanModulo(targetAngle() - angle + Math.PI, Math.PI * 2) - Math.PI;
-    desiredTurn = THREE.MathUtils.clamp(delta * 2.35, -s.turn * 1.35, s.turn * 1.35);
-    turnVelocity += (desiredTurn - turnVelocity) * (1 - Math.exp(-dt * 3.6));
+    desiredTurn = THREE.MathUtils.clamp(delta * 2.35, -mv.turnMax, mv.turnMax);
+    turnVelocity = spinStep(turnVelocity, desiredTurn, mv.turnResponse, dt);
   } else {
     // Let go and the spin eases out over a moment instead of stopping dead.
-    turnVelocity += (desiredTurn - turnVelocity) * (1 - Math.exp(-dt * (turn !== 0 ? 4.2 : 3.4)));
+    turnVelocity = spinStep(turnVelocity, desiredTurn, mv.turnResponse * (turn !== 0 ? 1.1 : 0.9), dt);
   }
   if (state.knock > 0) {
     state.knock -= dt;
     forward *= 0.6;
   }
+  if (state.stun > 0) {
+    state.stun -= dt;
+    forward *= 0.25;
+  }
   if (state.courtship) forward = 0;
   angle += turnVelocity * dt;
-  const bodyLength = Math.abs(nodes[nodes.length - 1].x - nodes[0].x),
-    bodyMass = 1 + nodes.reduce((sum, n) => sum + n.r * n.r, 0) * 0.11 + bodyLength * 0.1 + parts.length * 0.025,
-    thrust = (s.speed * 1.72) / bodyMass;
-  // Flagellum strokes: thrust pulses slightly, so a cell surges and glides rather than sliding.
+  // Swimming: thrust along the heading against water drag, so the cell takes time to get going, keeps
+  // coasting when you let go, and (without cilia) slides sideways through turns. A flagellum pushes
+  // with steady power; everything else surges and glides with the stroke.
   strokePhase += dt * (5 + velocity.length() * 2);
-  const stroke = 0.75 + 0.5 * Math.max(0, Math.sin(strokePhase)) ** 2;
-  velocity.x += Math.cos(angle) * forward * thrust * stroke * dt;
-  velocity.y += Math.sin(angle) * forward * thrust * stroke * dt;
-  state.stamina = Math.min(100, state.stamina + dt * 9);
-  const wantsJet = input[" "] || state.jetQueued;
-  state.jetQueued = false;
-  if (wantsJet && state.jetCooldown <= 0 && state.stamina >= 35 && parts.some((p) => p.id === "jet")) {
-    // The burst rides on top of normal swimming and glides out over about half a second.
-    const burst = 7.5 * Math.sqrt(state.scale);
-    jetVel.x += Math.cos(angle) * burst;
-    jetVel.y += Math.sin(angle) * burst;
-    state.shake = Math.max(state.shake || 0, 0.12);
-    state.stamina -= 35;
-    state.jetCooldown = 1.5;
-    playSfx("jet");
-    spawnBurst(player.position.x - Math.cos(angle) * 0.65, player.position.y - Math.sin(angle) * 0.65, 0x8befff, 8);
-  } else if (input[" "] && !parts.some((p) => p.id === "jet") && (state.jetHintCooldown || 0) <= 0) {
-    state.jetHintCooldown = 3;
+  const stroke = mv.constantThrust ? 1 : 0.75 + 0.5 * Math.max(0, Math.sin(strokePhase)) ** 2;
+  velocity.x += Math.cos(angle) * forward * mv.thrust * stroke * dt;
+  velocity.y += Math.sin(angle) * forward * mv.thrust * stroke * dt;
+  // A jet fires short bursts of thrust by itself while you swim.
+  const jet = jetStep(state.jetTimer || 0, dt, Math.max(0, forward), mv.jet);
+  state.jetTimer = jet.timer;
+  if (jet.fired) {
+    jetVel.x += Math.cos(angle) * mv.jet.power;
+    jetVel.y += Math.sin(angle) * mv.jet.power;
+    spawnBurst(player.position.x - Math.cos(angle) * 0.65 * state.scale, player.position.y - Math.sin(angle) * 0.65 * state.scale, 0x8befff, 6);
+    if (gameTime - (state.jetSfxAt || -9) > 2) {
+      state.jetSfxAt = gameTime;
+      playSfx("jet");
+    }
   }
-  state.jetCooldown -= dt;
-  const waterDrag = 0.34 + parts.length * 0.012 + (parts.some((p) => p.id === "armour") ? 0.13 : 0);
-  velocity.multiplyScalar(Math.exp(-waterDrag * dt));
-  velocity.clampLength(0, 2.1 + Math.min(1.05, s.speed * 0.24));
+  velocity.multiplyScalar(Math.exp(-mv.drag * dt));
+  applyGrip(velocity, angle, mv.grip, dt);
+  velocity.clampLength(0, mv.top);
   player.position.x += (velocity.x + jetVel.x + knockVel.x) * dt;
   player.position.y += (velocity.y + jetVel.y + knockVel.y) * dt;
   jetVel.multiplyScalar(Math.exp(-JET_FADE * dt));
@@ -4829,49 +5177,9 @@ function updateGame(dt, time) {
     spawnWake();
     wakeCooldown = 0.12;
   }
-  const poisonParts = parts.filter((p) => p.id === "poison");
-  if (poisonParts.length && Math.random() < dt * 3) {
-    const g = new THREE.Mesh(poisonPuffGeometry, new THREE.MeshBasicMaterial({ color: 0x8cf67a, transparent: true, opacity: 0.65 }));
-    g.position.set(player.position.x - Math.cos(angle) * 0.8, player.position.y - Math.sin(angle) * 0.8, 0.3);
-    g.userData.life = 2;
-    hazardGroup.add(g);
-    particles.push(g);
-  }
-  particles.forEach((p) => {
-    p.userData.life -= dt;
-    p.material.opacity = Math.max(0, (p.userData.life / 2) * 0.6);
-    enemies.forEach((e) => {
-      if (e.userData.alive && !e.userData.kin && e.position.distanceTo(p.position) < 0.5) damageNPC(e, dt * 2);
-    });
-    if (p.userData.life <= 0) {
-      hazardGroup.remove(p);
-      p.material.dispose();
-    }
-  });
-  particles = particles.filter((p) => p.userData.life > 0);
   state.damageCooldown = Math.max(0, state.damageCooldown - dt);
-  state.electricCooldown = Math.max(0, state.electricCooldown - dt);
-  if (parts.some((p) => p.id === "electric") && state.electricCooldown <= 0) {
-    const near = enemies.find(
-      (e) => e.userData.alive && !e.userData.mate && !e.userData.kin && distance2D(e.position, player.position) < 2.1 * state.scale,
-    );
-    if (near) {
-      const pulse = new THREE.Mesh(electricPulseGeometry, new THREE.MeshBasicMaterial({ color: 0x91a9ff, transparent: true, opacity: 0.8 }));
-      pulse.position.set(player.position.x, player.position.y, 0.8);
-      scene.add(pulse);
-      setTimeout(() => {
-        scene.remove(pulse);
-        pulse.material.dispose();
-      }, 300);
-      enemies.forEach((e) => {
-        if (e.userData.alive && distance2D(e.position, player.position) < 2.4) {
-          damageNPC(e, 5, true, player.position);
-          grudge(e, e.userData.alive ? "bite" : "kill");
-        }
-      });
-      state.electricCooldown = 3.2;
-    }
-  }
+  updatePlayerWeapons(dt, time);
+  updateToxins(dt);
   updateFood(dt, time);
   updateScenery(dt, time);
   updatePartOrbs(dt, time);
@@ -5251,13 +5559,13 @@ function bindUI() {
   $("#guideButton").onclick = () =>
     showDialog(
       "FIELD GUIDE",
-      "YOUR GOAL\nEat compatible food to grow. Collect meteor fragments to unlock parts and earn DNA.\n\nMOVEMENT\nWASD / arrows to swim. The mouse steers your cell on desktop. On touch screens, put your thumb anywhere on the water and drag the way you want to swim. Tap Boost if you have a Jet. Space / BOOST uses a Jet part and stamina.\n\nSURVIVAL\nSmall carnivores may hunt you. Avoid poison clouds, follow current rings carefully, and use spikes or electric organs to fight back.\n\nEVOLUTION\nFill the growth bar and your cell grows into the next stage by itself. Mate whenever you like (M or MATE) to design a new generation. In the last stage, a full bar and a mate take your species onto land.",
+      "YOUR GOAL\nEat compatible food to grow. Collect meteor fragments to unlock parts and earn DNA.\n\nMOVEMENT\nWASD / arrows to swim. The mouse steers your cell on desktop. On touch screens, put your thumb anywhere on the water and drag the way you want to swim.  A Jet part fires bursts of speed by itself while you swim.\n\nSURVIVAL\nSmall carnivores may hunt you. Avoid poison clouds, follow current rings carefully, and use spikes or electric organs to fight back.\n\nEVOLUTION\nFill the growth bar and your cell grows into the next stage by itself. Mate whenever you like (M or MATE) to design a new generation. In the last stage, a full bar and a mate take your species onto land.",
       [
         { label: "Got it", primary: true, action: () => {} },
       ],
     );
   const zoomBy = (delta) => {
-    cameraZoomTarget = THREE.MathUtils.clamp(cameraZoomTarget + delta, 7, 12 + stats().sight * 1.7);
+    cameraZoomTarget = THREE.MathUtils.clamp(cameraZoomTarget + delta * (stageZoom(state.tier) / 9), 7 * (stageZoom(state.tier) / 9), (12 + stats().sight * 1.7) * (stageZoom(state.tier) / 9));
     playSfx("click");
   };
   $("#zoomInBtn").onclick = () => zoomBy(-1);
@@ -5506,7 +5814,7 @@ function bindUI() {
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(k)) e.preventDefault();
     if (k.toLowerCase() === "m" && !state.editor) callMate();
     if (k.toLowerCase() === "l" && !state.editor && progress.landReady) promptLand();
-    if (k === " " && !e.repeat) state.jetQueued = true;
+    
     if (k === "Tab") {
       e.preventDefault();
       if (state.editor) setEditor(false);
@@ -5670,8 +5978,8 @@ function loadGame() {
     });
     cellMemory = readMemory(pr.memory);
     (Array.isArray(pr.zones) ? pr.zones : []).forEach((z) => ZONES[z] && zonesSeen.add(z));
-    worldSize = Math.pow(1.4, state.tier - 1);
-    cameraZoom = 9 * stageScale(state.tier);
+    worldSize = worldSizeFor(state.tier);
+    cameraZoom = stageZoom(state.tier);
     cameraZoomTarget = cameraZoom;
     unlocked.clear();
     (d.unlocked || STARTER_UNLOCKS).forEach((id) => unlocked.add(id));
@@ -6714,6 +7022,12 @@ if (new URLSearchParams(location.search).has("debug")) {
     closeStartScreen,
     startCivStage,
     startGrowthPullback,
+    advanceTier,
+    makeNPC,
+    releasePoison,
+    get poisonClouds() {
+      return poisonClouds;
+    },
     get growth() {
       return growth;
     },
