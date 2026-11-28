@@ -12,6 +12,7 @@
  * Everything is endless: the shaders sample world coordinates and the snow wraps around the view.
  */
 import * as THREE from "three";
+import { radialGlowTexture } from "./soft-textures.js";
 
 const BED_SIZE = 96; // world units per tile of the baked bed
 const NOISE = /* glsl */ `
@@ -186,15 +187,10 @@ const PLANE_VERT = /* glsl */ `
 `;
 
 function softDotTexture(size = 64, inner = "rgba(255,255,255,1)", outer = "rgba(255,255,255,0)") {
-  const cv = document.createElement("canvas");
-  cv.width = cv.height = size;
-  const x = cv.getContext("2d");
-  const g = x.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  g.addColorStop(0, inner);
-  g.addColorStop(1, outer);
-  x.fillStyle = g;
-  x.fillRect(0, 0, size, size);
-  return new THREE.CanvasTexture(cv);
+  return radialGlowTexture(size, [
+    [0, inner],
+    [1, outer],
+  ]);
 }
 
 const SNOW_W = 200,

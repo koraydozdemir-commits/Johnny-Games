@@ -110,8 +110,8 @@ const BUILDERS = {
   },
   flagellum(c, o) {
     const pieces = [
-      hose([[-0.02, 0, 0], [0.3, 0.02, 0.01], [0.62, -0.03, 0.02], [0.95, 0.02, 0.03], [1.25, -0.02, 0.04]], (t) => 0.08 * (1 - t * 0.85) + 0.008, c, { swayAmp: 0.3, radial: o.detail ? 8 : 5, segments: 26, colorTip: lighten(c, 0.45) }),
-      blob(o.detail ? 4 : 3, darken(c, 0.2), 0.02, 0, 0, 0.12, 0.1, 0.09),
+      hose([[-0.02, 0, 0], [0.16, 0.012, 0.01], [0.33, -0.016, 0.02], [0.5, 0.012, 0.03], [0.66, -0.01, 0.04]], (t) => 0.042 * (1 - t * 0.85) + 0.005, c, { swayAmp: 0.17, radial: o.detail ? 8 : 5, segments: 26, colorTip: lighten(c, 0.45) }),
+      blob(o.detail ? 4 : 3, darken(c, 0.2), 0.02, 0, 0, 0.07, 0.06, 0.055),
     ];
     return { pieces: [pieces] };
   },

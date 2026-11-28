@@ -12,6 +12,7 @@
  * are unit tested; this file is the scene, the controls and the HUD.
  */
 import * as THREE from "three";
+import { radialGlowTexture } from "../gfx/soft-textures.js";
 import { CUTSCENES, ease, mix, span } from "../cinematics.js";
 import { generateSpecies } from "../creature/species.js";
 import { regionById } from "../creature/regions.js";
@@ -644,18 +645,11 @@ export function createCivStage(o) {
   }
 
   /* ---- city lights at night, and a beacon to find each city from orbit ---------------------------- */
-  const glowTex = (() => {
-    const cv = document.createElement("canvas");
-    cv.width = cv.height = 64;
-    const g2 = cv.getContext("2d");
-    const grd = g2.createRadialGradient(32, 32, 0, 32, 32, 32);
-    grd.addColorStop(0, "rgba(255,255,255,1)");
-    grd.addColorStop(0.35, "rgba(255,255,255,0.55)");
-    grd.addColorStop(1, "rgba(255,255,255,0)");
-    g2.fillStyle = grd;
-    g2.fillRect(0, 0, 64, 64);
-    return new THREE.CanvasTexture(cv);
-  })();
+  const glowTex = radialGlowTexture(64, [
+    [0, "rgba(255,255,255,1)"],
+    [0.35, "rgba(255,255,255,0.55)"],
+    [1, "rgba(255,255,255,0)"],
+  ]);
   function makeLights(c) {
     if (c.lights) {
       scene.remove(c.lights, c.beacon);
